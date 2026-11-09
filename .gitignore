@@ -1,3 +1,7 @@
-/.vs/
+.vs/
 /build/
-/*.vcxproj.user
+*.vcxproj.user
+/project_code/Out_of_Scale/x64/
+/project_code/Out_of_Scale/Out_of_Scale/x64/
+/project_code/Out_of_Scale/Debug/
+/project_code/Out_of_Scale/Release/

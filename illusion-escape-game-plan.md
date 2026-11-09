@@ -213,14 +213,15 @@
 
 ## 10. 코드 구조와 작업 폴더
 
-C++·OpenGL 실행 파일 하나를 만든다. `src/main.cpp`에 진입점 `main()`을 두고 `Game`을 실행한다. 방마다 별도 클래스와 파일을 두어 두 사람이 맡은 방을 독립적으로 작업한다.
+C++·OpenGL 실행 파일 하나를 만든다. 현재 진입점은 `project_code/Out_of_Scale/main.cpp`다. 방마다 별도 클래스와 파일을 두어 두 사람이 맡은 방을 독립적으로 작업한다.
 
-Visual Studio에서는 저장소 루트의 `OutOfScale.sln`을 열고 `Debug | x64`를 선택한다. 솔루션은 `OutOfScale.vcxproj` 하나를 연결하고, `OutOfScale.vcxproj.filters`는 솔루션 탐색기의 소스 목록을 실제 폴더와 맞춘다. `src/`는 source의 약자로 게임 진입점과 `core/` 공통 코드를 둔다. `rooms/<방 이름>/`에는 방별 코드와 에셋, `docs/`에는 팀 문서와 작업 기록을 둔다.
+Visual Studio에서는 [Out_of_Scale.slnx](project_code/Out_of_Scale/Out_of_Scale.slnx)를 열고 `Debug | x64`를 선택한다. 현재 `main.cpp`는 창을 열고 `Player`와 `TestRoom`을 조합한다. 매 프레임 입력 처리, 플레이어 갱신, 방 그리기 순서로 실행한다. 실제 방도 각각 `rooms/<방 이름>/`에 클래스와 에셋을 두고 같은 프로젝트에 등록해 연결한다.
 
 | 코드 | 맡는 일 |
 | --- | --- |
-| `Game` | 게임 루프, 공통 입력과 렌더링, 네 방과 복도 배치, 시작 안내와 엔딩 |
-| `Player` | WASD 이동, 마우스 시점, 점프, 바닥과 벽 충돌. 복도를 지날 때도 같은 플레이어와 카메라를 사용 |
+| `main.cpp` | 창 초기화, 게임 루프, 플레이어와 방 조합 |
+| `Player` | WASD 이동, 마우스 시점, 점프와 평면 착지. 방이 이어져도 같은 플레이어를 사용 |
+| `TestRoom` | 1인칭 조작을 확인하는 격자 평면 |
 | `Interaction` | E를 눌렀을 때 조준한 대상 찾기, 집기·놓기, 원근에 따른 크기와 충돌 범위 변경 |
 | `Audio` | 공용 효과음 로드와 재생. 집기·놓기·문 열림을 공유하고, 방은 퍼즐 상태가 바뀌는 순간 필요한 소리를 요청 |
 | `SchoolRoom`, `OfficeRoom` | 새누 담당. 학교 계단과 회사 문 정렬·실물화, 회사에서 공통 크기 변경 사용 |
@@ -228,13 +229,17 @@ Visual Studio에서는 저장소 루트의 `OutOfScale.sln`을 열고 `Debug | x
 
 게임은 공통 입력으로 조준 대상을 찾고, 방별 퍼즐 처리는 그 방 클래스에 넘긴다. 예를 들어 `MilitaryRoom`은 장비 반납과 초승달 설치 상태를 기억한다. 달을 제자리에 놓으면 받침 조명과 미리 만든 그림자 다리를 표시하고, 같은 시점에 다리 충돌을 켠다. 달이 맞물리는 소리와 다리가 생기는 낮은 울림은 화면 변화에 맞춰 한 번씩 재생한다.
 
-Blender에서 고정 구조물과 움직이는 소품을 분리한다. 움직이는 소품은 자체 원점 기준으로 내보내고 시작 위치·회전·크기는 방의 배치 정보에 둔다. 방마다 출입구 기준점과 방향을 기록하고, `Game`이 팀에서 합의한 축·단위·바닥 높이에 맞춰 복도를 연결한다.
+Blender에서 고정 구조물과 움직이는 소품을 분리한다. 움직이는 소품은 자체 원점 기준으로 내보내고 시작 위치·회전·크기는 방의 배치 정보에 둔다. 방마다 출입구 기준점과 방향을 기록하고, 통합할 때 팀에서 합의한 축·단위·바닥 높이에 맞춰 복도를 연결한다.
 
 ```text
-src/
-  main.cpp
-  core/                    Game, Player, Interaction, Audio
+project_code/
+  Out_of_Scale/
+    Out_of_Scale.slnx
+    Out_of_Scale.vcxproj
+    main.cpp               실행 진입점과 플레이어·방 조합
+    src/core/              Player.h / Player.cpp
 rooms/
+  test/                    TestRoom.h / TestRoom.cpp
   school/                  SchoolRoom.h / SchoolRoom.cpp
   military/                MilitaryRoom.h / MilitaryRoom.cpp
     design/                구성도, Blender 예시, 미리보기
