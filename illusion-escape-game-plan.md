@@ -215,6 +215,8 @@
 
 C++·OpenGL 실행 파일 하나를 만든다. `src/main.cpp`에 진입점 `main()`을 두고 `Game`을 실행한다. 방마다 별도 클래스와 파일을 두어 두 사람이 맡은 방을 독립적으로 작업한다.
 
+Visual Studio에서는 저장소 루트의 `OutOfScale.sln`을 열고 `Debug | x64`를 선택한다. 솔루션은 `OutOfScale.vcxproj` 하나를 연결하고, `OutOfScale.vcxproj.filters`는 솔루션 탐색기의 소스 목록을 실제 폴더와 맞춘다. `src/`는 source의 약자로 게임 진입점과 `core/` 공통 코드를 둔다. `rooms/<방 이름>/`에는 방별 코드와 에셋, `docs/`에는 팀 문서와 작업 기록을 둔다.
+
 | 코드 | 맡는 일 |
 | --- | --- |
 | `Game` | 게임 루프, 공통 입력과 렌더링, 네 방과 복도 배치, 시작 안내와 엔딩 |
