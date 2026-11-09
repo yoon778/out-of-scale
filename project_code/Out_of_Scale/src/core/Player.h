@@ -12,6 +12,9 @@ public:
     void resetMouseSample();
     void jump();
     void update(GLFWwindow* window, float elapsed, float floorHalfSize);
+    void setHorizontalPosition(const glm::vec3& position);
+    glm::vec3 eyePosition() const;
+    glm::vec3 viewDirection() const;
     glm::mat4 view() const;
 
 private:

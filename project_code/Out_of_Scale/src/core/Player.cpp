@@ -47,9 +47,21 @@ void Player::update(GLFWwindow* window, float elapsed, float floorHalfSize) {
     updateJump(elapsed);
 }
 
+void Player::setHorizontalPosition(const glm::vec3& position) {
+    eye.x = position.x;
+    eye.z = position.z;
+}
+
+glm::vec3 Player::eyePosition() const {
+    return eye;
+}
+
+glm::vec3 Player::viewDirection() const {
+    return forwardOnFloor() * std::cos(pitch) + worldUp * std::sin(pitch);
+}
+
 glm::mat4 Player::view() const {
-    const glm::vec3 forward = forwardOnFloor() * std::cos(pitch) + worldUp * std::sin(pitch);
-    return glm::lookAt(eye, eye + forward, worldUp);
+    return glm::lookAt(eye, eye + viewDirection(), worldUp);
 }
 
 glm::vec3 Player::forwardOnFloor() const {

@@ -9,8 +9,27 @@
 #include <iostream>
 
 namespace {
-Player& playerFor(GLFWwindow* window) {
-    return *static_cast<Player*>(glfwGetWindowUserPointer(window));
+constexpr char lockedTitle[] = "Out of Scale | Return the cube | E Grab/Place | WASD Move | Esc Exit";
+
+const char* windowTitle(TestRoom::ExitState state) {
+    switch (state) {
+    case TestRoom::ExitState::Open:
+        return "Out of Scale | Exit open | Walk through the door | E Grab/Place | Esc Exit";
+    case TestRoom::ExitState::Escaped:
+        return "Out of Scale | Escaped | Esc Exit";
+    case TestRoom::ExitState::Locked:
+        return lockedTitle;
+    }
+    return lockedTitle;
+}
+
+struct Scene {
+    Player player;
+    TestRoom room;
+};
+
+Scene& sceneFor(GLFWwindow* window) {
+    return *static_cast<Scene*>(glfwGetWindowUserPointer(window));
 }
 
 void drawAimDot(int width, int height) {
@@ -30,33 +49,38 @@ void drawFrame(const Player& player, const TestRoom& room, int width, int height
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     const glm::mat4 projection = glm::perspective(
         glm::radians(68.0f), static_cast<float>(width) / static_cast<float>(height), 0.05f, 100.0f);
-    room.draw(projection * player.view());
+    room.draw(projection * player.view(), player.eyePosition(), player.viewDirection());
     drawAimDot(width, height);
 }
 
 int run(GLFWwindow* window) {
-    TestRoom room;
-    if (!room.initialize()) {
+    Scene scene;
+    if (!scene.room.initialize()) {
         return 1;
     }
     glEnable(GL_DEPTH_TEST);
 
-    Player player;
-    glfwSetWindowUserPointer(window, &player);
+    glfwSetWindowUserPointer(window, &scene);
     glfwSetCursorPosCallback(window, [](GLFWwindow* target, double x, double y) {
-        playerFor(target).look(x, y);
+        sceneFor(target).player.look(x, y);
     });
     glfwSetWindowFocusCallback(window, [](GLFWwindow* target, int) {
-        playerFor(target).resetMouseSample();
+        sceneFor(target).player.resetMouseSample();
     });
     glfwSetKeyCallback(window, [](GLFWwindow* target, int key, int, int action, int) {
-        if (key == GLFW_KEY_SPACE && action == GLFW_PRESS &&
-            glfwGetWindowAttrib(target, GLFW_FOCUSED) == GLFW_TRUE) {
-            playerFor(target).jump();
+        if (action != GLFW_PRESS || glfwGetWindowAttrib(target, GLFW_FOCUSED) != GLFW_TRUE) {
+            return;
+        }
+        auto& scene = sceneFor(target);
+        if (key == GLFW_KEY_SPACE) {
+            scene.player.jump();
+        } else if (key == GLFW_KEY_E) {
+            scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
         }
     });
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
+    auto exitState = scene.room.exitState();
     double previous = glfwGetTime();
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
@@ -67,13 +91,22 @@ int run(GLFWwindow* window) {
         const double now = glfwGetTime();
         const float elapsed = static_cast<float>(std::min(now - previous, 0.05));
         previous = now;
-        player.update(window, elapsed, TestRoom::halfSize);
+        const glm::vec3 previousEye = scene.player.eyePosition();
+        scene.player.update(window, elapsed, TestRoom::halfSize);
+        const glm::vec3 desiredEye = scene.player.eyePosition();
+        scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
+
+        const auto currentExitState = scene.room.exitState();
+        if (currentExitState != exitState) {
+            exitState = currentExitState;
+            glfwSetWindowTitle(window, windowTitle(exitState));
+        }
 
         int width = 0;
         int height = 0;
         glfwGetFramebufferSize(window, &width, &height);
         if (width > 0 && height > 0) {
-            drawFrame(player, room, width, height);
+            drawFrame(scene.player, scene.room, width, height);
             glfwSwapBuffers(window);
         } else {
             glfwWaitEventsTimeout(0.05);
@@ -97,8 +130,7 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(
-        1024, 640, "Out of Scale | WASD Move | Mouse Look | Space Jump | Esc Exit", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1024, 640, lockedTitle, nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
