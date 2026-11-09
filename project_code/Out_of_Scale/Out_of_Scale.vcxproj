@@ -154,10 +154,16 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="src\core\Player.cpp" />
     <ClCompile Include="..\..\rooms\test\TestRoom.cpp" />
+    <ClCompile Include="..\..\rooms\military\MilitaryRoom.cpp" />
+    <ClCompile Include="..\..\rooms\shared\BoxRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Player.h" />
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
+    <ClInclude Include="..\..\rooms\military\MilitaryRoom.h" />
+    <ClInclude Include="..\..\rooms\military\MilitaryGeometry.inc" />
+    <ClInclude Include="..\..\rooms\shared\BoxRenderer.h" />
+    <ClInclude Include="..\..\rooms\shared\PerspectiveCarry.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

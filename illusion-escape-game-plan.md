@@ -217,13 +217,13 @@
 
 C++·OpenGL 실행 파일 하나를 만든다. 현재 진입점은 `project_code/Out_of_Scale/main.cpp`다. 방마다 별도 클래스와 파일을 두어 두 사람이 맡은 방을 독립적으로 작업한다.
 
-Visual Studio에서는 [Out_of_Scale.slnx](project_code/Out_of_Scale/Out_of_Scale.slnx)를 열고 `Debug | x64`를 선택한다. 현재 `main.cpp`는 창을 열고 `Player`와 `TestRoom`을 조합한다. 매 프레임 입력 처리, 플레이어 갱신, 방 그리기 순서로 실행한다. 실제 방도 각각 `rooms/<방 이름>/`에 클래스와 에셋을 두고 같은 프로젝트에 등록해 연결한다.
+Visual Studio에서는 [Out_of_Scale.slnx](project_code/Out_of_Scale/Out_of_Scale.slnx)를 열고 `Debug | x64`를 선택한다. 기본 실행은 군대 방 보급 구역에서 시작하고, `--test-room` 인자로 기존 격자 테스트방을 실행할 수 있다. 두 방은 조준 광선과 원근 배치 계산을 공유한다.
 
 | 코드 | 맡는 일 |
 | --- | --- |
 | `main.cpp` | 창 초기화, 게임 루프, 플레이어와 방 조합 |
 | `Player` | WASD 이동, 마우스 시점, 점프와 평면 착지. 방이 이어져도 같은 플레이어를 사용 |
-| `TestRoom` | 1인칭 조작을 확인하는 격자 평면 |
+| `TestRoom` | 격자에서 1인칭 조작과 큐브 반납을 확인하는 방 |
 | `Interaction` | E를 눌렀을 때 조준한 대상 찾기, 집기·놓기, 원근에 따른 크기와 충돌 범위 변경 |
 | `Audio` | 공용 효과음 로드와 재생. 집기·놓기·문 열림을 공유하고, 방은 퍼즐 상태가 바뀌는 순간 필요한 소리를 요청 |
 | `SchoolRoom`, `OfficeRoom` | 새누 담당. 학교 계단과 회사 문 정렬·실물화, 회사에서 공통 크기 변경 사용 |
@@ -242,9 +242,11 @@ project_code/
     src/core/              Player.h / Player.cpp
 rooms/
   test/                    TestRoom.h / TestRoom.cpp
+  shared/                  두 방이 쓰는 조준·원근 계산과 그리기
   school/                  SchoolRoom.h / SchoolRoom.cpp
   military/                MilitaryRoom.h / MilitaryRoom.cpp
-    design/                구성도, Blender 예시, 미리보기
+    MilitaryGeometry.inc   Blender Entry 장면에서 내보낸 게임용 메시
+    design/                구성도, Blender 원본, 미리보기, 메시 내보내기 스크립트
     assets/                군대 방에서 불러올 모델과 전용 효과음
   office/                  OfficeRoom.h / OfficeRoom.cpp
   home/                    HomeRoom.h / HomeRoom.cpp

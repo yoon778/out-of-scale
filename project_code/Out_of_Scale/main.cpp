@@ -1,4 +1,5 @@
 #include "src/core/Player.h"
+#include "../../rooms/military/MilitaryRoom.h"
 #include "../../rooms/test/TestRoom.h"
 
 #include <GL/glew.h>
@@ -7,6 +8,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <string_view>
 
 namespace {
 constexpr char lockedTitle[] = "Out of Scale | Return the cube | E Grab/Place | WASD Move | Esc Exit";
@@ -23,13 +25,27 @@ const char* windowTitle(TestRoom::ExitState state) {
     return lockedTitle;
 }
 
+const char* windowTitle(MilitaryRoom::ExitState state) {
+    switch (state) {
+    case MilitaryRoom::ExitState::Open:
+        return "Out of Scale | Barricade returned | Follow arrows to the night outpost";
+    case MilitaryRoom::ExitState::OutpostReached:
+        return "Out of Scale | Night outpost reached | Esc Exit";
+    case MilitaryRoom::ExitState::Locked:
+        return "Out of Scale | Military supply | Return the barricade | E Grab/Place";
+    }
+    return "Out of Scale | Military supply";
+}
+
+template<class Room>
 struct Scene {
     Player player;
-    TestRoom room;
+    Room room;
 };
 
-Scene& sceneFor(GLFWwindow* window) {
-    return *static_cast<Scene*>(glfwGetWindowUserPointer(window));
+template<class Room>
+Scene<Room>& sceneFor(GLFWwindow* window) {
+    return *static_cast<Scene<Room>*>(glfwGetWindowUserPointer(window));
 }
 
 void drawAimDot(int width, int height) {
@@ -43,18 +59,20 @@ void drawAimDot(int width, int height) {
     glDisable(GL_SCISSOR_TEST);
 }
 
-void drawFrame(const Player& player, const TestRoom& room, int width, int height) {
+template<class Room>
+void drawFrame(const Player& player, const Room& room, int width, int height) {
     glViewport(0, 0, width, height);
     glClearColor(0.12f, 0.18f, 0.25f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     const glm::mat4 projection = glm::perspective(
-        glm::radians(68.0f), static_cast<float>(width) / static_cast<float>(height), 0.05f, 100.0f);
+        glm::radians(68.0f), static_cast<float>(width) / static_cast<float>(height), 0.05f, 600.0f);
     room.draw(projection * player.view(), player.eyePosition(), player.viewDirection());
     drawAimDot(width, height);
 }
 
-int run(GLFWwindow* window) {
-    Scene scene;
+template<class Room>
+int run(GLFWwindow* window, const Player& player) {
+    Scene<Room> scene{player, {}};
     if (!scene.room.initialize()) {
         return 1;
     }
@@ -62,16 +80,16 @@ int run(GLFWwindow* window) {
 
     glfwSetWindowUserPointer(window, &scene);
     glfwSetCursorPosCallback(window, [](GLFWwindow* target, double x, double y) {
-        sceneFor(target).player.look(x, y);
+        sceneFor<Room>(target).player.look(x, y);
     });
     glfwSetWindowFocusCallback(window, [](GLFWwindow* target, int) {
-        sceneFor(target).player.resetMouseSample();
+        sceneFor<Room>(target).player.resetMouseSample();
     });
     glfwSetKeyCallback(window, [](GLFWwindow* target, int key, int, int action, int) {
         if (action != GLFW_PRESS || glfwGetWindowAttrib(target, GLFW_FOCUSED) != GLFW_TRUE) {
             return;
         }
-        auto& scene = sceneFor(target);
+        auto& scene = sceneFor<Room>(target);
         if (key == GLFW_KEY_SPACE) {
             scene.player.jump();
         } else if (key == GLFW_KEY_E) {
@@ -92,7 +110,7 @@ int run(GLFWwindow* window) {
         const float elapsed = static_cast<float>(std::min(now - previous, 0.05));
         previous = now;
         const glm::vec3 previousEye = scene.player.eyePosition();
-        scene.player.update(window, elapsed, TestRoom::halfSize);
+        scene.player.update(window, elapsed, Room::halfSize);
         const glm::vec3 desiredEye = scene.player.eyePosition();
         scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
 
@@ -121,7 +139,8 @@ int run(GLFWwindow* window) {
 }
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    const bool useTestRoom = argc > 1 && std::string_view{argv[1]} == "--test-room";
     glfwSetErrorCallback([](int, const char* message) { std::cerr << message << '\n'; });
     if (!glfwInit()) {
         return 1;
@@ -130,7 +149,8 @@ int main() {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(1024, 640, lockedTitle, nullptr, nullptr);
+    const char* initialTitle = useTestRoom ? lockedTitle : windowTitle(MilitaryRoom::ExitState::Locked);
+    GLFWwindow* window = glfwCreateWindow(1024, 640, initialTitle, nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
@@ -142,7 +162,9 @@ int main() {
     const GLenum status = glewInit();
     int result = 1;
     if (status == GLEW_OK) {
-        result = run(window);
+        result = useTestRoom
+            ? run<TestRoom>(window, Player{})
+            : run<MilitaryRoom>(window, Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw});
     } else {
         std::cerr << glewGetErrorString(status) << '\n';
     }

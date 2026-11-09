@@ -15,7 +15,10 @@ constexpr float mouseSensitivity = 0.0025f;
 constexpr glm::vec3 worldUp{0.0f, 1.0f, 0.0f};
 }
 
-Player::Player() : eye{0.0f, eyeHeight, 0.0f}, pitch{glm::radians(-12.0f)} {}
+Player::Player() : Player({0.0f, eyeHeight, 0.0f}, 0.0f) {}
+
+Player::Player(const glm::vec3& spawnEye, float spawnYaw)
+    : eye{spawnEye}, yaw{spawnYaw}, pitch{glm::radians(-12.0f)} {}
 
 void Player::look(double x, double y) {
     if (hasMouseSample) {

@@ -1,7 +1,6 @@
 #pragma once
 
-#include <GL/glew.h>
-#include <GL/glm/glm.hpp>
+#include "../shared/BoxRenderer.h"
 
 #include <optional>
 
@@ -12,7 +11,6 @@ public:
     TestRoom() = default;
     TestRoom(const TestRoom&) = delete;
     TestRoom& operator=(const TestRoom&) = delete;
-    ~TestRoom();
 
     bool initialize();
     void interact(const glm::vec3& eye, const glm::vec3& direction);
@@ -38,10 +36,5 @@ private:
     Cube cube_{{0.0f, 0.5f, -4.0f}, 1.0f};
     float heldSizePerDepth_ = 0.0f;
     ExitState exitState_ = ExitState::Locked;
-    GLuint program_ = 0;
-    GLuint vertexArray_ = 0;
-    GLuint vertexBuffer_ = 0;
-    GLint viewProjectionLocation_ = -1;
-    GLint modelLocation_ = -1;
-    GLint cubeTintLocation_ = -1;
+    BoxRenderer renderer_;
 };

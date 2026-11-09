@@ -7,6 +7,7 @@ struct GLFWwindow;
 class Player {
 public:
     Player();
+    Player(const glm::vec3& spawnEye, float spawnYaw);
 
     void look(double x, double y);
     void resetMouseSample();
