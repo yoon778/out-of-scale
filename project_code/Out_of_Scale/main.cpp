@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <iostream>
 #include <string_view>
+#include <type_traits>
 
 namespace {
 constexpr char lockedTitle[] = "Out of Scale | Return the cube | E Grab/Place | WASD Move | Esc Exit";
@@ -30,7 +31,11 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
     case MilitaryRoom::ExitState::Open:
         return "Out of Scale | Barricade returned | Follow arrows to the night outpost";
     case MilitaryRoom::ExitState::OutpostReached:
-        return "Out of Scale | Night outpost reached | Esc Exit";
+        return "Out of Scale | E Grab moon | Scroll down to grow | E Place | Esc Exit";
+    case MilitaryRoom::ExitState::BridgeReady:
+        return "Out of Scale | Bridge ready | Cross to the exit | Esc Exit";
+    case MilitaryRoom::ExitState::Escaped:
+        return "Out of Scale | Military escaped | Esc Exit";
     case MilitaryRoom::ExitState::Locked:
         return "Out of Scale | Military supply | Return the barricade | E Grab/Place";
     }
@@ -96,6 +101,13 @@ int run(GLFWwindow* window, const Player& player) {
             scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
         }
     });
+    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+        glfwSetScrollCallback(window, [](GLFWwindow* target, double, double yOffset) {
+            if (glfwGetWindowAttrib(target, GLFW_FOCUSED) == GLFW_TRUE) {
+                sceneFor<Room>(target).room.scroll(yOffset);
+            }
+        });
+    }
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     auto exitState = scene.room.exitState();
@@ -134,6 +146,9 @@ int run(GLFWwindow* window, const Player& player) {
     glfwSetCursorPosCallback(window, nullptr);
     glfwSetWindowFocusCallback(window, nullptr);
     glfwSetKeyCallback(window, nullptr);
+    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+        glfwSetScrollCallback(window, nullptr);
+    }
     glfwSetWindowUserPointer(window, nullptr);
     return 0;
 }

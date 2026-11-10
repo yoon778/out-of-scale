@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <iostream>
 #include <iterator>
+#include <vector>
 
 namespace {
 constexpr char vertexSource[] = R"(#version 330 core
@@ -116,9 +117,23 @@ constexpr unsigned int cubeIndices[] = {
 };
 constexpr GLsizei cubeVertexCount = static_cast<GLsizei>(std::size(cubeIndices));
 constexpr GLsizei primitiveVertexCount = floorVertexCount + cubeVertexCount;
+
+void enableMeshAttributes() {
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), nullptr);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
+                          reinterpret_cast<const void*>(offsetof(MeshVertex, color)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+}
 }
 
 BoxRenderer::~BoxRenderer() {
+    if (flatPolygonBuffer_) {
+        glDeleteBuffers(1, &flatPolygonBuffer_);
+    }
+    if (flatPolygonArray_) {
+        glDeleteVertexArrays(1, &flatPolygonArray_);
+    }
     if (vertexBuffer_) {
         glDeleteBuffers(1, &vertexBuffer_);
     }
@@ -130,7 +145,8 @@ BoxRenderer::~BoxRenderer() {
     }
 }
 
-bool BoxRenderer::initialize(std::span<const MeshVertex> staticMesh, std::span<const MeshVertex> movableMesh) {
+bool BoxRenderer::initialize(std::span<const MeshVertex> staticMesh, std::span<const MeshVertex> movableMesh,
+                             std::span<const MeshVertex> moonMesh) {
     if (program_) {
         return true;
     }
@@ -157,23 +173,32 @@ bool BoxRenderer::initialize(std::span<const MeshVertex> staticMesh, std::span<c
     glGenBuffers(1, &vertexBuffer_);
     glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
     constexpr auto primitiveBytes = primitiveVertexCount * sizeof(MeshVertex);
-    glBufferData(GL_ARRAY_BUFFER, primitiveBytes + staticMesh.size_bytes() + movableMesh.size_bytes(),
-                 nullptr, GL_STATIC_DRAW);
+    const auto movableOffset = primitiveBytes + staticMesh.size_bytes();
+    const auto moonOffset = movableOffset + movableMesh.size_bytes();
+    glBufferData(GL_ARRAY_BUFFER, moonOffset + moonMesh.size_bytes(), nullptr, GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, primitiveBytes, vertices.data());
     if (!staticMesh.empty()) {
         glBufferSubData(GL_ARRAY_BUFFER, primitiveBytes, staticMesh.size_bytes(), staticMesh.data());
     }
     if (!movableMesh.empty()) {
-        glBufferSubData(GL_ARRAY_BUFFER, primitiveBytes + staticMesh.size_bytes(),
-                        movableMesh.size_bytes(), movableMesh.data());
+        glBufferSubData(GL_ARRAY_BUFFER, movableOffset, movableMesh.size_bytes(), movableMesh.data());
     }
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex), nullptr);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(MeshVertex),
-                          reinterpret_cast<const void*>(offsetof(MeshVertex, color)));
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
+    if (!moonMesh.empty()) {
+        glBufferSubData(GL_ARRAY_BUFFER, moonOffset, moonMesh.size_bytes(), moonMesh.data());
+    }
+    enableMeshAttributes();
+
+    glGenVertexArrays(1, &flatPolygonArray_);
+    glBindVertexArray(flatPolygonArray_);
+    glGenBuffers(1, &flatPolygonBuffer_);
+    glBindBuffer(GL_ARRAY_BUFFER, flatPolygonBuffer_);
+    enableMeshAttributes();
+    glBindVertexArray(vertexArray_);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+
     staticMeshCount_ = static_cast<GLsizei>(staticMesh.size());
     movableMeshCount_ = static_cast<GLsizei>(movableMesh.size());
+    moonMeshCount_ = static_cast<GLsizei>(moonMesh.size());
     viewProjectionLocation_ = glGetUniformLocation(program_, "viewProjection");
     modelLocation_ = glGetUniformLocation(program_, "model");
     cubeTintLocation_ = glGetUniformLocation(program_, "cubeTint");
@@ -217,9 +242,32 @@ void BoxRenderer::drawMovableMesh(const glm::mat4& model, const glm::vec3& tint)
     drawMesh(primitiveVertexCount + staticMeshCount_, movableMeshCount_, model, tint);
 }
 
-void BoxRenderer::drawMesh(GLint first, GLsizei count, const glm::mat4& model, const glm::vec3& tint) const {
+void BoxRenderer::drawMoonMesh(const glm::mat4& model, const glm::vec3& tint) const {
+    drawMesh(primitiveVertexCount + staticMeshCount_ + movableMeshCount_, moonMeshCount_, model, tint);
+}
+
+void BoxRenderer::drawFlatPolygon(std::span<const glm::vec2> outline, float height, const glm::vec3& color) const {
+    if (outline.size() < 3) {
+        return;
+    }
+
+    std::vector<MeshVertex> vertices;
+    vertices.reserve(outline.size());
+    for (const auto& point : outline) {
+        vertices.push_back({{point.x, height, point.y}, color});
+    }
+    glBindVertexArray(flatPolygonArray_);
+    glBindBuffer(GL_ARRAY_BUFFER, flatPolygonBuffer_);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(MeshVertex), vertices.data(), GL_STREAM_DRAW);
+    drawMesh(0, static_cast<GLsizei>(vertices.size()), glm::mat4{1.0f}, glm::vec3{1.0f}, GL_TRIANGLE_FAN);
+    glBindVertexArray(vertexArray_);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer_);
+}
+
+void BoxRenderer::drawMesh(GLint first, GLsizei count, const glm::mat4& model, const glm::vec3& tint,
+                           GLenum primitive) const {
     glUniformMatrix4fv(modelLocation_, 1, GL_FALSE, glm::value_ptr(model));
     glUniform3fv(cubeTintLocation_, 1, glm::value_ptr(tint));
     glUniform1i(useVertexColorLocation_, GL_TRUE);
-    glDrawArrays(GL_TRIANGLES, first, count);
+    glDrawArrays(primitive, first, count);
 }

@@ -3,6 +3,8 @@
 #include <GL/glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace {
 #include "MilitaryGeometry.inc"
@@ -16,6 +18,15 @@ constexpr float binRim = 0.73f;
 constexpr float gateFront = -0.12f;
 constexpr float playerRadius = 0.25f;
 constexpr float minimumScale = 0.05f;
+constexpr float moonCarryDepth = 3.2f;
+constexpr float moonLightScale = 0.25f;
+constexpr float gapNear = 7.8f;
+constexpr float gapFar = 12.5f;
+constexpr float trenchY = -1.33f;
+constexpr float minimumBridgeWidth = 0.80f;
+constexpr float overlapOnBank = 0.05f;
+
+using Polygon = std::vector<glm::vec2>;
 
 struct Footprint {
     glm::vec2 min;
@@ -31,8 +42,12 @@ struct Footprint {
 };
 
 constexpr Footprint supply{{0.0f, -4.4f}, {12.6f, 0.0f}};
-constexpr Footprint approach{{9.45f, 0.0f}, {12.6f, 7.8f}};
+constexpr Footprint approach{{9.45f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{8.4f, 0.0f}, {9.45f, 5.15f}};
+constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
+constexpr Footprint bridgeArea{{approach.min.x, gapNear}, {approach.max.x, gapFar}};
+constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
+constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
 constexpr Footprint bin{{3.985f, -4.155f}, {5.115f, -3.185f}};
 constexpr Footprint obstacles[]{
     bin,
@@ -61,12 +76,142 @@ bool overlapsObstacle(const Footprint& bounds) {
 }
 
 bool onRoute(const glm::vec2& point) {
-    return supply.contains(point) || approach.contains(point) || ledge.contains(point);
+    return supply.contains(point) || approach.contains(point) || ledge.contains(point) ||
+           farBank.contains(point) || exitWalkway.contains(point);
+}
+
+float cross(const glm::vec2& a, const glm::vec2& b) {
+    return a.x * b.y - a.y * b.x;
+}
+
+Polygon convexHull(Polygon points) {
+    std::sort(points.begin(), points.end(), [](const glm::vec2& a, const glm::vec2& b) {
+        return a.x == b.x ? a.y < b.y : a.x < b.x;
+    });
+    points.erase(std::unique(points.begin(), points.end()), points.end());
+    if (points.size() < 3) {
+        return {};
+    }
+    const auto buildHalf = [](auto begin, auto end) {
+        Polygon half;
+        for (auto point = begin; point != end; ++point) {
+            while (half.size() >= 2 &&
+                   cross(half.back() - half[half.size() - 2], *point - half.back()) <= 0.0f) {
+                half.pop_back();
+            }
+            half.push_back(*point);
+        }
+        half.pop_back();
+        return half;
+    };
+    auto lower = buildHalf(points.begin(), points.end());
+    const auto upper = buildHalf(points.rbegin(), points.rend());
+    lower.insert(lower.end(), upper.begin(), upper.end());
+    return lower;
+}
+
+Polygon projectPillar(const glm::vec3& light, float surfaceY) {
+    struct Bounds {
+        glm::vec3 min;
+        glm::vec3 max;
+    };
+    // Body, foot and cap bounds from the Blender Entry geometry.
+    constexpr Bounds parts[]{
+        {{9.97f, 0.0f, 5.84f}, {11.03f, 2.28f, 6.46f}},
+        {{9.865f, 0.0f, 5.745f}, {11.135f, 0.16f, 6.555f}},
+        {{9.945f, 2.255f, 5.815f}, {11.055f, 2.345f, 6.485f}},
+    };
+    Polygon points;
+    for (const auto& part : parts) {
+        for (float x : {part.min.x, part.max.x}) {
+            for (float y : {part.min.y, part.max.y}) {
+                for (float z : {part.min.z, part.max.z}) {
+                    const float distance = (light.y - surfaceY) / (light.y - y);
+                    points.push_back(horizontal(light + (glm::vec3{x, y, z} - light) * distance));
+                }
+            }
+        }
+    }
+    return convexHull(std::move(points));
+}
+
+Polygon clipTo(const Polygon& outline, const Footprint& area) {
+    auto clipped = outline;
+    for (int axis = 0; axis < 2; ++axis) {
+        for (bool lower : {true, false}) {
+            if (clipped.empty()) {
+                return {};
+            }
+            const float edge = lower ? area.min[axis] : area.max[axis];
+            const auto inside = [=](const glm::vec2& point) {
+                return lower ? point[axis] >= edge : point[axis] <= edge;
+            };
+            Polygon next;
+            auto previous = clipped.back();
+            for (const auto& point : clipped) {
+                if (inside(previous) != inside(point)) {
+                    const float ratio = (edge - previous[axis]) / (point[axis] - previous[axis]);
+                    auto intersection = glm::mix(previous, point, ratio);
+                    intersection[axis] = edge;
+                    next.push_back(intersection);
+                }
+                if (inside(point)) {
+                    next.push_back(point);
+                }
+                previous = point;
+            }
+            clipped = std::move(next);
+        }
+    }
+    return clipped;
+}
+
+glm::vec2 spanAt(const Polygon& outline, float z) {
+    const float infinity = std::numeric_limits<float>::infinity();
+    glm::vec2 span{infinity, -infinity};
+    for (std::size_t i = 0; i < outline.size(); ++i) {
+        const auto& a = outline[i];
+        const auto& b = outline[(i + 1) % outline.size()];
+        if (z < std::min(a.y, b.y) || z > std::max(a.y, b.y)) {
+            continue;
+        }
+        if (a.y == b.y) {
+            span.x = std::min({span.x, a.x, b.x});
+            span.y = std::max({span.y, a.x, b.x});
+        } else {
+            const float x = glm::mix(a.x, b.x, (z - a.y) / (b.y - a.y));
+            span.x = std::min(span.x, x);
+            span.y = std::max(span.y, x);
+        }
+    }
+    return span;
+}
+
+bool contains(const Polygon& outline, const glm::vec2& point) {
+    if (outline.size() < 3) {
+        return false;
+    }
+    for (std::size_t i = 0; i < outline.size(); ++i) {
+        const auto& a = outline[i];
+        const auto& b = outline[(i + 1) % outline.size()];
+        if (cross(b - a, point - a) < -0.00001f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool seenThroughWindow(const glm::vec3& eye, const glm::vec3& direction) {
+    if (direction.x <= 0.0f) {
+        return false;
+    }
+    const auto atWindow = eye + direction * ((12.60f - eye.x) / direction.x);
+    return atWindow.y > 1.18f && atWindow.y < 2.73f && atWindow.z > 2.36f && atWindow.z < 4.76f;
 }
 }
 
 bool MilitaryRoom::initialize() {
-    return renderer_.initialize(staticGeometry, barricadeGeometry);
+    return renderer_.initialize(staticGeometry, barricadeGeometry, moonGeometry);
 }
 
 std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
@@ -105,6 +250,7 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
 
 void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
     if (exitState_ != ExitState::Locked) {
+        interactMoon(eye, direction);
         return;
     }
     if (heldRatio_ > 0.0f) {
@@ -129,10 +275,73 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
     }
 }
 
+bool MilitaryRoom::canPlaceMoon(const glm::vec3& center) const {
+    const glm::vec3 half = moonWorldSize * (moonScale_ * 0.5f);
+    return center.x - half.x > 8.4f && center.x + half.x < 12.6f &&
+           center.y >= 3.15f && center.y <= 5.50f &&
+           center.z - half.z >= 0.25f && center.z + half.z <= gapNear;
+}
+
+void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction) {
+    // Keep the bridge stable for a player already walking across it or beyond it.
+    if (eye.z < 1.35f || eye.z + playerRadius >= gapNear) {
+        return;
+    }
+    if (moonHeld_) {
+        const glm::vec3 center = eye + direction * moonCarryDepth;
+        if (canPlaceMoon(center)) {
+            placedMoon_ = center;
+            moonHeld_ = false;
+            updateShadow(center);
+        }
+        return;
+    }
+
+    if (!placedMoon_ && !seenThroughWindow(eye, direction)) {
+        return;
+    }
+    const float scale = placedMoon_ ? moonScale_ : 1.0f;
+    const auto hit = perspective::rayBoxDistance(
+        eye, direction, placedMoon_.value_or(moonWorldCenter), moonWorldSize * (scale * 0.5f));
+    if (hit && *hit > 0.05f) {
+        moonHeld_ = true;
+        shadow_.clear();
+        trenchShadow_.clear();
+        bridge_.clear();
+        exitState_ = ExitState::OutpostReached;
+    }
+}
+
+void MilitaryRoom::scroll(double yOffset) {
+    if (moonHeld_) {
+        const auto step = static_cast<float>(std::clamp(yOffset, -8.0, 8.0));
+        moonScale_ = std::clamp(moonScale_ * std::pow(1.28f, -step), 0.08f, 0.52f);
+    }
+}
+
+void MilitaryRoom::updateShadow(const glm::vec3& light) {
+    shadow_ = projectPillar(light, 0.0f);
+    trenchShadow_ = clipTo(projectPillar(light, trenchY), gap);
+    bridge_.clear();
+    exitState_ = ExitState::OutpostReached;
+    const auto near = spanAt(shadow_, gapNear - overlapOnBank);
+    const auto far = spanAt(shadow_, gapFar + overlapOnBank);
+    const float left = std::max({near.x, far.x, bridgeArea.min.x});
+    const float right = std::min({near.y, far.y, bridgeArea.max.x});
+    if (moonScale_ >= moonLightScale && right - left >= minimumBridgeWidth) {
+        bridge_ = clipTo(shadow_, bridgeArea);
+        exitState_ = ExitState::BridgeReady;
+    }
+}
+
+bool MilitaryRoom::supports(const glm::vec2& point) const {
+    return onRoute(point) || contains(bridge_, point);
+}
+
 bool MilitaryRoom::canStand(const glm::vec3& position) const {
     const auto bounds = footprint(position, glm::vec2{playerRadius});
-    if (!onRoute(bounds.min) || !onRoute(bounds.max) ||
-        !onRoute({bounds.min.x, bounds.max.y}) || !onRoute({bounds.max.x, bounds.min.y}) ||
+    if (!supports(bounds.min) || !supports(bounds.max) ||
+        !supports({bounds.min.x, bounds.max.y}) || !supports({bounds.max.x, bounds.min.y}) ||
         (exitState_ == ExitState::Locked && bounds.max.y >= gateFront) || overlapsObstacle(bounds)) {
         return false;
     }
@@ -151,6 +360,9 @@ glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::ve
     }
     if (exitState_ == ExitState::Open && position.z >= 1.35f) {
         exitState_ = ExitState::OutpostReached;
+    }
+    if (exitState_ == ExitState::BridgeReady && position.z >= 15.70f) {
+        exitState_ = ExitState::Escaped;
     }
     return position;
 }
@@ -188,4 +400,27 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     }
     const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, displayed.center), barricadeSize * displayed.scale);
     renderer_.drawMovableMesh(model, tint);
+
+    if (!shadow_.empty()) {
+        const glm::vec3 shadowColor = moonScale_ >= moonLightScale
+            ? glm::vec3{0.08f, 0.14f, 0.21f} : glm::vec3{0.18f, 0.23f, 0.30f};
+        for (const auto& floor : {approach, ledge, farBank}) {
+            renderer_.drawFlatPolygon(clipTo(shadow_, floor), 0.012f, shadowColor);
+        }
+        renderer_.drawFlatPolygon(trenchShadow_, trenchY + 0.012f, shadowColor);
+        renderer_.drawFlatPolygon(bridge_, 0.012f, {0.13f, 0.27f, 0.37f});
+    }
+
+    glm::vec3 moonCenter = placedMoon_.value_or(moonWorldCenter);
+    glm::vec3 moonTint{1.0f};
+    if (moonHeld_) {
+        moonCenter = eye + direction * moonCarryDepth;
+        if (!canPlaceMoon(moonCenter)) {
+            moonTint = {1.0f, 0.38f, 0.38f};
+            moonCenter = eye + direction * (moonCarryDepth * 0.5f);
+        }
+    }
+    const float drawnScale = (placedMoon_ || moonHeld_) ? moonScale_ : 1.0f;
+    const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * drawnScale);
+    renderer_.drawMoonMesh(moonModel, moonTint);
 }

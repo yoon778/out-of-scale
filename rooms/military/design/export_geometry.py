@@ -12,6 +12,8 @@ from mathutils import Vector
 
 
 BARRICADE = "Barricade_Interactable"
+MOON = "Moon_Pickup"
+MOVABLE_OBJECTS = {BARRICADE, MOON}
 LIGHT = Vector((0.32, 0.87, 0.37)).normalized()
 
 
@@ -42,7 +44,7 @@ def object_triangles(obj, depsgraph):
     evaluated = obj.evaluated_get(depsgraph)
     # Keep the authored silhouette and omit decorative bevel tessellation on
     # static props. Evaluate text, the moon, and the interactive barricade.
-    if obj.type == "MESH" and obj.name not in {BARRICADE, "Moon_Pickup"}:
+    if obj.type == "MESH" and obj.name not in MOVABLE_OBJECTS:
         return list(mesh_triangles(obj.data, evaluated.matrix_world))
     mesh = evaluated.to_mesh()
     try:
@@ -51,29 +53,30 @@ def object_triangles(obj, depsgraph):
         evaluated.to_mesh_clear()
 
 
-def normalized_barricade(triangles):
+def world_bounds(triangles):
     points = [point for corners, _ in triangles for point in corners]
     minimum = Vector(tuple(min(point[i] for point in points) for i in range(3)))
     maximum = Vector(tuple(max(point[i] for point in points) for i in range(3)))
-    dimensions = maximum - minimum
-    center = (maximum + minimum) * 0.5
-    print("Barricade center", tuple(center), "dimensions", tuple(dimensions))
+    return (maximum + minimum) * 0.5, maximum - minimum
+
+
+def normalized_triangles(triangles, center, dimensions):
     for corners, color in triangles:
         yield tuple(tuple((point[i] - center[i]) / dimensions[i] for i in range(3))
                     for point in corners), color
 
 
-def cpp_number(value):
-    value = round(value, 3)
+def cpp_number(value, precision):
+    value = round(value, precision)
     if value == 0:
         return "0"
     if value == int(value):
         return str(int(value))
-    return f"{value:.3f}".rstrip("0") + "f"
+    return f"{value:.{precision}f}".rstrip("0") + "f"
 
 
-def cpp_vector(values):
-    return "{" + ",".join(map(cpp_number, values)) + "}"
+def cpp_vector(values, precision=3):
+    return "{" + ",".join(cpp_number(value, precision) for value in values) + "}"
 
 
 def write_triangles(output, triangles):
@@ -101,21 +104,32 @@ def main():
     bpy.context.view_layer.update()
     depsgraph = bpy.context.evaluated_depsgraph_get()
 
+    barricade = object_triangles(scene.objects[BARRICADE], depsgraph)
+    barricade_center, barricade_size = world_bounds(barricade)
+    moon = object_triangles(scene.objects[MOON], depsgraph)
+    moon_center, moon_size = world_bounds(moon)
+
     with args.output.open("w", encoding="utf-8", newline="\n") as output:
         output.write("// Generated from the Military Entry scene by design/export_geometry.py.\n")
         output.write("const MeshVertex staticGeometry[] = {\n")
         static_count = 0
         for obj in sorted(scene.objects, key=lambda item: item.name):
-            if obj.type not in {"MESH", "FONT"} or obj.hide_render or obj.name == BARRICADE:
+            if obj.type not in {"MESH", "FONT"} or obj.hide_render or obj.name in MOVABLE_OBJECTS:
                 continue
             output.write("    // " + obj.name + "\n")
             static_count += write_triangles(output, object_triangles(obj, depsgraph))
         output.write("};\n\nconst MeshVertex barricadeGeometry[] = {\n")
-        barricade = object_triangles(scene.objects[BARRICADE], depsgraph)
-        barricade_count = write_triangles(output, normalized_barricade(barricade))
+        barricade_count = write_triangles(output, normalized_triangles(barricade, barricade_center, barricade_size))
+        output.write("};\n\n")
+        output.write("const glm::vec3 moonWorldCenter = " + cpp_vector(moon_center, 9) + ";\n")
+        output.write("const glm::vec3 moonWorldSize = " + cpp_vector(moon_size, 9) + ";\n")
+        output.write("const MeshVertex moonGeometry[] = {\n")
+        moon_count = write_triangles(output, normalized_triangles(moon, moon_center, moon_size))
         output.write("};\n")
 
-    print("Exported", static_count, "static vertices and", barricade_count, "barricade vertices")
+    print("Barricade center", tuple(barricade_center), "dimensions", tuple(barricade_size))
+    print("Moon center", tuple(moon_center), "dimensions", tuple(moon_size))
+    print("Exported", static_count, "static vertices,", barricade_count, "barricade vertices,", moon_count, "moon vertices")
 
 
 if __name__ == "__main__":
