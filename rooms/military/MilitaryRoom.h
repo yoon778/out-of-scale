@@ -28,6 +28,7 @@ private:
     struct Placement {
         perspective::Pose pose;
         bool fits = true;
+        bool returning = false;
     };
 
     static constexpr std::size_t belongingsCount = 3;
@@ -47,6 +48,7 @@ private:
     BoxRenderer renderer_;
     std::array<perspective::Pose, belongingsCount + 1> objects_;
     std::array<float, belongingsCount + 1> verticalSpeeds_{};
+    std::array<float, belongingsCount + 1> fallGrowthRates_{};
     std::array<bool, belongingsCount> returned_{};
     std::optional<std::size_t> heldObject_;
     float heldRatio_ = 0.0f;

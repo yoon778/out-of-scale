@@ -205,6 +205,18 @@ bool fitsSupply(const Footprint& bounds) {
     return supply.contains(bounds.min) && supply.contains(bounds.max);
 }
 
+float wallScaleLimit(const glm::vec2& center, const Footprint& unitBounds) {
+    const auto minSide = (center - supply.min - glm::vec2{placementClearance}) / -unitBounds.min;
+    const auto maxSide = (supply.max - center - glm::vec2{placementClearance}) / unitBounds.max;
+    return std::min({minSide.x, minSide.y, maxSide.x, maxSide.y});
+}
+
+float sideContactScale(const glm::vec2& center, const Footprint& unitBounds, const Footprint& obstacle) {
+    const auto minSide = (center - obstacle.max - glm::vec2{placementClearance}) / -unitBounds.min;
+    const auto maxSide = (obstacle.min - center - glm::vec2{placementClearance}) / unitBounds.max;
+    return std::max({0.0f, minSide.x, minSide.y, maxSide.x, maxSide.y});
+}
+
 float landingHeight(const Footprint& bounds, float maximumHeight, std::span<const Solid> solids) {
     float height = 0.0f;
     for (const auto& solid : solids) {
@@ -424,7 +436,7 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
                                       return release.bottom < solid.top && release.top > solid.bottom &&
                                              release.bounds.overlaps(solid.bounds);
                                   });
-                return Placement{pose, fits};
+                return Placement{pose, fits, true};
             }
         }
     }
@@ -447,10 +459,11 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
     std::sort(order.begin(), order.end(), [&previous](std::size_t left, std::size_t right) {
         return previous[left].bottom < previous[right].bottom;
     });
+    auto updated = previous;
     RoomSolids storage;
     const auto fixed = barracksSolids(storage, objects_, heldObject_).first(staticSolidCount);
-    const auto playerBounds = footprint(playerEye, glm::vec2{playerRadius});
-    const float playerTop = playerEye.y + headClearance;
+    const Solid player{footprint(playerEye, glm::vec2{playerRadius}), playerEye.y - playerEyeHeight,
+                       playerEye.y + headClearance};
     for (const std::size_t index : order) {
         if (heldObject_ == index || (index != televisionIndex && returned_[index])) {
             continue;
@@ -458,15 +471,15 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
         const auto& body = previous[index];
         float support = landingHeight(body.bounds, body.bottom, fixed);
         float supportSpeed = 0.0f;
-        if (playerTop <= body.bottom + contactTolerance && body.bounds.overlaps(playerBounds)) {
-            support = std::max(support, playerTop);
+        if (player.top <= body.bottom + contactTolerance && body.bounds.overlaps(player.bounds)) {
+            support = std::max(support, player.top);
         }
         for (std::size_t other = 0; other < objects_.size(); ++other) {
             if (other == index || heldObject_ == other || previous[other].top > body.bottom + contactTolerance ||
-                !body.bounds.overlaps(previous[other].bounds)) {
+                !body.bounds.overlaps(updated[other].bounds)) {
                 continue;
             }
-            const float top = objectSolid(other, objects_[other], true).top;
+            const float top = updated[other].top;
             if (top > support || (top == support && verticalSpeeds_[other] > supportSpeed)) {
                 support = top;
                 supportSpeed = verticalSpeeds_[other];
@@ -474,17 +487,39 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
         }
 
         auto& speed = verticalSpeeds_[index];
-        const float nextBottom = body.bottom + (speed - 0.5f * gravity * elapsed) * elapsed;
-        speed -= gravity * elapsed;
-        if (nextBottom > support + contactTolerance) {
-            objects_[index].center.y += nextBottom - body.bottom;
-            continue;
+        const float fallingBottom = body.bottom + (speed - 0.5f * gravity * elapsed) * elapsed;
+        const bool landed = fallingBottom <= support + contactTolerance;
+        const float bottom = landed ? support : fallingBottom;
+        auto& pose = objects_[index];
+        const float fallDistance = std::max(0.0f, body.bottom - bottom);
+        if (fallDistance > 0.0f && fallGrowthRates_[index] > 0.0f) {
+            const auto center = horizontal(pose.center);
+            const auto unitBounds = objectSolid(index, {{0.0f, 0.0f, 0.0f}, 1.0f}, true).bounds;
+            float scaleLimit = wallScaleLimit(center, unitBounds);
+            const auto limitAgainst = [&](const Solid& obstacle) {
+                // A top the body is landing on can support a wider footprint.
+                if (bottom < obstacle.top - contactTolerance && body.top > obstacle.bottom + contactTolerance) {
+                    scaleLimit = std::min(scaleLimit, sideContactScale(center, unitBounds, obstacle.bounds));
+                }
+            };
+            for (const auto& obstacle : fixed) {
+                limitAgainst(obstacle);
+            }
+            for (std::size_t other = 0; other < objects_.size(); ++other) {
+                if (other != index && heldObject_ != other) {
+                    limitAgainst(updated[other]);
+                }
+            }
+            limitAgainst(player);
+            const float desiredScale = pose.scale + fallGrowthRates_[index] * fallDistance;
+            pose.scale = std::max(pose.scale, std::min(desiredScale, scaleLimit));
         }
-        const float halfHeight = objectSpecs[index].size.y * (0.5f * objects_[index].scale);
-        objects_[index].center.y = support + halfHeight;
-        speed = supportSpeed;
-        if (index < belongingsCount && speed == 0.0f && std::abs(support - slotTop) <= contactTolerance &&
-            fitsReturnSlot(body.bounds, returnSlots[index])) {
+        const float halfHeight = objectSpecs[index].size.y * (0.5f * pose.scale);
+        pose.center.y = bottom + halfHeight;
+        updated[index] = objectSolid(index, pose, true);
+        speed = landed ? supportSpeed : speed - gravity * elapsed;
+        if (landed && index < belongingsCount && speed == 0.0f && std::abs(support - slotTop) <= contactTolerance &&
+            fitsReturnSlot(updated[index].bounds, returnSlots[index])) {
             returned_[index] = true;
         }
     }
@@ -504,6 +539,7 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
             const std::size_t index = *heldObject_;
             objects_[index] = target->pose;
             verticalSpeeds_[index] = 0.0f;
+            fallGrowthRates_[index] = target->returning ? 0.0f : heldRatio_;
             heldObject_.reset();
         }
         return;
