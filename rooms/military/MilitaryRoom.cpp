@@ -4,20 +4,28 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
+#include <span>
 
 namespace {
 #include "MilitaryGeometry.inc"
 
-constexpr glm::vec3 barricadeSize{0.66f, 1.52f, 3.61f};
-constexpr glm::vec3 barricadeHalf = barricadeSize * 0.5f;
-constexpr glm::vec3 binCenter{4.55f, 0.0f, -3.67f};
-constexpr glm::vec2 binInterior{0.475f, 0.395f};
-constexpr float binFloor = 0.22f;
-constexpr float binRim = 0.73f;
-constexpr float gateFront = -0.12f;
+constexpr float slotTop = 0.56f;
+constexpr float slotZ = -6.65f;
+constexpr glm::vec2 rackHalf{0.43f, 0.40f};
+constexpr float returnClearance = 0.02f;
+constexpr float placementClearance = 0.025f;
 constexpr float playerRadius = 0.25f;
+constexpr float playerEyeHeight = MilitaryRoom::spawnEye.y;
+constexpr float headClearance = 0.12f;
+constexpr float barracksCeiling = 4.60f;
+constexpr float contactTolerance = 0.001f;
 constexpr float minimumScale = 0.05f;
+constexpr float televisionEntryScale = 1.9f;
+constexpr glm::vec3 screenSize{0.025f, 0.88f, 1.30f};
+constexpr glm::vec3 screenOffset{-0.255f, 0.03f, 0.0f};
+constexpr glm::vec3 outpostEntrance{9.75f, 1.65f, 1.60f};
 constexpr float moonCarryDepth = 3.2f;
 constexpr float moonLightScale = 0.25f;
 constexpr float gapNear = 7.8f;
@@ -41,21 +49,83 @@ struct Footprint {
     }
 };
 
-constexpr Footprint supply{{0.0f, -4.4f}, {12.6f, 0.0f}};
+struct Solid {
+    Footprint bounds;
+    float bottom;
+    float top;
+    bool rack = false;
+};
+
+struct DepthRange {
+    float first = 0.0f;
+    float last;
+
+    bool clipBelow(float origin, float slope, float limit) {
+        if (slope > 0.0f) {
+            last = std::min(last, (limit - origin) / slope);
+        } else if (slope < 0.0f) {
+            first = std::max(first, (limit - origin) / slope);
+        } else if (origin > limit) {
+            return false;
+        }
+        return first <= last;
+    }
+};
+
+struct ObjectSpec {
+    glm::vec3 initialCenter;
+    glm::vec3 size;
+    glm::vec3 color;
+    float frontOverhang = 0.0f;
+};
+
+constexpr ObjectSpec objectSpecs[]{
+    {{3.35f, 0.38f, -4.14f}, {1.62f, 0.76f, 0.98f}, {0.47f, 0.54f, 0.22f}},
+    {{5.65f, 0.28f, -3.18f}, {1.54f, 0.56f, 1.05f}, {0.27f, 0.56f, 0.83f}},
+    {{8.05f, 0.44f, -3.17f}, {1.25f, 0.88f, 1.10f}, {0.78f, 0.58f, 0.32f}},
+    {{11.05f, 0.54f, -3.60f}, {0.50f, 1.08f, 1.58f}, {0.27f, 0.27f, 0.25f}, 0.03f},
+};
+
+struct ReturnSlot {
+    glm::vec3 center;
+    glm::vec2 opening;
+};
+
+constexpr ReturnSlot returnSlots[]{
+    {{9.10f, slotTop, slotZ}, {0.84f, 0.58f}},
+    {{10.0f, slotTop, slotZ}, {0.82f, 0.58f}},
+    {{10.9f, slotTop, slotZ}, {0.72f, 0.62f}},
+};
+
+constexpr Footprint supply{{0.0f, -7.20f}, {12.6f, 0.0f}};
 constexpr Footprint approach{{9.45f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{8.4f, 0.0f}, {9.45f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
 constexpr Footprint bridgeArea{{approach.min.x, gapNear}, {approach.max.x, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
 constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
-constexpr Footprint bin{{3.985f, -4.155f}, {5.115f, -3.185f}};
-constexpr Footprint obstacles[]{
-    bin,
-    {{1.95f, -4.12f}, {2.65f, -3.44f}},
-    {{2.75f, -4.17f}, {3.45f, -3.49f}},
-    {{10.46f, -4.12f}, {11.16f, -3.44f}},
-    {{9.865f, 5.745f}, {11.135f, 6.555f}},
+struct Furniture {
+    Footprint bounds;
+    float height;
 };
+
+constexpr auto furniture = [] {
+    constexpr std::array bedCenters{2.0f, 3.5f, 5.0f, 6.5f, 8.0f};
+    constexpr float halfWidth = 0.54f;
+    constexpr float bedHeight = 0.85f;
+    constexpr float lockerHeight = 1.95f;
+    std::array<Furniture, bedCenters.size() * 4> layout{};
+    for (std::size_t index = 0; index < bedCenters.size(); ++index) {
+        const float left = bedCenters[index] - halfWidth;
+        const float right = bedCenters[index] + halfWidth;
+        layout[index * 4] = {{{left, -2.48f}, {right, -0.48f}}, bedHeight};
+        layout[index * 4 + 1] = {{{left, -0.47f}, {right, -0.03f}}, lockerHeight};
+        layout[index * 4 + 2] = {{{left, -6.72f}, {right, -4.72f}}, bedHeight};
+        layout[index * 4 + 3] = {{{left, -7.17f}, {right, -6.73f}}, lockerHeight};
+    }
+    return layout;
+}();
+constexpr Footprint pillarFoot{{9.865f, 5.745f}, {11.135f, 6.555f}};
 
 glm::vec2 horizontal(const glm::vec3& position) {
     return {position.x, position.z};
@@ -66,18 +136,227 @@ Footprint footprint(const glm::vec3& position, const glm::vec2& half) {
     return {center - half, center + half};
 }
 
-bool overlapsObstacle(const Footprint& bounds) {
-    for (const auto& obstacle : obstacles) {
-        if (bounds.overlaps(obstacle)) {
-            return true;
-        }
-    }
-    return false;
+Footprint objectFootprint(std::size_t index, const perspective::Pose& pose) {
+    return footprint(pose.center, horizontal(objectSpecs[index].size) * (0.5f * pose.scale));
 }
 
-bool onRoute(const glm::vec2& point) {
-    return supply.contains(point) || approach.contains(point) || ledge.contains(point) ||
+Solid objectSolid(std::size_t index, const perspective::Pose& pose, bool includeScreen) {
+    auto bounds = objectFootprint(index, pose);
+    if (includeScreen) {
+        bounds.min.x -= objectSpecs[index].frontOverhang * pose.scale;
+    }
+    const float halfHeight = objectSpecs[index].size.y * (0.5f * pose.scale);
+    return {bounds, pose.center.y - halfHeight, pose.center.y + halfHeight};
+}
+
+using RoomSolids = std::array<Solid, furniture.size() + std::size(returnSlots) + std::size(objectSpecs)>;
+
+std::span<const Solid> barracksSolids(
+    RoomSolids& storage, const std::array<perspective::Pose, std::size(objectSpecs)>& objects,
+    std::optional<std::size_t> held, bool includeScreen = true) {
+    std::size_t count = 0;
+    for (const auto& obstacle : furniture) {
+        storage[count++] = {obstacle.bounds, 0.0f, obstacle.height};
+    }
+    for (const auto& slot : returnSlots) {
+        storage[count++] = {footprint(slot.center, rackHalf), 0.0f, slotTop, true};
+    }
+    for (std::size_t index = 0; index < objects.size(); ++index) {
+        if (held != index) {
+            storage[count++] = objectSolid(index, objects[index], includeScreen);
+        }
+    }
+    return {storage.data(), count};
+}
+
+bool overlapsPlayer(const Solid& object, const glm::vec3& eye) {
+    return object.top > eye.y - playerEyeHeight + contactTolerance &&
+           object.bottom < eye.y + headClearance - contactTolerance &&
+           object.bounds.overlaps(footprint(eye, glm::vec2{playerRadius}));
+}
+
+std::optional<float> rayHit(const glm::vec3& eye, const glm::vec3& direction, const Solid& solid) {
+    const glm::vec2 middle = (solid.bounds.min + solid.bounds.max) * 0.5f;
+    const glm::vec2 half = (solid.bounds.max - solid.bounds.min) * 0.5f;
+    return perspective::rayBoxDistance(eye, direction, {middle.x, (solid.bottom + solid.top) * 0.5f, middle.y},
+                                       {half.x, (solid.top - solid.bottom) * 0.5f, half.y});
+}
+
+float nearestFurnitureDepth(const glm::vec3& eye, const glm::vec3& direction) {
+    float closest = std::numeric_limits<float>::infinity();
+    for (const auto& obstacle : furniture) {
+        const glm::vec2 middle = (obstacle.bounds.min + obstacle.bounds.max) * 0.5f;
+        const glm::vec2 half = (obstacle.bounds.max - obstacle.bounds.min) * 0.5f;
+        const auto hit = perspective::rayBoxDistance(eye, direction, {middle.x, obstacle.height * 0.5f, middle.y},
+                                                     {half.x, obstacle.height * 0.5f, half.y});
+        if (hit) {
+            closest = std::min(closest, *hit);
+        }
+    }
+    return closest;
+}
+
+bool onOutpostRoute(const glm::vec2& point) {
+    return approach.contains(point) || ledge.contains(point) ||
            farBank.contains(point) || exitWalkway.contains(point);
+}
+
+bool fitsSupply(const Footprint& bounds) {
+    return supply.contains(bounds.min) && supply.contains(bounds.max);
+}
+
+std::optional<perspective::Pose> floorPlacement(
+    const glm::vec3& eye, const glm::vec3& direction, float ratio, const ObjectSpec& object,
+    std::span<const Solid> solids) {
+    const glm::vec3 half = object.size * 0.5f;
+    const glm::vec2 origin = horizontal(eye);
+    const glm::vec2 heading = horizontal(direction);
+    const auto scaleAt = [&](const glm::vec2& position) {
+        return perspective::scaleAtSupport(eye, direction, {position.x, 0.0f, position.y}, ratio, half.y);
+    };
+
+    // Each edge of the grounded footprint is linear in the aim depth, even while it grows.
+    const glm::vec2 back = horizontal(half);
+    const glm::vec2 front = back + glm::vec2{object.frontOverhang, 0.0f};
+    const float initialScale = scaleAt(origin);
+    const float scaleGrowth = scaleAt(origin + heading) - initialScale;
+    const Footprint start{origin - front * initialScale, origin + back * initialScale};
+    const Footprint slope{heading - front * scaleGrowth, heading + back * scaleGrowth};
+    const float floorDepth = eye.y / (ratio * half.y - direction.y);
+    DepthRange inside{0.0f, floorDepth};
+    for (int axis = 0; axis < 2; ++axis) {
+        if (!inside.clipBelow(-start.min[axis], -slope.min[axis], -supply.min[axis] - placementClearance) ||
+            !inside.clipBelow(start.max[axis], slope.max[axis], supply.max[axis] - placementClearance)) {
+            return std::nullopt;
+        }
+    }
+
+    const auto stopBefore = [&](const Footprint& obstacle) {
+        DepthRange contact{0.0f, inside.last};
+        const glm::vec2 near = obstacle.min - glm::vec2{placementClearance};
+        const glm::vec2 far = obstacle.max + glm::vec2{placementClearance};
+        for (int axis = 0; axis < 2; ++axis) {
+            if (!contact.clipBelow(start.min[axis], slope.min[axis], far[axis]) ||
+                !contact.clipBelow(-start.max[axis], -slope.max[axis], -near[axis])) {
+                return;
+            }
+        }
+        // When the initial footprint overlaps, allow it to move away on the player's side.
+        if (contact.first == 0.0f) {
+            for (int axis = 0; axis < 2; ++axis) {
+                if ((origin[axis] < near[axis] && slope.max[axis] < 0.0f &&
+                     (near[axis] - start.max[axis]) / slope.max[axis] <= contact.last) ||
+                    (origin[axis] > far[axis] && slope.min[axis] > 0.0f &&
+                     (far[axis] - start.min[axis]) / slope.min[axis] <= contact.last)) {
+                    inside.first = std::max(inside.first, contact.last);
+                    return;
+                }
+            }
+        }
+        inside.last = contact.first;
+    };
+    for (const auto& obstacle : solids) {
+        stopBefore(obstacle.bounds);
+    }
+
+    const glm::vec2 position = origin + heading * inside.last;
+    const float scale = scaleAt(position);
+    const glm::vec3 center{position.x, half.y * scale, position.y};
+    const Footprint bounds{position - front * scale, position + back * scale};
+    if (inside.last < inside.first || scale < minimumScale ||
+        bounds.overlaps(footprint(eye, glm::vec2{playerRadius}))) {
+        return std::nullopt;
+    }
+    return perspective::Pose{center, scale};
+}
+
+float landingHeight(const Footprint& bounds, float maximumHeight, std::span<const Solid> solids) {
+    float height = 0.0f;
+    for (const auto& solid : solids) {
+        if (solid.top <= maximumHeight + contactTolerance && bounds.overlaps(solid.bounds)) {
+            height = std::max(height, solid.top);
+        }
+    }
+    return height;
+}
+
+std::optional<perspective::Pose> placementOnTop(const glm::vec3& eye, const glm::vec3& direction, float ratio,
+                                                std::size_t index, std::span<const Solid> solids) {
+    if (direction.y >= -0.001f) {
+        return std::nullopt;
+    }
+    const Solid* target = nullptr;
+    float closest = std::numeric_limits<float>::infinity();
+    for (const auto& solid : solids) {
+        if (const auto hit = rayHit(eye, direction, solid); hit && *hit < closest) {
+            closest = *hit;
+            target = &solid;
+        }
+    }
+    if (!target || target->rack) {
+        return std::nullopt;
+    }
+    glm::vec3 support = eye + direction * closest;
+    if (std::abs(support.y - target->top) > contactTolerance) {
+        return std::nullopt;
+    }
+    support.y = target->top;
+    const float halfHeight = objectSpecs[index].size.y * 0.5f;
+    const float scale = perspective::scaleAtSupport(eye, direction, support, ratio, halfHeight);
+    const perspective::Pose pose{support + glm::vec3{0.0f, halfHeight * scale, 0.0f}, scale};
+    const Solid candidate = objectSolid(index, pose, true);
+    if (scale < minimumScale || candidate.top > barracksCeiling || !fitsSupply(candidate.bounds) ||
+        overlapsPlayer(candidate, eye)) {
+        return std::nullopt;
+    }
+    for (const auto& solid : solids) {
+        if (candidate.bottom < solid.top - contactTolerance && candidate.top > solid.bottom + contactTolerance &&
+            candidate.bounds.overlaps(solid.bounds)) {
+            return std::nullopt;
+        }
+    }
+    return pose;
+}
+
+std::optional<perspective::Pose> dropFromAim(const glm::vec3& eye, const glm::vec3& direction, float ratio,
+                                            std::size_t index, std::span<const Solid> solids) {
+    const auto& object = objectSpecs[index];
+    const glm::vec3 half = object.size * 0.5f;
+    const glm::vec3 lowerSlope = direction - (half + glm::vec3{object.frontOverhang, 0.0f, 0.0f}) * ratio;
+    const glm::vec3 upperSlope = direction + half * ratio;
+    const glm::vec3 roomMin{supply.min.x, 0.0f, supply.min.y};
+    const glm::vec3 roomMax{supply.max.x, barracksCeiling, supply.max.y};
+    DepthRange depth{0.0f, std::numeric_limits<float>::infinity()};
+    // The box grows linearly along the aim ray. Clip its entire volume before letting it settle.
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!depth.clipBelow(-eye[axis], -lowerSlope[axis], -roomMin[axis] - placementClearance) ||
+            !depth.clipBelow(eye[axis], upperSlope[axis], roomMax[axis] - placementClearance)) {
+            return std::nullopt;
+        }
+    }
+    for (const auto& solid : solids) {
+        const glm::vec3 lower{solid.bounds.min.x, solid.bottom, solid.bounds.min.y};
+        const glm::vec3 upper{solid.bounds.max.x, solid.top, solid.bounds.max.y};
+        DepthRange hit{0.0f, depth.last};
+        bool intersects = true;
+        for (int axis = 0; axis < 3 && intersects; ++axis) {
+            intersects = hit.clipBelow(eye[axis], lowerSlope[axis], upper[axis] + placementClearance) &&
+                         hit.clipBelow(-eye[axis], -upperSlope[axis], -lower[axis] + placementClearance);
+        }
+        if (intersects) {
+            depth.last = hit.first;
+        }
+    }
+    perspective::Pose pose{eye + direction * depth.last, ratio * depth.last};
+    if (depth.last < depth.first || pose.scale < minimumScale) {
+        return std::nullopt;
+    }
+    const auto release = objectSolid(index, pose, true);
+    pose.center.y = landingHeight(release.bounds, release.bottom, solids) + half.y * pose.scale;
+    if (overlapsPlayer(objectSolid(index, pose, true), eye)) {
+        return std::nullopt;
+    }
+    return pose;
 }
 
 float cross(const glm::vec2& a, const glm::vec2& b) {
@@ -210,68 +489,115 @@ bool seenThroughWindow(const glm::vec3& eye, const glm::vec3& direction) {
 }
 }
 
+MilitaryRoom::MilitaryRoom() {
+    static_assert(std::size(objectSpecs) == belongingsCount + 1);
+    static_assert(std::size(returnSlots) == belongingsCount);
+    for (std::size_t index = 0; index < objects_.size(); ++index) {
+        objects_[index] = {objectSpecs[index].initialCenter, 1.0f};
+    }
+}
+
 bool MilitaryRoom::initialize() {
-    return renderer_.initialize(staticGeometry, barricadeGeometry, moonGeometry);
+    return renderer_.initialize(staticGeometry, {}, moonGeometry);
+}
+
+bool MilitaryRoom::inBarracks() const {
+    return exitState_ == ExitState::Locked || exitState_ == ExitState::Open;
 }
 
 std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
     const glm::vec3& eye, const glm::vec3& direction) const {
-    if (direction.y >= -0.001f) {
+    if (!heldObject_ || eye.y <= 0.0f || heldRatio_ <= 0.0f) {
         return std::nullopt;
     }
 
-    const float rimDepth = (binRim - eye.y) / direction.y;
-    const glm::vec3 rimPoint = eye + direction * rimDepth;
-    if (rimDepth > 0.0f && bin.contains(horizontal(rimPoint))) {
-        const auto opening = footprint(binCenter, binInterior);
-        const glm::vec3 binTop{binCenter.x, binRim, binCenter.z};
-        // Size is chosen at the opening, then the returned prop settles onto the tray.
-        const float scale = perspective::scaleAtSupport(eye, direction, binTop, heldRatio_, barricadeHalf.y);
-        const glm::vec3 half = barricadeHalf * scale;
-        if (!opening.contains(horizontal(rimPoint)) || scale < minimumScale ||
-            half.x + 0.02f > binInterior.x || half.z + 0.02f > binInterior.y) {
-            return std::nullopt;
+    const std::size_t index = *heldObject_;
+    const glm::vec3 half = objectSpecs[index].size * 0.5f;
+    if (index != televisionIndex && direction.y < -0.001f && eye.y > slotTop) {
+        const float rackDepth = (slotTop - eye.y) / direction.y;
+        const glm::vec2 rackAim = horizontal(eye + direction * rackDepth);
+        for (std::size_t slotIndex = 0; slotIndex < belongingsCount; ++slotIndex) {
+            const auto& slot = returnSlots[slotIndex];
+            if (footprint(slot.center, rackHalf).contains(rackAim) &&
+                rackDepth <= nearestFurnitureDepth(eye, direction)) {
+                const float scale = perspective::scaleAtSupport(eye, direction, slot.center, heldRatio_, half.y);
+                const glm::vec2 scaledHalf = horizontal(half) * scale + glm::vec2{returnClearance};
+                const glm::vec2 openingHalf = slot.opening * 0.5f;
+                const perspective::Pose pose{slot.center + glm::vec3{0.0f, half.y * scale, 0.0f}, scale};
+                const bool fits = index == slotIndex && !returned_[slotIndex] && scale >= minimumScale &&
+                                  scaledHalf.x <= openingHalf.x && scaledHalf.y <= openingHalf.y &&
+                                  !overlapsPlayer(objectSolid(index, pose, true), eye);
+                return Placement{pose, true, fits};
+            }
         }
-        return Placement{{{binCenter.x, binFloor + half.y, binCenter.z}, scale}, true};
     }
 
-    const auto target = perspective::onFloor(eye, direction, heldRatio_, barricadeHalf.y);
-    if (!target || target->scale < minimumScale) {
-        return std::nullopt;
+    RoomSolids storage;
+    const auto solids = barracksSolids(storage, objects_, heldObject_);
+    if (const auto top = placementOnTop(eye, direction, heldRatio_, index, solids)) {
+        return Placement{*top};
     }
-    const auto half = horizontal(barricadeHalf) * target->scale;
-    const auto bounds = footprint(target->center, half);
-    if (!supply.contains(bounds.min) || !supply.contains(bounds.max) || bounds.max.y >= gateFront ||
-        bounds.overlaps(footprint(eye, glm::vec2{playerRadius})) || overlapsObstacle(bounds)) {
-        return std::nullopt;
+    const auto target = eye.y <= playerEyeHeight + contactTolerance && direction.y <= 0.0f
+        ? floorPlacement(eye, direction, heldRatio_, objectSpecs[index], solids)
+        : dropFromAim(eye, direction, heldRatio_, index, solids);
+    return target ? std::optional{Placement{*target}} : std::nullopt;
+}
+
+void MilitaryRoom::settleObjects() {
+    std::array<std::size_t, std::size(objectSpecs)> order{0, 1, 2, televisionIndex};
+    std::sort(order.begin(), order.end(), [this](std::size_t left, std::size_t right) {
+        return objectSolid(left, objects_[left], true).bottom < objectSolid(right, objects_[right], true).bottom;
+    });
+    RoomSolids storage;
+    for (const std::size_t index : order) {
+        if (heldObject_ == index || (index != televisionIndex && returned_[index])) {
+            continue;
+        }
+        const auto solid = objectSolid(index, objects_[index], true);
+        const auto solids = barracksSolids(storage, objects_, heldObject_);
+        objects_[index].center.y += landingHeight(solid.bounds, solid.bottom, solids) - solid.bottom;
     }
-    return Placement{*target, false};
 }
 
 void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
-    if (exitState_ != ExitState::Locked) {
+    if (!inBarracks()) {
         interactMoon(eye, direction);
         return;
     }
-    if (heldRatio_ > 0.0f) {
-        if (const auto target = placement(eye, direction)) {
-            barricade_ = target->pose;
-            heldRatio_ = 0.0f;
-            if (target->returned) {
-                exitState_ = ExitState::Open;
+    if (heldObject_) {
+        if (const auto target = placement(eye, direction); target && target->fits) {
+            const std::size_t index = *heldObject_;
+            objects_[index] = target->pose;
+            heldObject_.reset();
+            if (target->onRack) {
+                returned_[index] = true;
+                if (std::all_of(returned_.begin(), returned_.end(), [](bool returned) { return returned; })) {
+                    exitState_ = ExitState::Open;
+                }
             }
         }
         return;
     }
 
-    const auto hit = perspective::rayBoxDistance(eye, direction, barricade_.center, barricadeHalf * barricade_.scale);
-    if (!hit || *hit <= 0.05f) {
-        return;
+    float closest = nearestFurnitureDepth(eye, direction);
+    for (std::size_t index = 0; index < objects_.size(); ++index) {
+        if (index == televisionIndex ? exitState_ == ExitState::Locked : returned_[index]) {
+            continue;
+        }
+        const auto& object = objects_[index];
+        const auto hit = perspective::rayBoxDistance(eye, direction, object.center,
+                                                     objectSpecs[index].size * (object.scale * 0.5f));
+        if (hit && *hit > 0.05f && *hit < closest) {
+            closest = *hit;
+            heldObject_ = index;
+        }
     }
-    const auto binHit = perspective::rayBoxDistance(
-        eye, direction, binCenter + glm::vec3{0.0f, binRim * 0.5f, 0.0f}, {0.565f, binRim * 0.5f, 0.485f});
-    if (!binHit || *hit < *binHit) {
-        heldRatio_ = perspective::grabRatio(eye, direction, barricade_.center, barricade_.scale, barricadeSize.z);
+    if (heldObject_) {
+        const auto& object = objects_[*heldObject_];
+        const auto& size = objectSpecs[*heldObject_].size;
+        heldRatio_ = perspective::grabRatio(eye, direction, object.center, object.scale,
+                                           std::max({size.x, size.y, size.z}));
+        settleObjects();
     }
 }
 
@@ -335,71 +661,184 @@ void MilitaryRoom::updateShadow(const glm::vec3& light) {
 }
 
 bool MilitaryRoom::supports(const glm::vec2& point) const {
-    return onRoute(point) || contains(bridge_, point);
+    return onOutpostRoute(point) || contains(bridge_, point);
 }
 
-bool MilitaryRoom::canStand(const glm::vec3& position) const {
+bool MilitaryRoom::canStandAtOutpost(const glm::vec3& position) const {
     const auto bounds = footprint(position, glm::vec2{playerRadius});
-    if (!supports(bounds.min) || !supports(bounds.max) ||
-        !supports({bounds.min.x, bounds.max.y}) || !supports({bounds.max.x, bounds.min.y}) ||
-        (exitState_ == ExitState::Locked && bounds.max.y >= gateFront) || overlapsObstacle(bounds)) {
+    return supports(bounds.min) && supports(bounds.max) &&
+           supports({bounds.min.x, bounds.max.y}) && supports({bounds.max.x, bounds.min.y}) &&
+           !bounds.overlaps(pillarFoot);
+}
+
+bool MilitaryRoom::canEnterTelevision(const glm::vec3& previous, const glm::vec3& desired,
+                                      const glm::vec3& facing) const {
+    const auto& television = objects_[televisionIndex];
+    const float scale = television.scale;
+    const glm::vec2 movement = horizontal(desired - previous);
+    if (exitState_ != ExitState::Open || heldObject_ || scale < televisionEntryScale ||
+        facing.x <= 0.30f || movement.x <= 0.0f || glm::dot(movement, horizontal(facing)) <= 0.0f) {
         return false;
     }
-    const auto barricadeBounds = footprint(barricade_.center, horizontal(barricadeHalf) * barricade_.scale);
-    return heldRatio_ > 0.0f || exitState_ != ExitState::Locked || !bounds.overlaps(barricadeBounds);
+    const glm::vec3 screenCenter = television.center + screenOffset * scale;
+    const glm::vec3 screenHalf = screenSize * (0.5f * scale);
+    const float edge = screenCenter.x - screenHalf.x - playerRadius;
+    if (previous.x > edge || desired.x <= edge) {
+        return false;
+    }
+    const glm::vec3 crossing = glm::mix(previous, desired, (edge - previous.x) / movement.x);
+    return std::abs(crossing.z - screenCenter.z) <= screenHalf.z - playerRadius &&
+           std::abs(crossing.y - screenCenter.y) < screenHalf.y;
 }
 
-glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired) {
-    glm::vec3 position{desired.x, desired.y, previous.z};
-    if (!canStand(position)) {
+glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired,
+                                        const glm::vec3& facing, bool* grounded) {
+    const auto groundAt = [&](glm::vec3 position, float height) {
+        const bool landed = position.y <= height + playerEyeHeight;
+        if (grounded) {
+            *grounded = landed;
+        }
+        position.y = std::max(position.y, height + playerEyeHeight);
+        return position;
+    };
+    if (canEnterTelevision(previous, desired, facing)) {
+        exitState_ = ExitState::OutpostReached;
+        return groundAt({outpostEntrance.x, desired.y, outpostEntrance.z}, 0.0f);
+    }
+    const bool barracks = inBarracks();
+    RoomSolids storage;
+    // The screen protrudes from the TV body. Keep the portal reachable before touching its body.
+    const auto solids = barracks ? barracksSolids(storage, objects_, heldObject_, false) : std::span<const Solid>{};
+    const auto canMoveTo = [&](const glm::vec3& position) {
+        if (!barracks) {
+            return canStandAtOutpost(position);
+        }
+        return fitsSupply(footprint(position, glm::vec2{playerRadius})) &&
+               std::none_of(solids.begin(), solids.end(), [&](const Solid& solid) {
+                   return overlapsPlayer(solid, position);
+               });
+    };
+    // Move sideways above a top only after the feet clear it. On descent, land after moving sideways.
+    glm::vec3 position{desired.x, std::max(previous.y, desired.y), previous.z};
+    if (!canMoveTo(position)) {
         position.x = previous.x;
     }
     position.z = desired.z;
-    if (!canStand(position)) {
+    if (!canMoveTo(position)) {
         position.z = previous.z;
     }
-    if (exitState_ == ExitState::Open && position.z >= 1.35f) {
-        exitState_ = ExitState::OutpostReached;
+    position.y = desired.y;
+    if (barracks) {
+        const auto bounds = footprint(position, glm::vec2{playerRadius});
+        if (desired.y > previous.y) {
+            position.y = std::min(position.y, barracksCeiling - headClearance);
+            for (const auto& solid : solids) {
+                if (bounds.overlaps(solid.bounds) && previous.y + headClearance <= solid.bottom + contactTolerance) {
+                    position.y = std::min(position.y, solid.bottom - headClearance);
+                }
+            }
+            if (grounded) {
+                *grounded = false;
+            }
+            return position;
+        }
+        return groundAt(position, landingHeight(bounds, previous.y - playerEyeHeight, solids));
     }
     if (exitState_ == ExitState::BridgeReady && position.z >= 15.70f) {
         exitState_ = ExitState::Escaped;
     }
-    return position;
+    return groundAt(position, 0.0f);
 }
 
 MilitaryRoom::ExitState MilitaryRoom::exitState() const {
     return exitState_;
 }
 
+void MilitaryRoom::drawObject(std::size_t index, const perspective::Pose& pose, const glm::vec3& tint) const {
+    const auto& spec = objectSpecs[index];
+    const glm::vec3 size = spec.size * pose.scale;
+    const auto part = [&](const glm::vec3& offset, const glm::vec3& dimensions, const glm::vec3& color) {
+        renderer_.drawBox(pose.center + offset * size, dimensions * size, color * tint);
+    };
+
+    if (index == 0) {
+        // Duffel bag: soft body, shoulder straps and a raised handle.
+        part({0.0f, -0.09f, 0.0f}, {1.0f, 0.82f, 0.96f}, spec.color);
+        for (float x : {-0.29f, 0.29f}) {
+            part({x, 0.32f, 0.0f}, {0.10f, 0.07f, 1.0f}, {0.26f, 0.30f, 0.17f});
+        }
+        part({0.0f, 0.44f, 0.0f}, {0.37f, 0.12f, 0.12f}, {0.29f, 0.34f, 0.17f});
+    } else if (index == 1) {
+        // Bedding bundle: folded blanket layers held by light straps.
+        part({0.0f, -0.20f, 0.0f}, {1.0f, 0.60f, 1.0f}, spec.color * 0.72f);
+        part({0.0f, 0.23f, 0.0f}, {0.95f, 0.27f, 0.92f}, spec.color);
+        for (float x : {-0.28f, 0.28f}) {
+            part({x, 0.40f, 0.0f}, {0.10f, 0.18f, 1.0f}, {0.68f, 0.76f, 0.81f});
+        }
+    } else if (index == 2) {
+        // Field kit: rigid case, lid and two metal latches.
+        part({0.0f, -0.10f, 0.0f}, {0.97f, 0.80f, 1.0f}, spec.color * 0.82f);
+        part({0.0f, 0.38f, 0.0f}, {1.0f, 0.24f, 1.0f}, spec.color);
+        for (float z : {-0.29f, 0.29f}) {
+            part({-0.47f, 0.22f, z}, {0.05f, 0.29f, 0.12f}, {0.37f, 0.39f, 0.38f});
+        }
+    } else {
+        part({}, {1.0f, 1.0f, 1.0f}, spec.color);
+        const bool powered = exitState_ == ExitState::Open;
+        const bool portal = powered && pose.scale >= televisionEntryScale;
+        const glm::vec3 screenColor = portal ? glm::vec3{0.006f, 0.008f, 0.012f}
+            : powered ? glm::vec3{0.23f, 0.61f, 0.79f} : glm::vec3{0.07f, 0.08f, 0.09f};
+        renderer_.drawBox(pose.center + screenOffset * pose.scale, screenSize * pose.scale, screenColor * tint);
+        if (powered && !portal) {
+            part({-0.55f, 0.08f, 0.0f}, {0.02f, 0.06f, 0.63f}, {0.47f, 0.81f, 0.90f});
+        }
+        part({-0.516f, -0.443f, 0.37f}, {0.05f, 0.04f, 0.04f},
+             powered ? glm::vec3{0.28f, 0.91f, 0.43f} : glm::vec3{0.64f, 0.16f, 0.12f});
+    }
+}
+
+void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction) const {
+    for (std::size_t index = 0; index < belongingsCount; ++index) {
+        const auto& slot = returnSlots[index];
+        const glm::vec2 half = slot.opening * 0.5f;
+        const glm::vec3 mark = objectSpecs[index].color;
+        renderer_.drawBox({slot.center.x, slotTop * 0.5f, slot.center.z},
+                          {2.0f * rackHalf.x, slotTop, 2.0f * rackHalf.y}, {0.32f, 0.33f, 0.28f});
+        for (float side : {-1.0f, 1.0f}) {
+            renderer_.drawBox(slot.center + glm::vec3{side * half.x, 0.012f, 0.0f},
+                              {0.023f, 0.024f, slot.opening.y}, mark);
+            renderer_.drawBox(slot.center + glm::vec3{0.0f, 0.012f, side * half.y},
+                              {slot.opening.x, 0.024f, 0.023f}, mark);
+        }
+        renderer_.drawBox({slot.center.x, slotTop - 0.12f, slot.center.z + rackHalf.y},
+                          {0.30f, 0.075f, 0.012f}, mark);
+    }
+
+    for (std::size_t index = 0; index < objects_.size(); ++index) {
+        perspective::Pose displayed = objects_[index];
+        glm::vec3 tint{1.0f};
+        if (heldObject_ == index) {
+            constexpr glm::vec3 blockedTint{1.35f, 0.36f, 0.36f};
+            if (const auto target = placement(eye, direction)) {
+                displayed = target->pose;
+                tint = target->fits ? glm::vec3{0.82f, 1.27f, 1.05f} : blockedTint;
+            } else {
+                constexpr float carryDepth = 1.45f;
+                displayed = {eye + direction * carryDepth, std::min(heldRatio_ * carryDepth, 0.55f)};
+                tint = blockedTint;
+            }
+        }
+        drawObject(index, displayed, tint);
+    }
+}
+
 void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
     renderer_.begin(viewProjection);
     renderer_.drawStaticMesh();
 
-    const bool locked = exitState_ == ExitState::Locked;
-    if (locked) {
-        renderer_.drawBox({10.5f, 1.34f, -0.04f}, {4.2f, 2.68f, 0.16f}, {0.27f, 0.33f, 0.30f});
-        for (float x : {8.8f, 9.65f, 10.5f, 11.35f, 12.2f}) {
-            renderer_.drawBox({x, 1.34f, -0.13f}, {0.055f, 2.54f, 0.025f}, {0.42f, 0.47f, 0.42f});
-        }
+    if (inBarracks()) {
+        drawBarracks(eye, direction);
     }
-    renderer_.drawBox({10.5f, 2.82f, -0.04f}, {4.2f, 0.28f, 0.26f}, {0.25f, 0.29f, 0.25f});
-    renderer_.drawBox({10.5f, 2.82f, -0.19f}, {0.48f, 0.10f, 0.04f},
-                      locked ? glm::vec3{0.95f, 0.25f, 0.16f} : glm::vec3{0.40f, 1.0f, 0.48f});
-
-    perspective::Pose displayed = barricade_;
-    glm::vec3 tint{1.0f};
-    if (heldRatio_ > 0.0f) {
-        if (const auto target = placement(eye, direction)) {
-            displayed = target->pose;
-            tint = {0.65f, 1.25f, 1.05f};
-        } else {
-            constexpr float carryDepth = 2.4f;
-            displayed = {eye + direction * carryDepth, std::min(heldRatio_ * carryDepth, 0.55f)};
-            tint = {1.0f, 0.43f, 0.40f};
-        }
-    }
-    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, displayed.center), barricadeSize * displayed.scale);
-    renderer_.drawMovableMesh(model, tint);
 
     if (!shadow_.empty()) {
         const glm::vec3 shadowColor = moonScale_ >= moonLightScale

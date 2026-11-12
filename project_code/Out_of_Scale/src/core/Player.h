@@ -6,14 +6,17 @@ struct GLFWwindow;
 
 class Player {
 public:
+    static constexpr float eyeHeight = 1.65f;
+
     Player();
     Player(const glm::vec3& spawnEye, float spawnYaw);
 
     void look(double x, double y);
     void resetMouseSample();
     void jump();
-    void update(GLFWwindow* window, float elapsed, float floorHalfSize);
+    void update(GLFWwindow* window, float elapsed, float floorHalfSize, bool roomControlsHeight = false);
     void setHorizontalPosition(const glm::vec3& position);
+    void setRoomPosition(const glm::vec3& position, bool roomGrounded);
     glm::vec3 eyePosition() const;
     glm::vec3 viewDirection() const;
     glm::mat4 view() const;
@@ -21,7 +24,7 @@ public:
 private:
     glm::vec3 forwardOnFloor() const;
     void move(GLFWwindow* window, float elapsed, float floorHalfSize);
-    void updateJump(float elapsed);
+    void updateJump(float elapsed, bool roomControlsHeight);
 
     glm::vec3 eye;
     float yaw = 0.0f;

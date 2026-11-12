@@ -29,7 +29,7 @@ const char* windowTitle(TestRoom::ExitState state) {
 const char* windowTitle(MilitaryRoom::ExitState state) {
     switch (state) {
     case MilitaryRoom::ExitState::Open:
-        return "Out of Scale | Barricade returned | Follow arrows to the night outpost";
+        return "Out of Scale | TV on | E Grab/Place | Enlarge and walk into the screen";
     case MilitaryRoom::ExitState::OutpostReached:
         return "Out of Scale | E Grab moon | Scroll down to grow | E Place | Esc Exit";
     case MilitaryRoom::ExitState::BridgeReady:
@@ -37,9 +37,9 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
     case MilitaryRoom::ExitState::Escaped:
         return "Out of Scale | Military escaped | Esc Exit";
     case MilitaryRoom::ExitState::Locked:
-        return "Out of Scale | Military supply | Return the barricade | E Grab/Place";
+        return "Out of Scale | Barracks | Return the three belongings | E Grab/Place";
     }
-    return "Out of Scale | Military supply";
+    return "Out of Scale | Barracks";
 }
 
 template<class Room>
@@ -122,9 +122,16 @@ int run(GLFWwindow* window, const Player& player) {
         const float elapsed = static_cast<float>(std::min(now - previous, 0.05));
         previous = now;
         const glm::vec3 previousEye = scene.player.eyePosition();
-        scene.player.update(window, elapsed, Room::halfSize);
+        scene.player.update(window, elapsed, Room::halfSize, std::is_same_v<Room, MilitaryRoom>);
         const glm::vec3 desiredEye = scene.player.eyePosition();
-        scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
+        if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+            bool grounded = false;
+            const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye,
+                                                                 scene.player.viewDirection(), &grounded);
+            scene.player.setRoomPosition(resolved, grounded);
+        } else {
+            scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
+        }
 
         const auto currentExitState = scene.room.exitState();
         if (currentExitState != exitState) {

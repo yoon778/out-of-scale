@@ -8,7 +8,6 @@
 
 namespace {
 constexpr float walkSpeed = 4.0f;
-constexpr float eyeHeight = 1.65f;
 constexpr float jumpSpeed = 4.8f;
 constexpr float gravity = 9.8f;
 constexpr float mouseSensitivity = 0.0025f;
@@ -43,16 +42,24 @@ void Player::jump() {
     }
 }
 
-void Player::update(GLFWwindow* window, float elapsed, float floorHalfSize) {
+void Player::update(GLFWwindow* window, float elapsed, float floorHalfSize, bool roomControlsHeight) {
     if (glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE) {
         move(window, elapsed, floorHalfSize);
     }
-    updateJump(elapsed);
+    updateJump(elapsed, roomControlsHeight);
 }
 
 void Player::setHorizontalPosition(const glm::vec3& position) {
     eye.x = position.x;
     eye.z = position.z;
+}
+
+void Player::setRoomPosition(const glm::vec3& position, bool roomGrounded) {
+    if (roomGrounded || (verticalSpeed > 0.0f && position.y < eye.y)) {
+        verticalSpeed = 0.0f;
+    }
+    eye = position;
+    grounded = roomGrounded;
 }
 
 glm::vec3 Player::eyePosition() const {
@@ -85,14 +92,14 @@ void Player::move(GLFWwindow* window, float elapsed, float floorHalfSize) {
     eye.z = std::clamp(eye.z, -edge, edge);
 }
 
-void Player::updateJump(float elapsed) {
-    if (grounded) {
+void Player::updateJump(float elapsed, bool roomControlsHeight) {
+    if (grounded && !roomControlsHeight) {
         return;
     }
 
     eye.y += (verticalSpeed - 0.5f * gravity * elapsed) * elapsed;
     verticalSpeed -= gravity * elapsed;
-    if (verticalSpeed <= 0.0f && eye.y <= eyeHeight) {
+    if (!roomControlsHeight && verticalSpeed <= 0.0f && eye.y <= eyeHeight) {
         eye.y = eyeHeight;
         verticalSpeed = 0.0f;
         grounded = true;
