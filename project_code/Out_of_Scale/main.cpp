@@ -160,6 +160,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap) {
         scene.player.update(window, elapsed, Room::halfSize, std::is_same_v<Room, MilitaryRoom>);
         const glm::vec3 desiredEye = scene.player.eyePosition();
         if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+            scene.room.update(elapsed, previousEye);
             bool grounded = false;
             const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye,
                                                                  scene.player.viewDirection(), &grounded);

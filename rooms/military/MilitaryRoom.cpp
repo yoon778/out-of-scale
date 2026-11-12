@@ -15,7 +15,9 @@ constexpr float slotTop = 0.56f;
 constexpr float slotZ = -6.65f;
 constexpr glm::vec2 rackHalf{0.43f, 0.40f};
 constexpr float returnClearance = 0.02f;
+constexpr float rackDropHeight = 0.12f;
 constexpr float placementClearance = 0.025f;
+constexpr float gravity = 9.8f;
 constexpr float playerRadius = 0.25f;
 constexpr float playerEyeHeight = MilitaryRoom::spawnEye.y;
 constexpr float headClearance = 0.12f;
@@ -53,7 +55,6 @@ struct Solid {
     Footprint bounds;
     float bottom;
     float top;
-    bool rack = false;
 };
 
 struct DepthRange {
@@ -149,7 +150,8 @@ Solid objectSolid(std::size_t index, const perspective::Pose& pose, bool include
     return {bounds, pose.center.y - halfHeight, pose.center.y + halfHeight};
 }
 
-using RoomSolids = std::array<Solid, furniture.size() + std::size(returnSlots) + std::size(objectSpecs)>;
+constexpr std::size_t staticSolidCount = furniture.size() + std::size(returnSlots);
+using RoomSolids = std::array<Solid, staticSolidCount + std::size(objectSpecs)>;
 
 std::span<const Solid> barracksSolids(
     RoomSolids& storage, const std::array<perspective::Pose, std::size(objectSpecs)>& objects,
@@ -159,7 +161,7 @@ std::span<const Solid> barracksSolids(
         storage[count++] = {obstacle.bounds, 0.0f, obstacle.height};
     }
     for (const auto& slot : returnSlots) {
-        storage[count++] = {footprint(slot.center, rackHalf), 0.0f, slotTop, true};
+        storage[count++] = {footprint(slot.center, rackHalf), 0.0f, slotTop};
     }
     for (std::size_t index = 0; index < objects.size(); ++index) {
         if (held != index) {
@@ -175,11 +177,9 @@ bool overlapsPlayer(const Solid& object, const glm::vec3& eye) {
            object.bounds.overlaps(footprint(eye, glm::vec2{playerRadius}));
 }
 
-std::optional<float> rayHit(const glm::vec3& eye, const glm::vec3& direction, const Solid& solid) {
-    const glm::vec2 middle = (solid.bounds.min + solid.bounds.max) * 0.5f;
-    const glm::vec2 half = (solid.bounds.max - solid.bounds.min) * 0.5f;
-    return perspective::rayBoxDistance(eye, direction, {middle.x, (solid.bottom + solid.top) * 0.5f, middle.y},
-                                       {half.x, (solid.top - solid.bottom) * 0.5f, half.y});
+bool fitsReturnSlot(const Footprint& bounds, const ReturnSlot& slot) {
+    const auto opening = footprint(slot.center, slot.opening * 0.5f - glm::vec2{returnClearance});
+    return opening.contains(bounds.min) && opening.contains(bounds.max);
 }
 
 float nearestFurnitureDepth(const glm::vec3& eye, const glm::vec3& direction) {
@@ -205,71 +205,6 @@ bool fitsSupply(const Footprint& bounds) {
     return supply.contains(bounds.min) && supply.contains(bounds.max);
 }
 
-std::optional<perspective::Pose> floorPlacement(
-    const glm::vec3& eye, const glm::vec3& direction, float ratio, const ObjectSpec& object,
-    std::span<const Solid> solids) {
-    const glm::vec3 half = object.size * 0.5f;
-    const glm::vec2 origin = horizontal(eye);
-    const glm::vec2 heading = horizontal(direction);
-    const auto scaleAt = [&](const glm::vec2& position) {
-        return perspective::scaleAtSupport(eye, direction, {position.x, 0.0f, position.y}, ratio, half.y);
-    };
-
-    // Each edge of the grounded footprint is linear in the aim depth, even while it grows.
-    const glm::vec2 back = horizontal(half);
-    const glm::vec2 front = back + glm::vec2{object.frontOverhang, 0.0f};
-    const float initialScale = scaleAt(origin);
-    const float scaleGrowth = scaleAt(origin + heading) - initialScale;
-    const Footprint start{origin - front * initialScale, origin + back * initialScale};
-    const Footprint slope{heading - front * scaleGrowth, heading + back * scaleGrowth};
-    const float floorDepth = eye.y / (ratio * half.y - direction.y);
-    DepthRange inside{0.0f, floorDepth};
-    for (int axis = 0; axis < 2; ++axis) {
-        if (!inside.clipBelow(-start.min[axis], -slope.min[axis], -supply.min[axis] - placementClearance) ||
-            !inside.clipBelow(start.max[axis], slope.max[axis], supply.max[axis] - placementClearance)) {
-            return std::nullopt;
-        }
-    }
-
-    const auto stopBefore = [&](const Footprint& obstacle) {
-        DepthRange contact{0.0f, inside.last};
-        const glm::vec2 near = obstacle.min - glm::vec2{placementClearance};
-        const glm::vec2 far = obstacle.max + glm::vec2{placementClearance};
-        for (int axis = 0; axis < 2; ++axis) {
-            if (!contact.clipBelow(start.min[axis], slope.min[axis], far[axis]) ||
-                !contact.clipBelow(-start.max[axis], -slope.max[axis], -near[axis])) {
-                return;
-            }
-        }
-        // When the initial footprint overlaps, allow it to move away on the player's side.
-        if (contact.first == 0.0f) {
-            for (int axis = 0; axis < 2; ++axis) {
-                if ((origin[axis] < near[axis] && slope.max[axis] < 0.0f &&
-                     (near[axis] - start.max[axis]) / slope.max[axis] <= contact.last) ||
-                    (origin[axis] > far[axis] && slope.min[axis] > 0.0f &&
-                     (far[axis] - start.min[axis]) / slope.min[axis] <= contact.last)) {
-                    inside.first = std::max(inside.first, contact.last);
-                    return;
-                }
-            }
-        }
-        inside.last = contact.first;
-    };
-    for (const auto& obstacle : solids) {
-        stopBefore(obstacle.bounds);
-    }
-
-    const glm::vec2 position = origin + heading * inside.last;
-    const float scale = scaleAt(position);
-    const glm::vec3 center{position.x, half.y * scale, position.y};
-    const Footprint bounds{position - front * scale, position + back * scale};
-    if (inside.last < inside.first || scale < minimumScale ||
-        bounds.overlaps(footprint(eye, glm::vec2{playerRadius}))) {
-        return std::nullopt;
-    }
-    return perspective::Pose{center, scale};
-}
-
 float landingHeight(const Footprint& bounds, float maximumHeight, std::span<const Solid> solids) {
     float height = 0.0f;
     for (const auto& solid : solids) {
@@ -278,44 +213,6 @@ float landingHeight(const Footprint& bounds, float maximumHeight, std::span<cons
         }
     }
     return height;
-}
-
-std::optional<perspective::Pose> placementOnTop(const glm::vec3& eye, const glm::vec3& direction, float ratio,
-                                                std::size_t index, std::span<const Solid> solids) {
-    if (direction.y >= -0.001f) {
-        return std::nullopt;
-    }
-    const Solid* target = nullptr;
-    float closest = std::numeric_limits<float>::infinity();
-    for (const auto& solid : solids) {
-        if (const auto hit = rayHit(eye, direction, solid); hit && *hit < closest) {
-            closest = *hit;
-            target = &solid;
-        }
-    }
-    if (!target || target->rack) {
-        return std::nullopt;
-    }
-    glm::vec3 support = eye + direction * closest;
-    if (std::abs(support.y - target->top) > contactTolerance) {
-        return std::nullopt;
-    }
-    support.y = target->top;
-    const float halfHeight = objectSpecs[index].size.y * 0.5f;
-    const float scale = perspective::scaleAtSupport(eye, direction, support, ratio, halfHeight);
-    const perspective::Pose pose{support + glm::vec3{0.0f, halfHeight * scale, 0.0f}, scale};
-    const Solid candidate = objectSolid(index, pose, true);
-    if (scale < minimumScale || candidate.top > barracksCeiling || !fitsSupply(candidate.bounds) ||
-        overlapsPlayer(candidate, eye)) {
-        return std::nullopt;
-    }
-    for (const auto& solid : solids) {
-        if (candidate.bottom < solid.top - contactTolerance && candidate.top > solid.bottom + contactTolerance &&
-            candidate.bounds.overlaps(solid.bounds)) {
-            return std::nullopt;
-        }
-    }
-    return pose;
 }
 
 std::optional<perspective::Pose> dropFromAim(const glm::vec3& eye, const glm::vec3& direction, float ratio,
@@ -327,7 +224,7 @@ std::optional<perspective::Pose> dropFromAim(const glm::vec3& eye, const glm::ve
     const glm::vec3 roomMin{supply.min.x, 0.0f, supply.min.y};
     const glm::vec3 roomMax{supply.max.x, barracksCeiling, supply.max.y};
     DepthRange depth{0.0f, std::numeric_limits<float>::infinity()};
-    // The box grows linearly along the aim ray. Clip its entire volume before letting it settle.
+    // The box grows along the aim ray. Stop it short of the first collision at its release height.
     for (int axis = 0; axis < 3; ++axis) {
         if (!depth.clipBelow(-eye[axis], -lowerSlope[axis], -roomMin[axis] - placementClearance) ||
             !depth.clipBelow(eye[axis], upperSlope[axis], roomMax[axis] - placementClearance)) {
@@ -347,13 +244,8 @@ std::optional<perspective::Pose> dropFromAim(const glm::vec3& eye, const glm::ve
             depth.last = hit.first;
         }
     }
-    perspective::Pose pose{eye + direction * depth.last, ratio * depth.last};
-    if (depth.last < depth.first || pose.scale < minimumScale) {
-        return std::nullopt;
-    }
-    const auto release = objectSolid(index, pose, true);
-    pose.center.y = landingHeight(release.bounds, release.bottom, solids) + half.y * pose.scale;
-    if (overlapsPlayer(objectSolid(index, pose, true), eye)) {
+    const perspective::Pose pose{eye + direction * depth.last, ratio * depth.last};
+    if (depth.last < depth.first || pose.scale < minimumScale || overlapsPlayer(objectSolid(index, pose, true), eye)) {
         return std::nullopt;
     }
     return pose;
@@ -513,6 +405,8 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
 
     const std::size_t index = *heldObject_;
     const glm::vec3 half = objectSpecs[index].size * 0.5f;
+    RoomSolids storage;
+    const auto solids = barracksSolids(storage, objects_, heldObject_);
     if (index != televisionIndex && direction.y < -0.001f && eye.y > slotTop) {
         const float rackDepth = (slotTop - eye.y) / direction.y;
         const glm::vec2 rackAim = horizontal(eye + direction * rackDepth);
@@ -521,41 +415,82 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
             if (footprint(slot.center, rackHalf).contains(rackAim) &&
                 rackDepth <= nearestFurnitureDepth(eye, direction)) {
                 const float scale = perspective::scaleAtSupport(eye, direction, slot.center, heldRatio_, half.y);
-                const glm::vec2 scaledHalf = horizontal(half) * scale + glm::vec2{returnClearance};
-                const glm::vec2 openingHalf = slot.opening * 0.5f;
-                const perspective::Pose pose{slot.center + glm::vec3{0.0f, half.y * scale, 0.0f}, scale};
+                const perspective::Pose pose{slot.center + glm::vec3{0.0f, rackDropHeight + half.y * scale, 0.0f}, scale};
+                const auto release = objectSolid(index, pose, true);
                 const bool fits = index == slotIndex && !returned_[slotIndex] && scale >= minimumScale &&
-                                  scaledHalf.x <= openingHalf.x && scaledHalf.y <= openingHalf.y &&
-                                  !overlapsPlayer(objectSolid(index, pose, true), eye);
-                return Placement{pose, true, fits};
+                                  release.top <= barracksCeiling && fitsReturnSlot(release.bounds, slot) &&
+                                  !overlapsPlayer(release, eye) &&
+                                  std::none_of(solids.begin(), solids.end(), [&](const Solid& solid) {
+                                      return release.bottom < solid.top && release.top > solid.bottom &&
+                                             release.bounds.overlaps(solid.bounds);
+                                  });
+                return Placement{pose, fits};
             }
         }
     }
 
-    RoomSolids storage;
-    const auto solids = barracksSolids(storage, objects_, heldObject_);
-    if (const auto top = placementOnTop(eye, direction, heldRatio_, index, solids)) {
-        return Placement{*top};
-    }
-    const auto target = eye.y <= playerEyeHeight + contactTolerance && direction.y <= 0.0f
-        ? floorPlacement(eye, direction, heldRatio_, objectSpecs[index], solids)
-        : dropFromAim(eye, direction, heldRatio_, index, solids);
+    const auto target = dropFromAim(eye, direction, heldRatio_, index, solids);
     return target ? std::optional{Placement{*target}} : std::nullopt;
 }
 
-void MilitaryRoom::settleObjects() {
-    std::array<std::size_t, std::size(objectSpecs)> order{0, 1, 2, televisionIndex};
-    std::sort(order.begin(), order.end(), [this](std::size_t left, std::size_t right) {
-        return objectSolid(left, objects_[left], true).bottom < objectSolid(right, objects_[right], true).bottom;
+void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
+    if (!inBarracks() || elapsed <= 0.0f) {
+        return;
+    }
+    std::array<Solid, std::size(objectSpecs)> previous;
+    std::array<std::size_t, std::size(objectSpecs)> order;
+    for (std::size_t index = 0; index < objects_.size(); ++index) {
+        previous[index] = objectSolid(index, objects_[index], true);
+        order[index] = index;
+    }
+    // Move lower bodies first so a falling stack can share the motion of its support.
+    std::sort(order.begin(), order.end(), [&previous](std::size_t left, std::size_t right) {
+        return previous[left].bottom < previous[right].bottom;
     });
     RoomSolids storage;
+    const auto fixed = barracksSolids(storage, objects_, heldObject_).first(staticSolidCount);
+    const auto playerBounds = footprint(playerEye, glm::vec2{playerRadius});
+    const float playerTop = playerEye.y + headClearance;
     for (const std::size_t index : order) {
         if (heldObject_ == index || (index != televisionIndex && returned_[index])) {
             continue;
         }
-        const auto solid = objectSolid(index, objects_[index], true);
-        const auto solids = barracksSolids(storage, objects_, heldObject_);
-        objects_[index].center.y += landingHeight(solid.bounds, solid.bottom, solids) - solid.bottom;
+        const auto& body = previous[index];
+        float support = landingHeight(body.bounds, body.bottom, fixed);
+        float supportSpeed = 0.0f;
+        if (playerTop <= body.bottom + contactTolerance && body.bounds.overlaps(playerBounds)) {
+            support = std::max(support, playerTop);
+        }
+        for (std::size_t other = 0; other < objects_.size(); ++other) {
+            if (other == index || heldObject_ == other || previous[other].top > body.bottom + contactTolerance ||
+                !body.bounds.overlaps(previous[other].bounds)) {
+                continue;
+            }
+            const float top = objectSolid(other, objects_[other], true).top;
+            if (top > support || (top == support && verticalSpeeds_[other] > supportSpeed)) {
+                support = top;
+                supportSpeed = verticalSpeeds_[other];
+            }
+        }
+
+        auto& speed = verticalSpeeds_[index];
+        const float nextBottom = body.bottom + (speed - 0.5f * gravity * elapsed) * elapsed;
+        speed -= gravity * elapsed;
+        if (nextBottom > support + contactTolerance) {
+            objects_[index].center.y += nextBottom - body.bottom;
+            continue;
+        }
+        const float halfHeight = objectSpecs[index].size.y * (0.5f * objects_[index].scale);
+        objects_[index].center.y = support + halfHeight;
+        speed = supportSpeed;
+        if (index < belongingsCount && speed == 0.0f && std::abs(support - slotTop) <= contactTolerance &&
+            fitsReturnSlot(body.bounds, returnSlots[index])) {
+            returned_[index] = true;
+        }
+    }
+    if (exitState_ == ExitState::Locked &&
+        std::all_of(returned_.begin(), returned_.end(), [](bool returned) { return returned; })) {
+        exitState_ = ExitState::Open;
     }
 }
 
@@ -568,13 +503,8 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         if (const auto target = placement(eye, direction); target && target->fits) {
             const std::size_t index = *heldObject_;
             objects_[index] = target->pose;
+            verticalSpeeds_[index] = 0.0f;
             heldObject_.reset();
-            if (target->onRack) {
-                returned_[index] = true;
-                if (std::all_of(returned_.begin(), returned_.end(), [](bool returned) { return returned; })) {
-                    exitState_ = ExitState::Open;
-                }
-            }
         }
         return;
     }
@@ -597,7 +527,6 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         const auto& size = objectSpecs[*heldObject_].size;
         heldRatio_ = perspective::grabRatio(eye, direction, object.center, object.scale,
                                            std::max({size.x, size.y, size.z}));
-        settleObjects();
     }
 }
 
@@ -676,7 +605,8 @@ bool MilitaryRoom::canEnterTelevision(const glm::vec3& previous, const glm::vec3
     const auto& television = objects_[televisionIndex];
     const float scale = television.scale;
     const glm::vec2 movement = horizontal(desired - previous);
-    if (exitState_ != ExitState::Open || heldObject_ || scale < televisionEntryScale ||
+    if (exitState_ != ExitState::Open || heldObject_ || verticalSpeeds_[televisionIndex] != 0.0f ||
+        scale < televisionEntryScale ||
         facing.x <= 0.30f || movement.x <= 0.0f || glm::dot(movement, horizontal(facing)) <= 0.0f) {
         return false;
     }

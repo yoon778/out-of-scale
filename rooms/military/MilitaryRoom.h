@@ -13,6 +13,7 @@ public:
     MilitaryRoom();
     bool initialize();
     void interact(const glm::vec3& eye, const glm::vec3& direction);
+    void update(float elapsed, const glm::vec3& playerEye);
     void scroll(double yOffset);
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired,
                               const glm::vec3& facing = {1.0f, 0.0f, 0.0f}, bool* grounded = nullptr);
@@ -26,7 +27,6 @@ public:
 private:
     struct Placement {
         perspective::Pose pose;
-        bool onRack = false;
         bool fits = true;
     };
 
@@ -34,7 +34,6 @@ private:
     static constexpr std::size_t televisionIndex = belongingsCount;
     bool inBarracks() const;
     std::optional<Placement> placement(const glm::vec3& eye, const glm::vec3& direction) const;
-    void settleObjects();
     bool canEnterTelevision(const glm::vec3& previous, const glm::vec3& desired,
                             const glm::vec3& facing) const;
     void drawBarracks(const glm::vec3& eye, const glm::vec3& direction) const;
@@ -47,6 +46,7 @@ private:
 
     BoxRenderer renderer_;
     std::array<perspective::Pose, belongingsCount + 1> objects_;
+    std::array<float, belongingsCount + 1> verticalSpeeds_{};
     std::array<bool, belongingsCount> returned_{};
     std::optional<std::size_t> heldObject_;
     float heldRatio_ = 0.0f;
