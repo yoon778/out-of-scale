@@ -211,7 +211,9 @@
 
 C++·OpenGL 실행 파일 하나를 만든다. 현재 진입점은 `project_code/Out_of_Scale/main.cpp`다. 방마다 별도 클래스와 파일을 두어 두 사람이 맡은 방을 독립적으로 작업한다.
 
-Visual Studio에서는 [Out_of_Scale.slnx](project_code/Out_of_Scale/Out_of_Scale.slnx)를 열고 `Debug | x64`를 선택한다. 기본 실행은 군대 방 보급 구역에서 시작하고, `--test-room` 인자로 기존 격자 테스트방을 실행할 수 있다. 두 방은 조준 광선과 원근 배치 계산을 공유한다.
+Visual Studio에서는 [Out_of_Scale.slnx](project_code/Out_of_Scale/Out_of_Scale.slnx)를 열고 `Debug | x64`를 선택한다. 기본 실행은 군대 생활관에서 시작하고, `--test-room` 인자로 기존 격자 테스트방을 실행할 수 있다. 두 방은 조준 광선과 원근 배치 계산을 공유한다.
+
+개발용 바로가기: `F1` 학교, `F2` 군대, `F3` 회사, `F4` 내 방. 학교·회사·내 방은 이동 가능한 프리뷰이며 실제 맵 연결 지점은 [B-003 작업 기록](docs/tasks/B-003.md)에 정리했다.
 
 | 코드 | 맡는 일 |
 | --- | --- |

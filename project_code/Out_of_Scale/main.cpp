@@ -1,5 +1,6 @@
 #include "src/core/Player.h"
 #include "../../rooms/military/MilitaryRoom.h"
+#include "../../rooms/shared/MapPreview.h"
 #include "../../rooms/test/TestRoom.h"
 
 #include <GL/glew.h>
@@ -8,11 +9,24 @@
 
 #include <algorithm>
 #include <iostream>
+#include <optional>
 #include <string_view>
 #include <type_traits>
 
 namespace {
 constexpr char lockedTitle[] = "Out of Scale | Return the cube | E Grab/Place | WASD Move | Esc Exit";
+
+enum class Map { School, Military, Office, Home, Test };
+
+std::optional<Map> mapForKey(int key) {
+    switch (key) {
+    case GLFW_KEY_F1: return Map::School;
+    case GLFW_KEY_F2: return Map::Military;
+    case GLFW_KEY_F3: return Map::Office;
+    case GLFW_KEY_F4: return Map::Home;
+    default: return std::nullopt;
+    }
+}
 
 const char* windowTitle(TestRoom::ExitState state) {
     switch (state) {
@@ -46,6 +60,8 @@ template<class Room>
 struct Scene {
     Player player;
     Room room;
+    bool initialized = false;
+    std::optional<Map> destination;
 };
 
 template<class Room>
@@ -76,12 +92,24 @@ void drawFrame(const Player& player, const Room& room, int width, int height) {
 }
 
 template<class Room>
-int run(GLFWwindow* window, const Player& player) {
-    Scene<Room> scene{player, {}};
-    if (!scene.room.initialize()) {
-        return 1;
+int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap) {
+    if (!scene.initialized) {
+        if (!scene.room.initialize()) {
+            return 1;
+        }
+        scene.initialized = true;
     }
-    glEnable(GL_DEPTH_TEST);
+    scene.destination.reset();
+    scene.player.resetMouseSample();
+    const auto titleForRoom = [&scene] {
+        if constexpr (std::is_same_v<Room, MapPreview>) {
+            return scene.room.title();
+        } else {
+            return windowTitle(scene.room.exitState());
+        }
+    };
+    const char* title = titleForRoom();
+    glfwSetWindowTitle(window, title);
 
     glfwSetWindowUserPointer(window, &scene);
     glfwSetCursorPosCallback(window, [](GLFWwindow* target, double x, double y) {
@@ -95,10 +123,14 @@ int run(GLFWwindow* window, const Player& player) {
             return;
         }
         auto& scene = sceneFor<Room>(target);
-        if (key == GLFW_KEY_SPACE) {
+        if (const auto map = mapForKey(key)) {
+            scene.destination = map;
+        } else if (key == GLFW_KEY_SPACE) {
             scene.player.jump();
-        } else if (key == GLFW_KEY_E) {
-            scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
+        } else if constexpr (!std::is_same_v<Room, MapPreview>) {
+            if (key == GLFW_KEY_E) {
+                scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
+            }
         }
     });
     if constexpr (std::is_same_v<Room, MilitaryRoom>) {
@@ -108,15 +140,18 @@ int run(GLFWwindow* window, const Player& player) {
             }
         });
     }
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-
-    auto exitState = scene.room.exitState();
     double previous = glfwGetTime();
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
         }
+        if (scene.destination && *scene.destination != activeMap) {
+            activeMap = *scene.destination;
+            break;
+        }
+        scene.destination.reset();
 
         const double now = glfwGetTime();
         const float elapsed = static_cast<float>(std::min(now - previous, 0.05));
@@ -129,14 +164,13 @@ int run(GLFWwindow* window, const Player& player) {
             const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye,
                                                                  scene.player.viewDirection(), &grounded);
             scene.player.setRoomPosition(resolved, grounded);
-        } else {
+        } else if constexpr (std::is_same_v<Room, TestRoom>) {
             scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
         }
 
-        const auto currentExitState = scene.room.exitState();
-        if (currentExitState != exitState) {
-            exitState = currentExitState;
-            glfwSetWindowTitle(window, windowTitle(exitState));
+        if (const char* currentTitle = titleForRoom(); currentTitle != title) {
+            title = currentTitle;
+            glfwSetWindowTitle(window, title);
         }
 
         int width = 0;
@@ -157,6 +191,32 @@ int run(GLFWwindow* window, const Player& player) {
         glfwSetScrollCallback(window, nullptr);
     }
     glfwSetWindowUserPointer(window, nullptr);
+    return 0;
+}
+
+int runGame(GLFWwindow* window, Map activeMap) {
+    using Theme = MapPreview::Theme;
+    Scene<MapPreview> school{Player{}, MapPreview{Theme::School}};
+    Scene<MilitaryRoom> military{Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw}, {}};
+    Scene<MapPreview> office{Player{}, MapPreview{Theme::Office}};
+    Scene<MapPreview> home{Player{}, MapPreview{Theme::Home}};
+    Scene<TestRoom> test{Player{}, {}};
+
+    glEnable(GL_DEPTH_TEST);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    while (!glfwWindowShouldClose(window)) {
+        int result = 0;
+        switch (activeMap) {
+        case Map::School: result = run(window, school, activeMap); break;
+        case Map::Military: result = run(window, military, activeMap); break;
+        case Map::Office: result = run(window, office, activeMap); break;
+        case Map::Home: result = run(window, home, activeMap); break;
+        case Map::Test: result = run(window, test, activeMap); break;
+        }
+        if (result != 0) {
+            return result;
+        }
+    }
     return 0;
 }
 }
@@ -184,9 +244,7 @@ int main(int argc, char* argv[]) {
     const GLenum status = glewInit();
     int result = 1;
     if (status == GLEW_OK) {
-        result = useTestRoom
-            ? run<TestRoom>(window, Player{})
-            : run<MilitaryRoom>(window, Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw});
+        result = runGame(window, useTestRoom ? Map::Test : Map::Military);
     } else {
         std::cerr << glewGetErrorString(status) << '\n';
     }
