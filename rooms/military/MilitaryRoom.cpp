@@ -263,6 +263,90 @@ std::optional<perspective::Pose> dropFromAim(const glm::vec3& eye, const glm::ve
     return pose;
 }
 
+std::optional<perspective::Pose> dropNearFeet(const glm::vec3& eye, const glm::vec3& direction, float ratio,
+                                              std::size_t index, std::span<const Solid> solids) {
+    const auto origin = horizontal(eye);
+    const float feet = std::max(0.0f, eye.y - playerEyeHeight);
+    const float halfHeight = objectSpecs[index].size.y * 0.5f;
+    const auto unitBounds = objectSolid(index, {{0.0f, 0.0f, 0.0f}, 1.0f}, true).bounds;
+    const float preferredScale = std::max(minimumScale, ratio * playerEyeHeight / (1.0f + ratio * halfHeight));
+
+    const auto tryPose = [&](const glm::vec2& heading, bool belowPlayer, float scale)
+        -> std::optional<perspective::Pose> {
+        glm::vec2 center = origin;
+        if (!belowPlayer) {
+            const auto distancePastPlayer = [&](int axis) {
+                if (std::abs(heading[axis]) < 0.0001f) {
+                    return std::numeric_limits<float>::infinity();
+                }
+                const float halfTowardPlayer = heading[axis] > 0.0f ? -unitBounds.min[axis] : unitBounds.max[axis];
+                return (playerRadius + placementClearance + halfTowardPlayer * scale) / std::abs(heading[axis]);
+            };
+            center += heading * std::min(distancePastPlayer(0), distancePastPlayer(1));
+        }
+
+        const Footprint bounds{center + unitBounds.min * scale, center + unitBounds.max * scale};
+        if (!fitsSupply(bounds)) {
+            return std::nullopt;
+        }
+        const float support = landingHeight(bounds, feet, solids);
+        const float height = 2.0f * halfHeight * scale;
+        const float ceiling = belowPlayer ? feet : barracksCeiling;
+        const float dropGap = std::min(placementClearance, ceiling - support - height);
+        if (dropGap < 0.0f) {
+            return std::nullopt;
+        }
+        const float bottom = support + dropGap;
+        const Solid release{bounds, bottom, bottom + height};
+        if (overlapsPlayer(release, eye) || std::any_of(solids.begin(), solids.end(), [&](const Solid& solid) {
+                return solid.top > support + contactTolerance && solid.bottom < release.top - contactTolerance &&
+                       solid.bounds.overlaps(bounds);
+            })) {
+            return std::nullopt;
+        }
+        return perspective::Pose{{center.x, bottom + halfHeight * scale, center.y}, scale};
+    };
+
+    const auto largestFit = [&](const glm::vec2& heading, bool belowPlayer = false) {
+        if (const auto fullSize = tryPose(heading, belowPlayer, preferredScale)) {
+            return fullSize;
+        }
+        auto best = tryPose(heading, belowPlayer, minimumScale);
+        if (!best) {
+            return best;
+        }
+        float low = minimumScale;
+        float high = preferredScale;
+        for (int iteration = 0; iteration < 10; ++iteration) {
+            const float scale = (low + high) * 0.5f;
+            if (const auto pose = tryPose(heading, belowPlayer, scale)) {
+                best = pose;
+                low = scale;
+            } else {
+                high = scale;
+            }
+        }
+        return best;
+    };
+
+    if (feet > contactTolerance) {
+        if (const auto below = largestFit({}, true)) {
+            return below;
+        }
+    }
+    const auto aim = horizontal(direction);
+    const glm::vec2 forward = glm::length(aim) > 0.0001f ? glm::normalize(aim) : glm::vec2{1.0f, 0.0f};
+    const glm::vec2 right{-forward.y, forward.x};
+    const glm::vec2 directions[]{forward, forward + right, forward - right, right, -right,
+                                -forward + right, -forward - right, -forward};
+    for (const auto& heading : directions) {
+        if (const auto beside = largestFit(heading)) {
+            return beside;
+        }
+    }
+    return std::nullopt;
+}
+
 float cross(const glm::vec2& a, const glm::vec2& b) {
     return a.x * b.y - a.y * b.x;
 }
@@ -441,7 +525,10 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
         }
     }
 
-    const auto target = dropFromAim(eye, direction, heldRatio_, index, solids);
+    auto target = dropFromAim(eye, direction, heldRatio_, index, solids);
+    if (!target) {
+        target = dropNearFeet(eye, direction, heldRatio_, index, solids);
+    }
     return target ? std::optional{Placement{*target}} : std::nullopt;
 }
 
