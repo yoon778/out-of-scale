@@ -17,23 +17,41 @@ uniform mat4 viewProjection;
 uniform mat4 model;
 out vec3 localPosition;
 out vec3 vertexColor;
+out vec3 worldPosition;
 void main() {
     localPosition = position;
     vertexColor = color;
-    gl_Position = viewProjection * model * vec4(position, 1.0);
+    vec4 world = model * vec4(position, 1.0);
+    worldPosition = world.xyz;
+    gl_Position = viewProjection * world;
 }
 )";
 
 constexpr char fragmentSource[] = R"(#version 330 core
 in vec3 localPosition;
 in vec3 vertexColor;
+in vec3 worldPosition;
 uniform vec3 cubeTint;
 uniform float gridHalfSize;
 uniform bool useVertexColor;
+uniform bool nightLighting;
+uniform vec3 eye;
+uniform vec4 moonLight;
 out vec4 pixel;
 void main() {
     if (useVertexColor) {
-        pixel = vec4(vertexColor * cubeTint, 1.0);
+        vec3 color = vertexColor * cubeTint;
+        if (nightLighting && worldPosition.z >= 0.0) {
+            vec3 toMoon = moonLight.xyz - worldPosition;
+            float distanceSquared = dot(toMoon, toMoon);
+            vec3 normal = normalize(cross(dFdx(worldPosition), dFdy(worldPosition)));
+            float facing = max(0.0, dot(normal, toMoon * inversesqrt(max(0.01, distanceSquared))));
+            color += vec3(0.22, 0.32, 0.46) * moonLight.w * facing / (1.0 + 0.15 * distanceSquared);
+            float haze = smoothstep(15.0, 105.0, length(worldPosition - eye)) * 0.60;
+            haze *= 1.0 - smoothstep(6.0, 22.0, worldPosition.y);
+            color = mix(color, vec3(0.10, 0.16, 0.24), haze);
+        }
+        pixel = vec4(color, 1.0);
         return;
     }
     if (gridHalfSize <= 0.0) {
@@ -204,6 +222,9 @@ bool BoxRenderer::initialize(std::span<const MeshVertex> staticMesh, std::span<c
     cubeTintLocation_ = glGetUniformLocation(program_, "cubeTint");
     gridHalfSizeLocation_ = glGetUniformLocation(program_, "gridHalfSize");
     useVertexColorLocation_ = glGetUniformLocation(program_, "useVertexColor");
+    nightLightingLocation_ = glGetUniformLocation(program_, "nightLighting");
+    eyeLocation_ = glGetUniformLocation(program_, "eye");
+    moonLightLocation_ = glGetUniformLocation(program_, "moonLight");
     return true;
 }
 
@@ -211,6 +232,17 @@ void BoxRenderer::begin(const glm::mat4& viewProjection) const {
     glUseProgram(program_);
     glBindVertexArray(vertexArray_);
     glUniformMatrix4fv(viewProjectionLocation_, 1, GL_FALSE, glm::value_ptr(viewProjection));
+    clearNightLighting();
+}
+
+void BoxRenderer::setNightLighting(const glm::vec3& eye, const glm::vec3& moon, float moonStrength) const {
+    glUniform1i(nightLightingLocation_, GL_TRUE);
+    glUniform3fv(eyeLocation_, 1, glm::value_ptr(eye));
+    glUniform4f(moonLightLocation_, moon.x, moon.y, moon.z, moonStrength);
+}
+
+void BoxRenderer::clearNightLighting() const {
+    glUniform1i(nightLightingLocation_, GL_FALSE);
 }
 
 void BoxRenderer::drawBox(const glm::vec3& center, const glm::vec3& size, const glm::vec3& tint) const {
