@@ -21,7 +21,7 @@ public:
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
     static constexpr float halfSize = 20.0f;
-    static constexpr glm::vec3 spawnEye{0.95f, 1.65f, -3.60f};
+    static constexpr glm::vec3 spawnEye{1.30f, 1.65f, -5.20f};
     static constexpr float spawnYaw = 1.5707963268f;
 
 private:

@@ -12,7 +12,7 @@ namespace {
 #include "MilitaryGeometry.inc"
 
 constexpr float slotTop = 0.56f;
-constexpr float slotZ = -6.65f;
+constexpr float slotZ = -9.85f;
 constexpr glm::vec2 rackHalf{0.43f, 0.40f};
 constexpr float returnClearance = 0.02f;
 constexpr float rackDropHeight = 0.12f;
@@ -81,10 +81,10 @@ struct ObjectSpec {
 };
 
 constexpr ObjectSpec objectSpecs[]{
-    {{3.35f, 0.38f, -4.14f}, {1.62f, 0.76f, 0.98f}, {0.47f, 0.54f, 0.22f}},
-    {{5.65f, 0.28f, -3.18f}, {1.54f, 0.56f, 1.05f}, {0.27f, 0.56f, 0.83f}},
-    {{8.05f, 0.44f, -3.17f}, {1.25f, 0.88f, 1.10f}, {0.78f, 0.58f, 0.32f}},
-    {{11.05f, 0.54f, -3.60f}, {0.50f, 1.08f, 1.58f}, {0.27f, 0.27f, 0.25f}, 0.03f},
+    {{4.20f, 0.38f, -5.95f}, {1.62f, 0.76f, 0.98f}, {0.47f, 0.54f, 0.22f}},
+    {{7.30f, 0.28f, -4.45f}, {1.54f, 0.56f, 1.05f}, {0.27f, 0.56f, 0.83f}},
+    {{10.30f, 0.44f, -5.85f}, {1.25f, 0.88f, 1.10f}, {0.78f, 0.58f, 0.32f}},
+    {{14.70f, 0.54f, -5.20f}, {0.50f, 1.08f, 1.58f}, {0.27f, 0.27f, 0.25f}, 0.03f},
 };
 
 struct ReturnSlot {
@@ -93,16 +93,16 @@ struct ReturnSlot {
 };
 
 constexpr ReturnSlot returnSlots[]{
-    {{9.10f, slotTop, slotZ}, {0.84f, 0.58f}},
-    {{10.0f, slotTop, slotZ}, {0.82f, 0.58f}},
-    {{10.9f, slotTop, slotZ}, {0.72f, 0.62f}},
+    {{12.80f, slotTop, slotZ}, {0.84f, 0.58f}},
+    {{13.90f, slotTop, slotZ}, {0.82f, 0.58f}},
+    {{15.00f, slotTop, slotZ}, {0.72f, 0.62f}},
 };
 
-constexpr Footprint supply{{0.0f, -7.20f}, {12.6f, 0.0f}};
-constexpr Footprint approach{{9.45f, 0.0f}, {12.6f, gapNear}};
-constexpr Footprint ledge{{8.4f, 0.0f}, {9.45f, 5.15f}};
+constexpr Footprint supply{{0.0f, -10.40f}, {16.60f, 0.0f}};
+constexpr Footprint approach{{8.25f, 0.0f}, {12.6f, gapNear}};
+constexpr Footprint ledge{{7.20f, 0.0f}, {8.25f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
-constexpr Footprint bridgeArea{{approach.min.x, gapNear}, {approach.max.x, gapFar}};
+constexpr Footprint bridgeArea{{9.45f, gapNear}, {approach.max.x, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
 constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
 struct Furniture {
@@ -111,7 +111,7 @@ struct Furniture {
 };
 
 constexpr auto furniture = [] {
-    constexpr std::array bedCenters{2.0f, 3.5f, 5.0f, 6.5f, 8.0f};
+    constexpr std::array bedCenters{2.0f, 4.2f, 6.4f, 8.6f, 10.8f};
     constexpr float halfWidth = 0.54f;
     constexpr float bedHeight = 0.85f;
     constexpr float lockerHeight = 1.95f;
@@ -121,8 +121,8 @@ constexpr auto furniture = [] {
         const float right = bedCenters[index] + halfWidth;
         layout[index * 4] = {{{left, -2.48f}, {right, -0.48f}}, bedHeight};
         layout[index * 4 + 1] = {{{left, -0.47f}, {right, -0.03f}}, lockerHeight};
-        layout[index * 4 + 2] = {{{left, -6.72f}, {right, -4.72f}}, bedHeight};
-        layout[index * 4 + 3] = {{{left, -7.17f}, {right, -6.73f}}, lockerHeight};
+        layout[index * 4 + 2] = {{{left, -9.92f}, {right, -7.92f}}, bedHeight};
+        layout[index * 4 + 3] = {{{left, -10.37f}, {right, -9.93f}}, lockerHeight};
     }
     return layout;
 }();
