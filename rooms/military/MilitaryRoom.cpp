@@ -7,6 +7,7 @@
 #include <iterator>
 #include <limits>
 #include <span>
+#include <vector>
 
 namespace {
 #include "MilitaryGeometry.inc"
@@ -31,10 +32,10 @@ constexpr glm::vec3 outpostEntrance{9.75f, 1.65f, 1.60f};
 constexpr float moonCarryDepth = 3.2f;
 constexpr float moonLightScale = 0.25f;
 constexpr float maximumMoonScale = 0.52f;
+constexpr float distantMoonStrength = 0.23f;
 constexpr float gapNear = 7.8f;
 constexpr float gapFar = 12.5f;
 constexpr float trenchY = -1.33f;
-constexpr float minimumBridgeWidth = 0.80f;
 constexpr float overlapOnBank = 0.05f;
 
 using Polygon = std::vector<glm::vec2>;
@@ -103,7 +104,7 @@ constexpr Footprint supply{{0.0f, -10.40f}, {16.60f, 0.0f}};
 constexpr Footprint approach{{8.25f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{7.20f, 0.0f}, {8.25f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
-constexpr Footprint bridgeArea{{9.45f, gapNear}, {approach.max.x, gapFar}};
+constexpr Footprint shadowWalkway{{10.0f, gapNear}, {11.0f, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
 constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
 struct Furniture {
@@ -389,6 +390,9 @@ Polygon projectPillar(const glm::vec3& light, float surfaceY) {
         {{9.865f, 0.0f, 5.745f}, {11.135f, 0.16f, 6.555f}},
         {{9.945f, 2.255f, 5.815f}, {11.055f, 2.345f, 6.485f}},
     };
+    if (light.y <= parts[2].max.y + 0.02f) {
+        return {};
+    }
     Polygon points;
     for (const auto& part : parts) {
         for (float x : {part.min.x, part.max.x}) {
@@ -455,39 +459,12 @@ glm::vec2 spanAt(const Polygon& outline, float z) {
     return span;
 }
 
-bool contains(const Polygon& outline, const glm::vec2& point) {
-    if (outline.size() < 3) {
-        return false;
-    }
-    for (std::size_t i = 0; i < outline.size(); ++i) {
-        const auto& a = outline[i];
-        const auto& b = outline[(i + 1) % outline.size()];
-        if (cross(b - a, point - a) < -0.00001f) {
-            return false;
-        }
-    }
-    return true;
+bool coversWalkwayAt(const Polygon& shadow, float z) {
+    const auto span = spanAt(shadow, z);
+    return span.x <= shadowWalkway.min.x && span.y >= shadowWalkway.max.x;
 }
 
-struct BridgeAlignment {
-    glm::vec2 near;
-    glm::vec2 far;
-    float sharedWidth;
-};
-
-BridgeAlignment alignBridge(const Polygon& shadow) {
-    const auto near = spanAt(shadow, gapNear - overlapOnBank);
-    const auto far = spanAt(shadow, gapFar + overlapOnBank);
-    const auto withinRoute = [](const glm::vec2& span) {
-        return glm::vec2{std::max(span.x, bridgeArea.min.x), std::min(span.y, bridgeArea.max.x)};
-    };
-    const auto start = withinRoute(near);
-    const auto end = withinRoute(far);
-    return {start, end, std::min(start.y, end.y) - std::max(start.x, end.x)};
-}
-
-void drawBridgeEdge(const BoxRenderer& renderer, const Polygon& outline, float width,
-                    const glm::vec3& color, bool dashed) {
+void drawShadowPreview(const BoxRenderer& renderer, const Polygon& outline, const glm::vec3& color) {
     for (std::size_t i = 0; i < outline.size(); ++i) {
         const glm::vec2 start = outline[i];
         const glm::vec2 end = outline[(i + 1) % outline.size()];
@@ -496,11 +473,12 @@ void drawBridgeEdge(const BoxRenderer& renderer, const Polygon& outline, float w
         if (length < 0.001f) {
             continue;
         }
+        constexpr float width = 0.027f;
         const glm::vec2 inset{-edge.y * width / length, edge.x * width / length};
-        const int count = dashed ? std::max(1, static_cast<int>(std::ceil(length / 0.44f))) : 1;
+        const int count = std::max(1, static_cast<int>(std::ceil(length / 0.44f)));
         for (int dash = 0; dash < count; ++dash) {
             const auto a = start + edge * (static_cast<float>(dash) / count);
-            const auto b = start + edge * ((dash + (dashed ? 0.56f : 1.0f)) / count);
+            const auto b = start + edge * ((dash + 0.56f) / count);
             const glm::vec2 line[]{a, b, b + inset, a + inset};
             renderer.drawFlatPolygon(line, 0.028f, color);
         }
@@ -522,6 +500,14 @@ bool MilitaryRoom::initialize() {
 
 bool MilitaryRoom::inBarracks() const {
     return exitState_ == ExitState::Locked || exitState_ == ExitState::Open;
+}
+
+bool MilitaryRoom::returnToBarracks() {
+    if (inBarracks()) {
+        return false;
+    }
+    exitState_ = ExitState::Open;
+    return true;
 }
 
 std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
@@ -701,7 +687,7 @@ void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction
         if (canPlaceMoon(center)) {
             placedMoon_ = center;
             moonHeld_ = false;
-            updateShadow(center);
+            exitState_ = outpostState();
         }
         return;
     }
@@ -713,33 +699,30 @@ void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction
                                                        {0.555f, 1.1725f, 0.335f});
     if (hit && *hit > 0.05f && (!pillarHit || *hit < *pillarHit)) {
         moonHeld_ = true;
-        shadow_.clear();
-        trenchShadow_.clear();
-        bridge_.clear();
         exitState_ = ExitState::OutpostReached;
     }
 }
 
 void MilitaryRoom::scroll(double yOffset) {
-    if (moonHeld_) {
+    if (!inBarracks() && moonHeld_) {
         const auto step = static_cast<float>(std::clamp(yOffset, -8.0, 8.0));
         moonScale_ = std::clamp(moonScale_ * std::pow(1.28f, -step), 0.08f, maximumMoonScale);
     }
 }
 
-void MilitaryRoom::updateShadow(const glm::vec3& light) {
-    shadow_ = projectPillar(light, 0.0f);
-    trenchShadow_ = clipTo(projectPillar(light, trenchY), gap);
-    bridge_.clear();
-    exitState_ = ExitState::OutpostReached;
-    if (moonScale_ >= moonLightScale && alignBridge(shadow_).sharedWidth >= minimumBridgeWidth) {
-        bridge_ = clipTo(shadow_, bridgeArea);
-        exitState_ = ExitState::BridgeReady;
+MilitaryRoom::ExitState MilitaryRoom::outpostState() const {
+    if (placedMoon_ && !moonHeld_ && moonScale_ >= moonLightScale) {
+        const auto shadow = projectPillar(*placedMoon_, 0.0f);
+        if (coversWalkwayAt(shadow, gapNear - overlapOnBank) && coversWalkwayAt(shadow, gapFar + overlapOnBank)) {
+            return ExitState::BridgeReady;
+        }
     }
+    return ExitState::OutpostReached;
 }
 
 bool MilitaryRoom::supports(const glm::vec2& point) const {
-    return onOutpostRoute(point) || contains(bridge_, point);
+    const bool ready = exitState_ == ExitState::BridgeReady || exitState_ == ExitState::Escaped;
+    return onOutpostRoute(point) || (ready && shadowWalkway.contains(point));
 }
 
 bool MilitaryRoom::canStandAtOutpost(const glm::vec3& position) const {
@@ -781,7 +764,7 @@ glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::ve
         return position;
     };
     if (canEnterTelevision(previous, desired, facing)) {
-        exitState_ = ExitState::OutpostReached;
+        exitState_ = outpostState();
         return groundAt({outpostEntrance.x, desired.y, outpostEntrance.z}, 0.0f);
     }
     const bool barracks = inBarracks();
@@ -919,65 +902,49 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
         return;
     }
 
-    const glm::vec3 aimedMoon = eye + direction * moonCarryDepth;
-    const bool hasPreview = moonHeld_ && canPlaceMoon(aimedMoon);
-    auto light = placedMoon_;
-    if (moonHeld_) {
-        light = hasPreview ? std::optional{aimedMoon} : std::nullopt;
-    }
-    renderer_.setNightLighting(eye, light.value_or(moonWorldCenter),
-                               light ? 2.7f * moonScale_ / maximumMoonScale : 0.0f);
+    const bool distantMoon = !moonHeld_ && !placedMoon_;
+    const glm::vec3 moonCenter = moonHeld_ ? eye + direction * moonCarryDepth
+                                          : placedMoon_.value_or(moonWorldCenter);
+    const glm::vec3 moonLight = distantMoon ? glm::normalize(moonCenter - outpostEntrance) : moonCenter;
+    const float strength = distantMoon ? distantMoonStrength : std::max(0.70f, 2.7f * moonScale_ / maximumMoonScale);
+    renderer_.setNightLighting(eye, moonLight, strength, distantMoon);
     renderer_.drawStaticMesh();
     renderer_.clearNightLighting();
 
     const glm::vec3 idleColor{0.58f, 0.30f, 0.10f};
     const glm::vec3 alignedColor{0.28f, 0.78f, 0.79f};
-    const Polygon preview = hasPreview ? projectPillar(aimedMoon, 0.0f) : Polygon{};
-    const auto alignment = alignBridge(hasPreview ? preview : shadow_);
-    const bool strongLight = moonScale_ >= moonLightScale;
-    const bool ready = !bridge_.empty();
-    const bool aligned = strongLight && alignment.sharedWidth >= minimumBridgeWidth;
-    const bool reachesNear = strongLight && alignment.near.y - alignment.near.x >= minimumBridgeWidth;
-    const bool reachesFar = strongLight && alignment.far.y - alignment.far.x >= minimumBridgeWidth;
+    const auto shadow = projectPillar(moonCenter, 0.0f);
+    const bool hasPreview = moonHeld_ && canPlaceMoon(moonCenter);
+    const bool strongLight = (moonHeld_ ? hasPreview : placedMoon_.has_value()) && moonScale_ >= moonLightScale;
+    const bool ready = exitState_ == ExitState::BridgeReady || exitState_ == ExitState::Escaped;
+    const bool reachesNear = strongLight && coversWalkwayAt(shadow, gapNear - overlapOnBank);
+    const bool reachesFar = strongLight && coversWalkwayAt(shadow, gapFar + overlapOnBank);
     const auto drawBankMarkers = [&](float z, bool connected) {
         const glm::vec3 color = ready || connected ? alignedColor : idleColor;
-        for (float x : {9.55f, 12.48f}) {
+        for (float x : {shadowWalkway.min.x - 0.17f, shadowWalkway.max.x + 0.17f}) {
             renderer_.drawBox({x, 0.035f, z}, {0.16f, 0.07f, 0.24f}, {0.12f, 0.16f, 0.19f});
             renderer_.drawBox({x, 0.074f, z}, {0.108f, 0.012f, 0.18f}, color);
         }
     };
     drawBankMarkers(7.56f, reachesNear);
-    drawBankMarkers(12.74f, reachesFar && (!reachesNear || aligned));
+    drawBankMarkers(12.74f, reachesFar);
 
-    if (!shadow_.empty()) {
-        const glm::vec3 shadowColor{0.034f, 0.064f, 0.107f};
-        for (const auto& floor : {approach, ledge, farBank}) {
-            renderer_.drawFlatPolygon(clipTo(shadow_, floor), 0.020f, shadowColor);
-        }
-        renderer_.drawFlatPolygon(trenchShadow_, trenchY + 0.020f, shadowColor);
+    const glm::vec3 shadowColor{0.034f, 0.064f, 0.107f};
+    for (const auto& floor : {approach, ledge, farBank}) {
+        renderer_.drawFlatPolygon(clipTo(shadow, floor), 0.020f, shadowColor);
     }
+    renderer_.drawFlatPolygon(clipTo(projectPillar(moonCenter, trenchY), gap), trenchY + 0.020f, shadowColor);
     if (ready) {
-        renderer_.drawFlatPolygon(bridge_, 0.014f, {0.065f, 0.16f, 0.26f});
-        drawBridgeEdge(renderer_, bridge_, 0.04f, {0.16f, 0.52f, 0.65f}, false);
+        renderer_.drawFlatPolygon(clipTo(shadow, shadowWalkway), 0.014f, shadowColor);
     } else if (hasPreview) {
-        const auto color = aligned ? alignedColor : glm::vec3{0.32f, 0.46f, 0.58f};
+        const auto color = reachesNear && reachesFar ? alignedColor : glm::vec3{0.32f, 0.46f, 0.58f};
         for (const auto& floor : {approach, ledge, farBank}) {
-            drawBridgeEdge(renderer_, clipTo(preview, floor), 0.027f, color, true);
+            drawShadowPreview(renderer_, clipTo(shadow, floor), color);
         }
-        drawBridgeEdge(renderer_, clipTo(preview, bridgeArea), 0.027f, color, true);
+        drawShadowPreview(renderer_, clipTo(shadow, gap), color);
     }
 
-    glm::vec3 moonCenter = placedMoon_.value_or(moonWorldCenter);
-    glm::vec3 moonTint{1.0f};
-    float drawnScale = (placedMoon_ || moonHeld_) ? moonScale_ : 1.0f;
-    if (moonHeld_) {
-        moonCenter = aimedMoon;
-        if (!hasPreview) {
-            moonTint = {0.78f, 0.48f, 0.42f};
-            moonCenter = eye + direction * (moonCarryDepth * 0.5f);
-            drawnScale *= 0.5f;
-        }
-    }
+    const float drawnScale = distantMoon ? 1.0f : moonScale_;
     const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * drawnScale);
-    renderer_.drawMoonMesh(moonModel, moonTint);
+    renderer_.drawMoonMesh(moonModel, glm::vec3{1.0f});
 }

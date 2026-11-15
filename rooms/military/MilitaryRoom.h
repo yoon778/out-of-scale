@@ -4,7 +4,7 @@
 #include "../shared/PerspectiveCarry.h"
 
 #include <array>
-#include <vector>
+#include <optional>
 
 class MilitaryRoom {
 public:
@@ -15,6 +15,7 @@ public:
     void interact(const glm::vec3& eye, const glm::vec3& direction);
     void update(float elapsed, const glm::vec3& playerEye);
     void scroll(double yOffset);
+    bool returnToBarracks();
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired,
                               const glm::vec3& facing = {1.0f, 0.0f, 0.0f}, bool* grounded = nullptr);
     ExitState exitState() const;
@@ -41,7 +42,7 @@ private:
     void drawObject(std::size_t index, const perspective::Pose& pose, const glm::vec3& tint) const;
     void interactMoon(const glm::vec3& eye, const glm::vec3& direction);
     bool canPlaceMoon(const glm::vec3& center) const;
-    void updateShadow(const glm::vec3& light);
+    ExitState outpostState() const;
     bool supports(const glm::vec2& point) const;
     bool canStandAtOutpost(const glm::vec3& position) const;
 
@@ -56,7 +57,4 @@ private:
     std::optional<glm::vec3> placedMoon_;
     float moonScale_ = 0.10f;
     bool moonHeld_ = false;
-    std::vector<glm::vec2> shadow_;
-    std::vector<glm::vec2> trenchShadow_;
-    std::vector<glm::vec2> bridge_;
 };

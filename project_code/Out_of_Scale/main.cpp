@@ -147,7 +147,8 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
         }
-        if (scene.destination && *scene.destination != activeMap) {
+        // F2 can return from the training ground within the military map.
+        if (scene.destination && (*scene.destination != activeMap || *scene.destination == Map::Military)) {
             activeMap = *scene.destination;
             break;
         }
@@ -209,7 +210,12 @@ int runGame(GLFWwindow* window, Map activeMap) {
         int result = 0;
         switch (activeMap) {
         case Map::School: result = run(window, school, activeMap); break;
-        case Map::Military: result = run(window, military, activeMap); break;
+        case Map::Military:
+            if (military.room.returnToBarracks()) {
+                military.player = Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw};
+            }
+            result = run(window, military, activeMap);
+            break;
         case Map::Office: result = run(window, office, activeMap); break;
         case Map::Home: result = run(window, home, activeMap); break;
         case Map::Test: result = run(window, test, activeMap); break;

@@ -21,7 +21,7 @@ public:
                     std::span<const MeshVertex> movableMesh = {},
                     std::span<const MeshVertex> moonMesh = {});
     void begin(const glm::mat4& viewProjection) const;
-    void setNightLighting(const glm::vec3& eye, const glm::vec3& moon, float moonStrength) const;
+    void setNightLighting(const glm::vec3& eye, const glm::vec3& moonLight, float strength, bool directional) const;
     void clearNightLighting() const;
     void drawBox(const glm::vec3& center, const glm::vec3& size, const glm::vec3& tint) const;
     void drawBox(const glm::mat4& model, const glm::vec3& tint) const;
@@ -48,6 +48,7 @@ private:
     GLint nightLightingLocation_ = -1;
     GLint eyeLocation_ = -1;
     GLint moonLightLocation_ = -1;
+    GLint directionalMoonLocation_ = -1;
     GLsizei staticMeshCount_ = 0;
     GLsizei movableMeshCount_ = 0;
     GLsizei moonMeshCount_ = 0;

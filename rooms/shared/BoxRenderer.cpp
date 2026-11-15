@@ -37,16 +37,18 @@ uniform bool useVertexColor;
 uniform bool nightLighting;
 uniform vec3 eye;
 uniform vec4 moonLight;
+uniform bool directionalMoon;
 out vec4 pixel;
 void main() {
     if (useVertexColor) {
         vec3 color = vertexColor * cubeTint;
         if (nightLighting && worldPosition.z >= 0.0) {
-            vec3 toMoon = moonLight.xyz - worldPosition;
+            vec3 toMoon = directionalMoon ? moonLight.xyz : moonLight.xyz - worldPosition;
             float distanceSquared = dot(toMoon, toMoon);
             vec3 normal = normalize(cross(dFdx(worldPosition), dFdy(worldPosition)));
             float facing = max(0.0, dot(normal, toMoon * inversesqrt(max(0.01, distanceSquared))));
-            color += vec3(0.22, 0.32, 0.46) * moonLight.w * facing / (1.0 + 0.15 * distanceSquared);
+            float attenuation = directionalMoon ? 1.0 : 1.0 + 0.15 * distanceSquared;
+            color += vec3(0.22, 0.32, 0.46) * moonLight.w * facing / attenuation;
             float haze = smoothstep(15.0, 105.0, length(worldPosition - eye)) * 0.60;
             haze *= 1.0 - smoothstep(6.0, 22.0, worldPosition.y);
             color = mix(color, vec3(0.10, 0.16, 0.24), haze);
@@ -225,6 +227,7 @@ bool BoxRenderer::initialize(std::span<const MeshVertex> staticMesh, std::span<c
     nightLightingLocation_ = glGetUniformLocation(program_, "nightLighting");
     eyeLocation_ = glGetUniformLocation(program_, "eye");
     moonLightLocation_ = glGetUniformLocation(program_, "moonLight");
+    directionalMoonLocation_ = glGetUniformLocation(program_, "directionalMoon");
     return true;
 }
 
@@ -235,10 +238,12 @@ void BoxRenderer::begin(const glm::mat4& viewProjection) const {
     clearNightLighting();
 }
 
-void BoxRenderer::setNightLighting(const glm::vec3& eye, const glm::vec3& moon, float moonStrength) const {
+void BoxRenderer::setNightLighting(const glm::vec3& eye, const glm::vec3& moonLight, float strength,
+                                   bool directional) const {
     glUniform1i(nightLightingLocation_, GL_TRUE);
     glUniform3fv(eyeLocation_, 1, glm::value_ptr(eye));
-    glUniform4f(moonLightLocation_, moon.x, moon.y, moon.z, moonStrength);
+    glUniform4f(moonLightLocation_, moonLight.x, moonLight.y, moonLight.z, strength);
+    glUniform1i(directionalMoonLocation_, directional ? GL_TRUE : GL_FALSE);
 }
 
 void BoxRenderer::clearNightLighting() const {
