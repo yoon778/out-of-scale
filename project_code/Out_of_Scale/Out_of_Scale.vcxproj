@@ -155,6 +155,7 @@
     <ClCompile Include="src\core\Player.cpp" />
     <ClCompile Include="..\..\rooms\test\TestRoom.cpp" />
     <ClCompile Include="..\..\rooms\military\MilitaryRoom.cpp" />
+    <ClCompile Include="..\..\rooms\military\ParadeGround.cpp" />
     <ClCompile Include="..\..\rooms\shared\BoxRenderer.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -162,6 +163,8 @@
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\military\MilitaryRoom.h" />
     <ClInclude Include="..\..\rooms\military\MilitaryGeometry.inc" />
+    <ClInclude Include="..\..\rooms\military\ParadeGround.h" />
+    <ClInclude Include="..\..\rooms\military\ParadeGeometry.inc" />
     <ClInclude Include="..\..\rooms\shared\BoxRenderer.h" />
     <ClInclude Include="..\..\rooms\shared\PerspectiveCarry.h" />
   </ItemGroup>

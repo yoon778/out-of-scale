@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ParadeGround.h"
 #include "../shared/BoxRenderer.h"
 #include "../shared/PerspectiveCarry.h"
 
@@ -9,7 +10,7 @@
 
 class MilitaryRoom {
 public:
-    enum class ExitState { Locked, Open, OutpostReached, BridgeReady, Escaped };
+    enum class ExitState { Locked, Open, OutpostReached, BridgeReady, ParadeReached, Escaped };
 
     MilitaryRoom();
     bool initialize();
@@ -22,7 +23,7 @@ public:
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
-    static constexpr float halfSize = 20.0f;
+    static constexpr float halfSize = 32.0f;
     static constexpr glm::vec3 spawnEye{1.30f, 1.65f, -5.20f};
     static constexpr float spawnYaw = 1.5707963268f;
 
@@ -37,6 +38,7 @@ private:
     static constexpr std::size_t belongingsCount = 3;
     static constexpr std::size_t televisionIndex = belongingsCount;
     bool inBarracks() const;
+    bool inParadeGround() const;
     std::optional<Placement> placement(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canEnterTelevision(const glm::vec3& previous, const glm::vec3& desired,
                             const glm::vec3& facing) const;
@@ -50,6 +52,7 @@ private:
                                     const glm::vec3& facing, bool* grounded);
 
     BoxRenderer renderer_;
+    ParadeGround parade_;
     std::array<perspective::Pose, belongingsCount + 1> objects_;
     std::array<float, belongingsCount + 1> verticalSpeeds_{};
     std::array<float, belongingsCount + 1> fallGrowthRates_{};

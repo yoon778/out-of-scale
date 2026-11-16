@@ -27,6 +27,9 @@
     <ClCompile Include="..\..\rooms\military\MilitaryRoom.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\rooms\military\ParadeGround.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\rooms\shared\BoxRenderer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -42,6 +45,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\..\rooms\military\MilitaryGeometry.inc">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\rooms\military\ParadeGround.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\rooms\military\ParadeGeometry.inc">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\..\rooms\shared\BoxRenderer.h">

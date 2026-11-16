@@ -31,6 +31,8 @@ constexpr float maximumMoonScale = 0.52f;
 constexpr float distantMoonStrength = 0.23f;
 constexpr float gapNear = 7.8f;
 constexpr float gapFar = 12.5f;
+constexpr float paradeEntranceZ = 16.0f;
+constexpr float paradeReturnZ = 15.70f;
 constexpr float trenchY = -4.0f;
 constexpr float ladderX = 11.82f;
 constexpr float ladderZ = gapNear + playerRadius;
@@ -149,7 +151,7 @@ constexpr Footprint approach{{8.25f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{7.20f, 0.0f}, {8.25f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
-constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
+constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f + playerRadius}};
 constexpr Footprint banks[]{approach, ledge, farBank, exitWalkway};
 constexpr auto furniture = [] {
     constexpr std::array bedCenters{2.0f, 4.2f, 6.4f, 8.6f, 10.8f};
@@ -541,11 +543,15 @@ MilitaryRoom::MilitaryRoom() {
 }
 
 bool MilitaryRoom::initialize() {
-    return renderer_.initialize(staticGeometry, barracksGear, moonGeometry);
+    return renderer_.initialize(staticGeometry, barracksGear, moonGeometry) && parade_.initialize();
 }
 
 bool MilitaryRoom::inBarracks() const {
     return exitState_ == ExitState::Locked || exitState_ == ExitState::Open;
+}
+
+bool MilitaryRoom::inParadeGround() const {
+    return exitState_ == ExitState::ParadeReached || exitState_ == ExitState::Escaped;
 }
 
 bool MilitaryRoom::returnToBarracks() {
@@ -554,6 +560,7 @@ bool MilitaryRoom::returnToBarracks() {
     }
     exitState_ = ExitState::Open;
     climbing_ = false;
+    parade_.cancelCarry();
     return true;
 }
 
@@ -602,6 +609,10 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
 }
 
 void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
+    if (inParadeGround()) {
+        parade_.update(elapsed, playerEye);
+        return;
+    }
     if (!inBarracks() || elapsed <= 0.0f) {
         return;
     }
@@ -687,6 +698,10 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
 }
 
 void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
+    if (inParadeGround()) {
+        parade_.interact(eye, direction);
+        return;
+    }
     if (!inBarracks()) {
         interactMoon(eye, direction);
         return;
@@ -751,9 +766,7 @@ void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction
             placedMoon_ = center;
             moonHeld_ = false;
             bridge_ = clipTo(projectPillar(center, 0.0f), gap);
-            if (exitState_ != ExitState::Escaped) {
-                exitState_ = outpostState();
-            }
+            exitState_ = outpostState();
         }
         return;
     }
@@ -772,14 +785,14 @@ void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction
     if (!behindPillar) {
         moonHeld_ = true;
         bridge_.clear();
-        if (exitState_ != ExitState::Escaped) {
-            exitState_ = outpostState();
-        }
+        exitState_ = outpostState();
     }
 }
 
 void MilitaryRoom::scroll(double yOffset) {
-    if (!inBarracks() && moonHeld_) {
+    if (inParadeGround()) {
+        parade_.scroll(yOffset);
+    } else if (!inBarracks() && moonHeld_) {
         const auto step = static_cast<float>(std::clamp(yOffset, -8.0, 8.0));
         moonScale_ = std::clamp(moonScale_ * std::pow(1.28f, -step), 0.08f, maximumMoonScale);
     }
@@ -819,6 +832,16 @@ glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::ve
     if (canEnterTelevision(previous, desired, facing)) {
         exitState_ = outpostState();
         return groundAt({outpostEntrance.x, desired.y, outpostEntrance.z}, 0.0f, grounded);
+    }
+    if (inParadeGround()) {
+        const auto position = parade_.resolveMovement(previous, desired, grounded);
+        if (position.z < paradeReturnZ) {
+            parade_.cancelCarry();
+            exitState_ = outpostState();
+        } else if (parade_.reachedExit()) {
+            exitState_ = ExitState::Escaped;
+        }
+        return position;
     }
     if (!inBarracks()) {
         return resolveOutpostMovement(previous, desired, facing, grounded);
@@ -909,8 +932,13 @@ glm::vec3 MilitaryRoom::resolveOutpostMovement(const glm::vec3& previous, const 
     const bool supported = supports(bounds.min) && supports(bounds.max) &&
                            supports({bounds.min.x, bounds.max.y}) && supports({bounds.max.x, bounds.min.y});
     const float floor = inTrench && (belowLip || !supported) ? trenchY : 0.0f;
-    if (position.z >= 15.70f) {
-        exitState_ = ExitState::Escaped;
+    if (position.z >= paradeEntranceZ) {
+        // Keep the moon in the training ground when crossing the gate.
+        moonHeld_ = false;
+        if (placedMoon_) {
+            bridge_ = clipTo(projectPillar(*placedMoon_, 0.0f), gap);
+        }
+        exitState_ = parade_.reachedExit() ? ExitState::Escaped : ExitState::ParadeReached;
     }
     return groundAt(position, floor, grounded);
 }
@@ -991,4 +1019,5 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     const float drawnScale = distantMoon ? 1.0f : moonScale_;
     const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * drawnScale);
     renderer_.drawMoonMesh(moonModel, glm::vec3{1.0f});
+    parade_.draw(viewProjection, eye, direction);
 }
