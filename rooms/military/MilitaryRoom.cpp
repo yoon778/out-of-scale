@@ -95,37 +95,56 @@ struct ReturnSlot {
     bool hangs = false;
 };
 
-// Openings in the last locker on the north wall match the Blender model.
-constexpr float emptyLockerX = 10.80f;
-constexpr float lockerLeft = 10.325f;
-constexpr float lockerRight = 11.275f;
-constexpr float safeRight = 10.775f;
-constexpr float cubbyLeft = 10.805f;
-constexpr float lockerFront = -0.428f;
-constexpr float lockerBack = -0.095f;
+// The locker sits beside each bed, with its front facing the aisle.
+constexpr float emptyLockerBedX = 10.80f;
+constexpr float lockerSideOffset = 1.10f;
+constexpr float lockerAisleOffset = 0.74f;
+constexpr glm::vec3 lockerScale{1.10f, 1.14f, 1.28f};
+constexpr float southWallZ = -10.40f;
+constexpr float lockerHalfWidth = 0.50f * lockerScale.x;
+
+constexpr float northLockerZ(float modelZ) {
+    return modelZ * lockerScale.z - lockerAisleOffset;
+}
+
+constexpr float emptyLockerX(float modelOffsetX) {
+    return emptyLockerBedX + lockerSideOffset + modelOffsetX * lockerScale.x;
+}
+
+constexpr float lockerLeft = emptyLockerX(-0.475f);
+constexpr float lockerRight = emptyLockerX(0.475f);
+constexpr float safeRight = emptyLockerX(-0.025f);
+constexpr float cubbyLeft = emptyLockerX(0.005f);
+constexpr float lockerFront = northLockerZ(-0.428f);
+constexpr float lockerBack = northLockerZ(-0.095f);
+constexpr float lockerShellFront = northLockerZ(-0.445f);
+constexpr float lockerShellBack = northLockerZ(-0.050f);
+constexpr float lockerDoorFront = northLockerZ(-0.454f);
 constexpr float shelfZ = (lockerFront + lockerBack) * 0.5f;
 constexpr float shelfHalfDepth = (lockerBack - lockerFront) * 0.5f;
 constexpr ReturnSlot returnSlots[]{
-    {{10.55f, 1.83f, shelfZ}, {0.215f, shelfHalfDepth}, 0.835f, 2.110f, true},
-    {{emptyLockerX, 2.15f, shelfZ}, {(lockerRight - lockerLeft) * 0.5f, shelfHalfDepth}, 2.15f, 2.55f},
-    {{(cubbyLeft + lockerRight) * 0.5f, 0.40f, shelfZ},
-     {(lockerRight - cubbyLeft) * 0.5f, shelfHalfDepth}, 0.40f, 0.805f},
+    {{emptyLockerX(-0.25f), 1.83f * lockerScale.y, shelfZ},
+     {0.215f * lockerScale.x, shelfHalfDepth}, 0.835f * lockerScale.y, 2.110f * lockerScale.y, true},
+    {{emptyLockerX(0.0f), 2.15f * lockerScale.y, shelfZ},
+     {(lockerRight - lockerLeft) * 0.5f, shelfHalfDepth}, 2.15f * lockerScale.y, 2.55f * lockerScale.y},
+    {{(cubbyLeft + lockerRight) * 0.5f, 0.40f * lockerScale.y, shelfZ},
+     {(lockerRight - cubbyLeft) * 0.5f, shelfHalfDepth}, 0.40f * lockerScale.y, 0.805f * lockerScale.y},
 };
 constexpr Footprint lockerInterior{{lockerLeft, lockerFront}, {lockerRight, lockerBack}};
 constexpr Solid lockerPanels[]{
-    {{{10.300f, -0.445f}, {lockerLeft, -0.050f}}, 0.0f, returnSlots[1].floor},
-    {{{lockerRight, -0.445f}, {11.300f, -0.050f}}, 0.0f, returnSlots[1].floor},
-    {{{lockerLeft, lockerBack}, {lockerRight, -0.050f}}, 0.0f, returnSlots[1].floor},
-    {{{lockerLeft, -0.445f}, {lockerRight, lockerBack}}, 0.0f, returnSlots[2].floor},
+    {{{emptyLockerX(-0.50f), lockerShellFront}, {lockerLeft, lockerShellBack}}, 0.0f, returnSlots[1].floor},
+    {{{lockerRight, lockerShellFront}, {emptyLockerX(0.50f), lockerShellBack}}, 0.0f, returnSlots[1].floor},
+    {{{lockerLeft, lockerBack}, {lockerRight, lockerShellBack}}, 0.0f, returnSlots[1].floor},
+    {{{lockerLeft, lockerDoorFront}, {lockerRight, lockerBack}}, 0.0f, returnSlots[2].floor},
     {lockerInterior, returnSlots[2].ceiling, returnSlots[0].floor},
-    {{{lockerLeft, -0.445f}, {lockerRight, lockerBack}}, returnSlots[0].ceiling, returnSlots[1].floor},
+    {{{lockerLeft, lockerShellFront}, {lockerRight, lockerBack}}, returnSlots[0].ceiling, returnSlots[1].floor},
     {{{safeRight, lockerFront}, {cubbyLeft, lockerBack}}, returnSlots[2].floor, returnSlots[2].ceiling},
-    {{{lockerLeft, -0.445f}, {safeRight, lockerBack}}, returnSlots[2].floor, returnSlots[2].ceiling},
+    {{{lockerLeft, lockerDoorFront}, {safeRight, lockerBack}}, returnSlots[2].floor, returnSlots[2].ceiling},
 };
 constexpr Solid gunCabinet{{{12.95f, -10.36f}, {14.85f, -9.75f}}, 0.0f, 1.95f};
 constexpr Solid clothingBags{{{11.72f, -10.30f}, {12.53f, -9.69f}}, 0.0f, 0.83f};
 
-constexpr Footprint supply{{0.0f, -10.40f}, {16.60f, 0.0f}};
+constexpr Footprint supply{{0.0f, southWallZ}, {16.60f, 0.0f}};
 constexpr Footprint approach{{8.25f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{7.20f, 0.0f}, {8.25f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
@@ -143,11 +162,16 @@ constexpr auto furniture = [] {
     for (float x : bedCenters) {
         const float left = x - halfWidth;
         const float right = x + halfWidth;
+        const float lockerX = x + lockerSideOffset;
+        const float lockerLeftEdge = lockerX - lockerHalfWidth;
+        const float lockerRightEdge = lockerX + lockerHalfWidth;
         layout[index++] = {{{left, -2.48f - bedAisleOffset}, {right, -0.48f - bedAisleOffset}}, 0.0f, bedHeight};
         layout[index++] = {{{left, -9.92f + bedAisleOffset}, {right, -7.92f + bedAisleOffset}}, 0.0f, bedHeight};
-        layout[index++] = {{{left, -10.37f}, {right, -9.93f}}, 0.0f, lockerHeight};
-        if (x != emptyLockerX) {
-            layout[index++] = {{{left, -0.47f}, {right, -0.03f}}, 0.0f, lockerHeight};
+        layout[index++] = {{{lockerLeftEdge, southWallZ - lockerShellBack},
+                            {lockerRightEdge, southWallZ - lockerDoorFront}}, 0.0f, lockerHeight};
+        if (x != emptyLockerBedX) {
+            layout[index++] = {{{lockerLeftEdge, lockerDoorFront},
+                                {lockerRightEdge, lockerShellBack}}, 0.0f, lockerHeight};
         }
     }
     for (const auto& panel : lockerPanels) {
