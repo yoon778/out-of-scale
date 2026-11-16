@@ -51,7 +51,7 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
     case MilitaryRoom::ExitState::Escaped:
         return "Out of Scale | Military escaped | Esc Exit";
     case MilitaryRoom::ExitState::Locked:
-        return "Out of Scale | Barracks | Return the three belongings | E Grab/Place";
+        return "Out of Scale | Barracks | E Grab/Place";
     }
     return "Out of Scale | Barracks";
 }

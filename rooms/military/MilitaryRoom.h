@@ -29,8 +29,7 @@ public:
 private:
     struct Placement {
         perspective::Pose pose;
-        bool fits = true;
-        bool returning = false;
+        bool onShelf = false;
     };
 
     static constexpr std::size_t belongingsCount = 3;

@@ -12,11 +12,8 @@
 namespace {
 #include "MilitaryGeometry.inc"
 
-constexpr float slotTop = 0.56f;
-constexpr float slotZ = -9.85f;
-constexpr glm::vec2 rackHalf{0.43f, 0.40f};
-constexpr float returnClearance = 0.02f;
-constexpr float rackDropHeight = 0.12f;
+constexpr float returnClearance = 0.01f;
+constexpr float shelfDropHeight = 0.02f;
 constexpr float placementClearance = 0.025f;
 constexpr float gravity = 9.8f;
 constexpr float playerRadius = 0.25f;
@@ -85,7 +82,7 @@ struct ObjectSpec {
 };
 
 constexpr ObjectSpec objectSpecs[]{
-    {{4.20f, 0.38f, -5.95f}, {1.62f, 0.76f, 0.98f}, {0.47f, 0.54f, 0.22f}},
+    {{4.80f, 0.38f, -5.95f}, {1.62f, 0.76f, 0.98f}, {0.47f, 0.54f, 0.22f}},
     {{7.30f, 0.28f, -4.45f}, {1.54f, 0.56f, 1.05f}, {0.27f, 0.56f, 0.83f}},
     {{10.30f, 0.44f, -5.85f}, {1.25f, 0.88f, 1.10f}, {0.78f, 0.58f, 0.32f}},
     {{14.70f, 0.54f, -5.20f}, {0.50f, 1.08f, 1.58f}, {0.27f, 0.27f, 0.25f}, 0.03f},
@@ -93,13 +90,32 @@ constexpr ObjectSpec objectSpecs[]{
 
 struct ReturnSlot {
     glm::vec3 center;
-    glm::vec2 opening;
+    float ceiling;
 };
 
+// The last locker on the north wall has three open compartments.
+constexpr float emptyLockerX = 10.80f;
+constexpr float lockerLeft = 10.366f;
+constexpr float lockerRight = 11.234f;
+constexpr float lockerFront = -0.409f;
+constexpr float lockerBack = -0.112f;
+constexpr float shelfZ = (lockerFront + lockerBack) * 0.5f;
+constexpr glm::vec2 slotHalf{(lockerRight - lockerLeft) * 0.5f, (lockerBack - lockerFront) * 0.5f};
 constexpr ReturnSlot returnSlots[]{
-    {{12.80f, slotTop, slotZ}, {0.84f, 0.58f}},
-    {{13.90f, slotTop, slotZ}, {0.82f, 0.58f}},
-    {{15.00f, slotTop, slotZ}, {0.72f, 0.62f}},
+    {{emptyLockerX, 1.26f, shelfZ}, 1.635f},
+    {{emptyLockerX, 1.675f, shelfZ}, 1.900f},
+    {{emptyLockerX, 0.93f, shelfZ}, 1.22f},
+};
+constexpr Footprint shelves{{lockerLeft, lockerFront}, {lockerRight, lockerBack}};
+constexpr Solid lockerPanels[]{
+    {{{10.304f, -0.456f}, {lockerLeft, -0.044f}}, 0.0f, 1.95f},
+    {{{lockerRight, -0.456f}, {11.296f, -0.044f}}, 0.0f, 1.95f},
+    {{{lockerLeft, lockerBack}, {lockerRight, -0.049f}}, 0.026f, 1.926f},
+    {{{lockerLeft, -0.443f}, {lockerRight, -0.044f}}, 0.0f, 0.89f},
+    {shelves, 0.89f, returnSlots[2].center.y},
+    {shelves, returnSlots[2].ceiling, returnSlots[0].center.y},
+    {shelves, returnSlots[0].ceiling, returnSlots[1].center.y},
+    {{{lockerLeft, -0.456f}, {lockerRight, -0.044f}}, returnSlots[1].ceiling, 1.95f},
 };
 
 constexpr Footprint supply{{0.0f, -10.40f}, {16.60f, 0.0f}};
@@ -109,24 +125,25 @@ constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
 constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
 constexpr Footprint banks[]{approach, ledge, farBank, exitWalkway};
-struct Furniture {
-    Footprint bounds;
-    float height;
-};
-
 constexpr auto furniture = [] {
     constexpr std::array bedCenters{2.0f, 4.2f, 6.4f, 8.6f, 10.8f};
     constexpr float halfWidth = 0.54f;
     constexpr float bedHeight = 0.85f;
     constexpr float lockerHeight = 1.95f;
-    std::array<Furniture, bedCenters.size() * 4> layout{};
-    for (std::size_t index = 0; index < bedCenters.size(); ++index) {
-        const float left = bedCenters[index] - halfWidth;
-        const float right = bedCenters[index] + halfWidth;
-        layout[index * 4] = {{{left, -2.48f}, {right, -0.48f}}, bedHeight};
-        layout[index * 4 + 1] = {{{left, -0.47f}, {right, -0.03f}}, lockerHeight};
-        layout[index * 4 + 2] = {{{left, -9.92f}, {right, -7.92f}}, bedHeight};
-        layout[index * 4 + 3] = {{{left, -10.37f}, {right, -9.93f}}, lockerHeight};
+    std::array<Solid, bedCenters.size() * 4 - 1 + std::size(lockerPanels)> layout{};
+    std::size_t index = 0;
+    for (float x : bedCenters) {
+        const float left = x - halfWidth;
+        const float right = x + halfWidth;
+        layout[index++] = {{{left, -2.48f}, {right, -0.48f}}, 0.0f, bedHeight};
+        layout[index++] = {{{left, -9.92f}, {right, -7.92f}}, 0.0f, bedHeight};
+        layout[index++] = {{{left, -10.37f}, {right, -9.93f}}, 0.0f, lockerHeight};
+        if (x != emptyLockerX) {
+            layout[index++] = {{{left, -0.47f}, {right, -0.03f}}, 0.0f, lockerHeight};
+        }
+    }
+    for (const auto& panel : lockerPanels) {
+        layout[index++] = panel;
     }
     return layout;
 }();
@@ -166,7 +183,7 @@ Solid objectSolid(std::size_t index, const perspective::Pose& pose, bool include
     return {bounds, pose.center.y - halfHeight, pose.center.y + halfHeight};
 }
 
-constexpr std::size_t staticSolidCount = furniture.size() + std::size(returnSlots);
+constexpr std::size_t staticSolidCount = furniture.size();
 using RoomSolids = std::array<Solid, staticSolidCount + std::size(objectSpecs)>;
 
 std::span<const Solid> barracksSolids(
@@ -174,10 +191,7 @@ std::span<const Solid> barracksSolids(
     std::optional<std::size_t> held, bool includeScreen = true) {
     std::size_t count = 0;
     for (const auto& obstacle : furniture) {
-        storage[count++] = {obstacle.bounds, 0.0f, obstacle.height};
-    }
-    for (const auto& slot : returnSlots) {
-        storage[count++] = {footprint(slot.center, rackHalf), 0.0f, slotTop};
+        storage[count++] = obstacle;
     }
     for (std::size_t index = 0; index < objects.size(); ++index) {
         if (held != index) {
@@ -193,18 +207,20 @@ bool overlapsPlayer(const Solid& object, const glm::vec3& eye) {
            object.bounds.overlaps(footprint(eye, glm::vec2{playerRadius}));
 }
 
-bool fitsReturnSlot(const Footprint& bounds, const ReturnSlot& slot) {
-    const auto opening = footprint(slot.center, slot.opening * 0.5f - glm::vec2{returnClearance});
-    return opening.contains(bounds.min) && opening.contains(bounds.max);
+bool fitsReturnSlot(const Solid& object, const ReturnSlot& slot) {
+    const auto opening = footprint(slot.center, slotHalf - glm::vec2{returnClearance});
+    return object.top <= slot.ceiling - returnClearance &&
+           opening.contains(object.bounds.min) && opening.contains(object.bounds.max);
 }
 
-float nearestFurnitureDepth(const glm::vec3& eye, const glm::vec3& direction) {
+float nearestSolidDepth(const glm::vec3& eye, const glm::vec3& direction, std::span<const Solid> solids) {
     float closest = std::numeric_limits<float>::infinity();
-    for (const auto& obstacle : furniture) {
+    for (const auto& obstacle : solids) {
         const glm::vec2 middle = (obstacle.bounds.min + obstacle.bounds.max) * 0.5f;
         const glm::vec2 half = (obstacle.bounds.max - obstacle.bounds.min) * 0.5f;
-        const auto hit = perspective::rayBoxDistance(eye, direction, {middle.x, obstacle.height * 0.5f, middle.y},
-                                                     {half.x, obstacle.height * 0.5f, half.y});
+        const auto hit = perspective::rayBoxDistance(eye, direction,
+            {middle.x, (obstacle.bottom + obstacle.top) * 0.5f, middle.y},
+            {half.x, (obstacle.top - obstacle.bottom) * 0.5f, half.y});
         if (hit) {
             closest = std::min(closest, *hit);
         }
@@ -516,24 +532,24 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
     const glm::vec3 half = objectSpecs[index].size * 0.5f;
     RoomSolids storage;
     const auto solids = barracksSolids(storage, objects_, heldObject_);
-    if (index != televisionIndex && direction.y < -0.001f && eye.y > slotTop) {
-        const float rackDepth = (slotTop - eye.y) / direction.y;
-        const glm::vec2 rackAim = horizontal(eye + direction * rackDepth);
-        for (std::size_t slotIndex = 0; slotIndex < belongingsCount; ++slotIndex) {
-            const auto& slot = returnSlots[slotIndex];
-            if (footprint(slot.center, rackHalf).contains(rackAim) &&
-                rackDepth <= nearestFurnitureDepth(eye, direction)) {
-                const float scale = perspective::scaleAtSupport(eye, direction, slot.center, heldRatio_, half.y);
-                const perspective::Pose pose{slot.center + glm::vec3{0.0f, rackDropHeight + half.y * scale, 0.0f}, scale};
-                const auto release = objectSolid(index, pose, true);
-                const bool fits = index == slotIndex && !returned_[slotIndex] && scale >= minimumScale &&
-                                  release.top <= barracksCeiling && fitsReturnSlot(release.bounds, slot) &&
-                                  !overlapsPlayer(release, eye) &&
-                                  std::none_of(solids.begin(), solids.end(), [&](const Solid& solid) {
-                                      return release.bottom < solid.top && release.top > solid.bottom &&
-                                             release.bounds.overlaps(solid.bounds);
-                                  });
-                return Placement{pose, fits, true};
+    if (index != televisionIndex) {
+        const float obstacleDepth = nearestSolidDepth(eye, direction, solids);
+        for (const auto& slot : returnSlots) {
+            const float halfHeight = (slot.ceiling - slot.center.y) * 0.5f;
+            const auto hit = perspective::rayBoxDistance(eye, direction,
+                slot.center + glm::vec3{0.0f, halfHeight, 0.0f}, {slotHalf.x, halfHeight, slotHalf.y});
+            if (!hit || *hit >= obstacleDepth) {
+                continue;
+            }
+
+            const float scale = perspective::scaleAtSupport(eye, direction, slot.center, heldRatio_, half.y);
+            const perspective::Pose pose{slot.center + glm::vec3{0.0f, shelfDropHeight + half.y * scale, 0.0f}, scale};
+            const auto release = objectSolid(index, pose, true);
+            if (scale >= minimumScale && fitsReturnSlot(release, slot) && !overlapsPlayer(release, eye) &&
+                std::none_of(solids.begin(), solids.end(), [&](const Solid& solid) {
+                    return release.bottom < solid.top && release.top > solid.bottom && release.bounds.overlaps(solid.bounds);
+                })) {
+                return Placement{pose, true};
             }
         }
     }
@@ -618,9 +634,10 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
         pose.center.y = bottom + halfHeight;
         updated[index] = objectSolid(index, pose, true);
         speed = landed ? supportSpeed : speed - gravity * elapsed;
-        if (landed && index < belongingsCount && speed == 0.0f && std::abs(support - slotTop) <= contactTolerance &&
-            fitsReturnSlot(updated[index].bounds, returnSlots[index])) {
-            returned_[index] = true;
+        if (landed && index < belongingsCount && speed == 0.0f) {
+            const auto& slot = returnSlots[index];
+            returned_[index] = std::abs(support - slot.center.y) <= contactTolerance &&
+                               fitsReturnSlot(updated[index], slot);
         }
     }
     if (exitState_ == ExitState::Locked &&
@@ -635,17 +652,17 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         return;
     }
     if (heldObject_) {
-        if (const auto target = placement(eye, direction); target && target->fits) {
+        if (const auto target = placement(eye, direction)) {
             const std::size_t index = *heldObject_;
             objects_[index] = target->pose;
             verticalSpeeds_[index] = 0.0f;
-            fallGrowthRates_[index] = target->returning ? 0.0f : heldRatio_;
+            fallGrowthRates_[index] = target->onShelf ? 0.0f : heldRatio_;
             heldObject_.reset();
         }
         return;
     }
 
-    float closest = nearestFurnitureDepth(eye, direction);
+    float closest = nearestSolidDepth(eye, direction, furniture);
     for (std::size_t index = 0; index < objects_.size(); ++index) {
         if (index == televisionIndex ? exitState_ == ExitState::Locked : returned_[index]) {
             continue;
@@ -903,22 +920,6 @@ void MilitaryRoom::drawObject(std::size_t index, const perspective::Pose& pose, 
 }
 
 void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction) const {
-    for (std::size_t index = 0; index < belongingsCount; ++index) {
-        const auto& slot = returnSlots[index];
-        const glm::vec2 half = slot.opening * 0.5f;
-        const glm::vec3 mark = objectSpecs[index].color;
-        renderer_.drawBox({slot.center.x, slotTop * 0.5f, slot.center.z},
-                          {2.0f * rackHalf.x, slotTop, 2.0f * rackHalf.y}, {0.32f, 0.33f, 0.28f});
-        for (float side : {-1.0f, 1.0f}) {
-            renderer_.drawBox(slot.center + glm::vec3{side * half.x, 0.012f, 0.0f},
-                              {0.023f, 0.024f, slot.opening.y}, mark);
-            renderer_.drawBox(slot.center + glm::vec3{0.0f, 0.012f, side * half.y},
-                              {slot.opening.x, 0.024f, 0.023f}, mark);
-        }
-        renderer_.drawBox({slot.center.x, slotTop - 0.12f, slot.center.z + rackHalf.y},
-                          {0.30f, 0.075f, 0.012f}, mark);
-    }
-
     for (std::size_t index = 0; index < objects_.size(); ++index) {
         perspective::Pose displayed = objects_[index];
         glm::vec3 tint{1.0f};
@@ -926,7 +927,6 @@ void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction
             constexpr glm::vec3 blockedTint{1.35f, 0.36f, 0.36f};
             if (const auto target = placement(eye, direction)) {
                 displayed = target->pose;
-                tint = target->fits ? glm::vec3{0.82f, 1.27f, 1.05f} : blockedTint;
             } else {
                 constexpr float carryDepth = 1.45f;
                 displayed = {eye + direction * carryDepth, std::min(heldRatio_ * carryDepth, 0.55f)};
