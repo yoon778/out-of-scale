@@ -14,6 +14,7 @@ from mathutils import Vector
 BARRICADE = "Barricade_Interactable"
 MOON = "Moon_Pickup"
 MOVABLE_OBJECTS = {BARRICADE, MOON}
+GEAR_MODELS = ("pack", "bedding", "mask")
 LIGHT = Vector((0.32, 0.87, 0.37)).normalized()
 
 
@@ -113,11 +114,28 @@ def main():
         output.write("const MeshVertex staticGeometry[] = {\n")
         static_count = 0
         for obj in sorted(scene.objects, key=lambda item: item.name):
-            if obj.type not in {"MESH", "FONT"} or obj.hide_render or obj.name in MOVABLE_OBJECTS:
+            if (obj.type not in {"MESH", "FONT"} or obj.hide_render or
+                    obj.name in MOVABLE_OBJECTS or obj.get("game_prop") in GEAR_MODELS):
                 continue
             output.write("    // " + obj.name + "\n")
             static_count += write_triangles(output, object_triangles(obj, depsgraph))
         output.write("};\n\n")
+
+        output.write("const MeshVertex barracksGear[] = {\n")
+        gear_offsets = [0]
+        for model in GEAR_MODELS:
+            triangles = [triangle
+                         for obj in sorted(scene.objects, key=lambda item: item.name)
+                         if obj.type == "MESH" and obj.get("game_prop") == model
+                         for triangle in object_triangles(obj, depsgraph)]
+            if not triangles:
+                raise ValueError(f"Interacting gear mesh is missing: {model}")
+            center, size = world_bounds(triangles)
+            output.write(f"    // {model}\n")
+            count = write_triangles(output, normalized_triangles(triangles, center, size))
+            gear_offsets.append(gear_offsets[-1] + count)
+        output.write("};\n")
+        output.write("constexpr GLint gearOffsets[] = " + cpp_vector(gear_offsets) + ";\n\n")
         output.write("const glm::vec3 moonWorldCenter = " + cpp_vector(moon_center, 9) + ";\n")
         output.write("const glm::vec3 moonWorldSize = " + cpp_vector(moon_size, 9) + ";\n")
         output.write("const MeshVertex moonGeometry[] = {\n")

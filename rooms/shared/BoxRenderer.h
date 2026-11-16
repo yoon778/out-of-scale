@@ -27,7 +27,7 @@ public:
     void drawBox(const glm::mat4& model, const glm::vec3& tint) const;
     void drawGrid(float halfSize) const;
     void drawStaticMesh() const;
-    void drawMovableMesh(const glm::mat4& model, const glm::vec3& tint) const;
+    void drawMovableMesh(GLint first, GLsizei count, const glm::mat4& model, const glm::vec3& tint) const;
     void drawMoonMesh(const glm::mat4& model, const glm::vec3& tint) const;
     void drawFlatPolygon(std::span<const glm::vec2> outline, float height, const glm::vec3& color) const;
 

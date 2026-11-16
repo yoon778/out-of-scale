@@ -275,8 +275,8 @@ void BoxRenderer::drawStaticMesh() const {
     drawMesh(primitiveVertexCount, staticMeshCount_, glm::mat4{1.0f}, glm::vec3{1.0f});
 }
 
-void BoxRenderer::drawMovableMesh(const glm::mat4& model, const glm::vec3& tint) const {
-    drawMesh(primitiveVertexCount + staticMeshCount_, movableMeshCount_, model, tint);
+void BoxRenderer::drawMovableMesh(GLint first, GLsizei count, const glm::mat4& model, const glm::vec3& tint) const {
+    drawMesh(primitiveVertexCount + staticMeshCount_ + first, count, model, tint);
 }
 
 void BoxRenderer::drawMoonMesh(const glm::mat4& model, const glm::vec3& tint) const {

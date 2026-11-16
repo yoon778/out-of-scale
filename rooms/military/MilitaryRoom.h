@@ -27,9 +27,11 @@ public:
     static constexpr float spawnYaw = 1.5707963268f;
 
 private:
+    enum class Support { Free, Shelf, Hook };
+
     struct Placement {
         perspective::Pose pose;
-        bool onShelf = false;
+        Support support = Support::Free;
     };
 
     static constexpr std::size_t belongingsCount = 3;
