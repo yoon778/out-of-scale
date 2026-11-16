@@ -47,7 +47,7 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
     case MilitaryRoom::ExitState::OutpostReached:
         return "Out of Scale | E Grab moon | Scroll down to grow | E Place | Esc Exit";
     case MilitaryRoom::ExitState::BridgeReady:
-        return "Out of Scale | Bridge ready | Cross to the exit | Esc Exit";
+        return "Out of Scale | Follow the shadow | E Move moon | Esc Exit";
     case MilitaryRoom::ExitState::Escaped:
         return "Out of Scale | Military escaped | Esc Exit";
     case MilitaryRoom::ExitState::Locked:

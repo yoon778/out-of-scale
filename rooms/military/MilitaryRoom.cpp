@@ -30,13 +30,15 @@ constexpr glm::vec3 screenSize{0.025f, 0.88f, 1.30f};
 constexpr glm::vec3 screenOffset{-0.255f, 0.03f, 0.0f};
 constexpr glm::vec3 outpostEntrance{9.75f, 1.65f, 1.60f};
 constexpr float moonCarryDepth = 3.2f;
-constexpr float moonLightScale = 0.25f;
 constexpr float maximumMoonScale = 0.52f;
 constexpr float distantMoonStrength = 0.23f;
 constexpr float gapNear = 7.8f;
 constexpr float gapFar = 12.5f;
-constexpr float trenchY = -1.33f;
-constexpr float overlapOnBank = 0.05f;
+constexpr float trenchY = -4.0f;
+constexpr float ladderX = 11.82f;
+constexpr float ladderZ = gapNear + playerRadius;
+constexpr float ladderReach = 0.46f;
+constexpr float climbPerStep = 0.65f;
 
 using Polygon = std::vector<glm::vec2>;
 
@@ -104,9 +106,9 @@ constexpr Footprint supply{{0.0f, -10.40f}, {16.60f, 0.0f}};
 constexpr Footprint approach{{8.25f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{7.20f, 0.0f}, {8.25f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
-constexpr Footprint shadowWalkway{{10.0f, gapNear}, {11.0f, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
 constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
+constexpr Footprint banks[]{approach, ledge, farBank, exitWalkway};
 struct Furniture {
     Footprint bounds;
     float height;
@@ -129,6 +131,18 @@ constexpr auto furniture = [] {
     return layout;
 }();
 constexpr Footprint pillarFoot{{9.865f, 5.745f}, {11.135f, 6.555f}};
+
+struct Bounds {
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
+// Body, foot and cap bounds from the Blender Entry geometry.
+constexpr Bounds pillarParts[]{
+    {{9.97f, 0.0f, 5.84f}, {11.03f, 2.28f, 6.46f}},
+    {{9.865f, 0.0f, 5.745f}, {11.135f, 0.16f, 6.555f}},
+    {{9.945f, 2.255f, 5.815f}, {11.055f, 2.345f, 6.485f}},
+};
 
 glm::vec2 horizontal(const glm::vec3& position) {
     return {position.x, position.z};
@@ -199,8 +213,18 @@ float nearestFurnitureDepth(const glm::vec3& eye, const glm::vec3& direction) {
 }
 
 bool onOutpostRoute(const glm::vec2& point) {
-    return approach.contains(point) || ledge.contains(point) ||
-           farBank.contains(point) || exitWalkway.contains(point);
+    return std::any_of(std::begin(banks), std::end(banks), [&](const Footprint& bank) {
+        return bank.contains(point);
+    });
+}
+
+glm::vec3 groundAt(glm::vec3 position, float height, bool* grounded) {
+    const float restingEye = height + playerEyeHeight;
+    if (grounded) {
+        *grounded = position.y <= restingEye;
+    }
+    position.y = std::max(position.y, restingEye);
+    return position;
 }
 
 bool fitsSupply(const Footprint& bounds) {
@@ -380,23 +404,20 @@ Polygon convexHull(Polygon points) {
 }
 
 Polygon projectPillar(const glm::vec3& light, float surfaceY) {
-    struct Bounds {
-        glm::vec3 min;
-        glm::vec3 max;
-    };
-    // Body, foot and cap bounds from the Blender Entry geometry.
-    constexpr Bounds parts[]{
-        {{9.97f, 0.0f, 5.84f}, {11.03f, 2.28f, 6.46f}},
-        {{9.865f, 0.0f, 5.745f}, {11.135f, 0.16f, 6.555f}},
-        {{9.945f, 2.255f, 5.815f}, {11.055f, 2.345f, 6.485f}},
-    };
-    if (light.y <= parts[2].max.y + 0.02f) {
+    constexpr float projectionClearance = 0.002f;
+    if (light.y <= surfaceY + projectionClearance) {
         return {};
     }
     Polygon points;
-    for (const auto& part : parts) {
+    for (const auto& part : pillarParts) {
+        const float bottom = std::max(part.min.y, surfaceY);
+        // The part above a low moon cannot block rays to the ground below it.
+        const float top = std::min(part.max.y, light.y - projectionClearance);
+        if (top < bottom) {
+            continue;
+        }
         for (float x : {part.min.x, part.max.x}) {
-            for (float y : {part.min.y, part.max.y}) {
+            for (float y : {bottom, top}) {
                 for (float z : {part.min.z, part.max.z}) {
                     const float distance = (light.y - surfaceY) / (light.y - y);
                     points.push_back(horizontal(light + (glm::vec3{x, y, z} - light) * distance));
@@ -435,54 +456,28 @@ Polygon clipTo(const Polygon& outline, const Footprint& area) {
             clipped = std::move(next);
         }
     }
+    float twiceArea = 0.0f;
+    for (std::size_t i = 2; i < clipped.size(); ++i) {
+        twiceArea += cross(clipped[i - 1] - clipped.front(), clipped[i] - clipped.front());
+    }
+    if (twiceArea <= 0.00001f) {
+        return {};
+    }
     return clipped;
 }
 
-glm::vec2 spanAt(const Polygon& outline, float z) {
-    const float infinity = std::numeric_limits<float>::infinity();
-    glm::vec2 span{infinity, -infinity};
+bool containsPoint(const Polygon& outline, const glm::vec2& point) {
+    if (outline.empty()) {
+        return false;
+    }
     for (std::size_t i = 0; i < outline.size(); ++i) {
-        const auto& a = outline[i];
-        const auto& b = outline[(i + 1) % outline.size()];
-        if (z < std::min(a.y, b.y) || z > std::max(a.y, b.y)) {
-            continue;
-        }
-        if (a.y == b.y) {
-            span.x = std::min({span.x, a.x, b.x});
-            span.y = std::max({span.y, a.x, b.x});
-        } else {
-            const float x = glm::mix(a.x, b.x, (z - a.y) / (b.y - a.y));
-            span.x = std::min(span.x, x);
-            span.y = std::max(span.y, x);
+        const auto& start = outline[i];
+        const auto edge = outline[(i + 1) % outline.size()] - start;
+        if (cross(edge, point - start) < -0.00001f) {
+            return false;
         }
     }
-    return span;
-}
-
-bool coversWalkwayAt(const Polygon& shadow, float z) {
-    const auto span = spanAt(shadow, z);
-    return span.x <= shadowWalkway.min.x && span.y >= shadowWalkway.max.x;
-}
-
-void drawShadowPreview(const BoxRenderer& renderer, const Polygon& outline, const glm::vec3& color) {
-    for (std::size_t i = 0; i < outline.size(); ++i) {
-        const glm::vec2 start = outline[i];
-        const glm::vec2 end = outline[(i + 1) % outline.size()];
-        const glm::vec2 edge = end - start;
-        const float length = glm::length(edge);
-        if (length < 0.001f) {
-            continue;
-        }
-        constexpr float width = 0.027f;
-        const glm::vec2 inset{-edge.y * width / length, edge.x * width / length};
-        const int count = std::max(1, static_cast<int>(std::ceil(length / 0.44f)));
-        for (int dash = 0; dash < count; ++dash) {
-            const auto a = start + edge * (static_cast<float>(dash) / count);
-            const auto b = start + edge * ((dash + 0.56f) / count);
-            const glm::vec2 line[]{a, b, b + inset, a + inset};
-            renderer.drawFlatPolygon(line, 0.028f, color);
-        }
-    }
+    return true;
 }
 }
 
@@ -507,6 +502,7 @@ bool MilitaryRoom::returnToBarracks() {
         return false;
     }
     exitState_ = ExitState::Open;
+    climbing_ = false;
     return true;
 }
 
@@ -672,22 +668,32 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
 
 bool MilitaryRoom::canPlaceMoon(const glm::vec3& center) const {
     const glm::vec3 half = moonWorldSize * (moonScale_ * 0.5f);
-    return center.x - half.x > 8.4f && center.x + half.x < 12.6f &&
-           center.y >= 3.15f && center.y <= 5.50f &&
-           center.z - half.z >= 0.25f && center.z + half.z <= gapNear;
+    const auto bounds = footprint(center, horizontal(half));
+    const auto min = center - half;
+    const auto max = center + half;
+    if (min.y < trenchY || (min.y < barracksCeiling && bounds.overlaps(supply))) {
+        return false;
+    }
+    if (min.y < 0.0f && std::any_of(std::begin(banks), std::end(banks), [&](const Footprint& bank) {
+        return bounds.overlaps(bank);
+    })) {
+        return false;
+    }
+    return std::none_of(std::begin(pillarParts), std::end(pillarParts), [&](const Bounds& part) {
+        return glm::all(glm::lessThan(min, part.max)) && glm::all(glm::greaterThan(max, part.min));
+    });
 }
 
 void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction) {
-    // Keep the bridge stable for a player already walking across it or beyond it.
-    if (eye.z + playerRadius >= gapNear) {
-        return;
-    }
     if (moonHeld_) {
         const glm::vec3 center = eye + direction * moonCarryDepth;
         if (canPlaceMoon(center)) {
             placedMoon_ = center;
             moonHeld_ = false;
-            exitState_ = outpostState();
+            bridge_ = clipTo(projectPillar(center, 0.0f), gap);
+            if (exitState_ != ExitState::Escaped) {
+                exitState_ = outpostState();
+            }
         }
         return;
     }
@@ -695,11 +701,20 @@ void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction
     const float scale = placedMoon_ ? moonScale_ : 1.40f;
     const auto hit = perspective::rayBoxDistance(
         eye, direction, placedMoon_.value_or(moonWorldCenter), moonWorldSize * (scale * 0.5f));
-    const auto pillarHit = perspective::rayBoxDistance(eye, direction, {10.5f, 1.1725f, 6.15f},
-                                                       {0.555f, 1.1725f, 0.335f});
-    if (hit && *hit > 0.05f && (!pillarHit || *hit < *pillarHit)) {
+    if (!hit || *hit <= 0.05f) {
+        return;
+    }
+    const bool behindPillar = std::any_of(std::begin(pillarParts), std::end(pillarParts), [&](const Bounds& part) {
+        const auto obstacle = perspective::rayBoxDistance(eye, direction, (part.min + part.max) * 0.5f,
+                                                          (part.max - part.min) * 0.5f);
+        return obstacle && *obstacle < *hit;
+    });
+    if (!behindPillar) {
         moonHeld_ = true;
-        exitState_ = ExitState::OutpostReached;
+        bridge_.clear();
+        if (exitState_ != ExitState::Escaped) {
+            exitState_ = outpostState();
+        }
     }
 }
 
@@ -711,25 +726,11 @@ void MilitaryRoom::scroll(double yOffset) {
 }
 
 MilitaryRoom::ExitState MilitaryRoom::outpostState() const {
-    if (placedMoon_ && !moonHeld_ && moonScale_ >= moonLightScale) {
-        const auto shadow = projectPillar(*placedMoon_, 0.0f);
-        if (coversWalkwayAt(shadow, gapNear - overlapOnBank) && coversWalkwayAt(shadow, gapFar + overlapOnBank)) {
-            return ExitState::BridgeReady;
-        }
-    }
-    return ExitState::OutpostReached;
+    return bridge_.empty() ? ExitState::OutpostReached : ExitState::BridgeReady;
 }
 
 bool MilitaryRoom::supports(const glm::vec2& point) const {
-    const bool ready = exitState_ == ExitState::BridgeReady || exitState_ == ExitState::Escaped;
-    return onOutpostRoute(point) || (ready && shadowWalkway.contains(point));
-}
-
-bool MilitaryRoom::canStandAtOutpost(const glm::vec3& position) const {
-    const auto bounds = footprint(position, glm::vec2{playerRadius});
-    return supports(bounds.min) && supports(bounds.max) &&
-           supports({bounds.min.x, bounds.max.y}) && supports({bounds.max.x, bounds.min.y}) &&
-           !bounds.overlaps(pillarFoot);
+    return onOutpostRoute(point) || containsPoint(bridge_, point);
 }
 
 bool MilitaryRoom::canEnterTelevision(const glm::vec3& previous, const glm::vec3& desired,
@@ -755,26 +756,17 @@ bool MilitaryRoom::canEnterTelevision(const glm::vec3& previous, const glm::vec3
 
 glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired,
                                         const glm::vec3& facing, bool* grounded) {
-    const auto groundAt = [&](glm::vec3 position, float height) {
-        const bool landed = position.y <= height + playerEyeHeight;
-        if (grounded) {
-            *grounded = landed;
-        }
-        position.y = std::max(position.y, height + playerEyeHeight);
-        return position;
-    };
     if (canEnterTelevision(previous, desired, facing)) {
         exitState_ = outpostState();
-        return groundAt({outpostEntrance.x, desired.y, outpostEntrance.z}, 0.0f);
+        return groundAt({outpostEntrance.x, desired.y, outpostEntrance.z}, 0.0f, grounded);
     }
-    const bool barracks = inBarracks();
+    if (!inBarracks()) {
+        return resolveOutpostMovement(previous, desired, facing, grounded);
+    }
     RoomSolids storage;
     // The screen protrudes from the TV body. Keep the portal reachable before touching its body.
-    const auto solids = barracks ? barracksSolids(storage, objects_, heldObject_, false) : std::span<const Solid>{};
+    const auto solids = barracksSolids(storage, objects_, heldObject_, false);
     const auto canMoveTo = [&](const glm::vec3& position) {
-        if (!barracks) {
-            return canStandAtOutpost(position);
-        }
         return fitsSupply(footprint(position, glm::vec2{playerRadius})) &&
                std::none_of(solids.begin(), solids.end(), [&](const Solid& solid) {
                    return overlapsPlayer(solid, position);
@@ -790,26 +782,77 @@ glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::ve
         position.z = previous.z;
     }
     position.y = desired.y;
-    if (barracks) {
-        const auto bounds = footprint(position, glm::vec2{playerRadius});
-        if (desired.y > previous.y) {
-            position.y = std::min(position.y, barracksCeiling - headClearance);
-            for (const auto& solid : solids) {
-                if (bounds.overlaps(solid.bounds) && previous.y + headClearance <= solid.bottom + contactTolerance) {
-                    position.y = std::min(position.y, solid.bottom - headClearance);
-                }
+    const auto bounds = footprint(position, glm::vec2{playerRadius});
+    if (desired.y > previous.y) {
+        position.y = std::min(position.y, barracksCeiling - headClearance);
+        for (const auto& solid : solids) {
+            if (bounds.overlaps(solid.bounds) && previous.y + headClearance <= solid.bottom + contactTolerance) {
+                position.y = std::min(position.y, solid.bottom - headClearance);
             }
-            if (grounded) {
-                *grounded = false;
-            }
-            return position;
         }
-        return groundAt(position, landingHeight(bounds, previous.y - playerEyeHeight, solids));
+        if (grounded) {
+            *grounded = false;
+        }
+        return position;
     }
-    if (exitState_ == ExitState::BridgeReady && position.z >= 15.70f) {
+    return groundAt(position, landingHeight(bounds, previous.y - playerEyeHeight, solids), grounded);
+}
+
+glm::vec3 MilitaryRoom::resolveOutpostMovement(const glm::vec3& previous, const glm::vec3& desired,
+                                               const glm::vec3& facing, bool* grounded) {
+    const bool belowLip = previous.y < playerEyeHeight;
+    const float towardLadder = previous.z - desired.z;
+    if (climbing_ && towardLadder < 0.0f) {
+        climbing_ = false;
+    }
+    constexpr float ladderEntry = ladderZ + 0.12f;
+    const bool facesNearBank = facing.z < -0.30f * glm::length(horizontal(facing));
+    if (belowLip && facesNearBank && towardLadder > 0.0f && desired.z <= ladderEntry &&
+        std::abs(desired.x - ladderX) <= ladderReach) {
+        climbing_ = true;
+    }
+    if (climbing_) {
+        const float y = previous.y + towardLadder * climbPerStep;
+        if (grounded) {
+            *grounded = true;
+        }
+        if (y >= playerEyeHeight) {
+            climbing_ = false;
+            return {ladderX, playerEyeHeight, gapNear - playerRadius - 0.03f};
+        }
+        return {ladderX, y, ladderZ};
+    }
+
+    const auto canMoveTo = [&](const glm::vec3& position) {
+        const auto bounds = footprint(position, glm::vec2{playerRadius});
+        if (belowLip) {
+            return gap.contains(bounds.min) && gap.contains(bounds.max);
+        }
+        const auto withinOutpost = [](const glm::vec2& point) {
+            return onOutpostRoute(point) || gap.contains(point);
+        };
+        return withinOutpost(bounds.min) && withinOutpost(bounds.max) &&
+               withinOutpost({bounds.min.x, bounds.max.y}) && withinOutpost({bounds.max.x, bounds.min.y}) &&
+               !bounds.overlaps(pillarFoot);
+    };
+    glm::vec3 position{desired.x, desired.y, previous.z};
+    if (!canMoveTo(position)) {
+        position.x = previous.x;
+    }
+    position.z = desired.z;
+    if (!canMoveTo(position)) {
+        position.z = previous.z;
+    }
+
+    const auto bounds = footprint(position, glm::vec2{playerRadius});
+    const bool inTrench = gap.contains(bounds.min) && gap.contains(bounds.max);
+    const bool supported = supports(bounds.min) && supports(bounds.max) &&
+                           supports({bounds.min.x, bounds.max.y}) && supports({bounds.max.x, bounds.min.y});
+    const float floor = inTrench && (belowLip || !supported) ? trenchY : 0.0f;
+    if (position.z >= 15.70f) {
         exitState_ = ExitState::Escaped;
     }
-    return groundAt(position, 0.0f);
+    return groundAt(position, floor, grounded);
 }
 
 MilitaryRoom::ExitState MilitaryRoom::exitState() const {
@@ -911,38 +954,14 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     renderer_.drawStaticMesh();
     renderer_.clearNightLighting();
 
-    const glm::vec3 idleColor{0.58f, 0.30f, 0.10f};
-    const glm::vec3 alignedColor{0.28f, 0.78f, 0.79f};
     const auto shadow = projectPillar(moonCenter, 0.0f);
-    const bool hasPreview = moonHeld_ && canPlaceMoon(moonCenter);
-    const bool strongLight = (moonHeld_ ? hasPreview : placedMoon_.has_value()) && moonScale_ >= moonLightScale;
-    const bool ready = exitState_ == ExitState::BridgeReady || exitState_ == ExitState::Escaped;
-    const bool reachesNear = strongLight && coversWalkwayAt(shadow, gapNear - overlapOnBank);
-    const bool reachesFar = strongLight && coversWalkwayAt(shadow, gapFar + overlapOnBank);
-    const auto drawBankMarkers = [&](float z, bool connected) {
-        const glm::vec3 color = ready || connected ? alignedColor : idleColor;
-        for (float x : {shadowWalkway.min.x - 0.17f, shadowWalkway.max.x + 0.17f}) {
-            renderer_.drawBox({x, 0.035f, z}, {0.16f, 0.07f, 0.24f}, {0.12f, 0.16f, 0.19f});
-            renderer_.drawBox({x, 0.074f, z}, {0.108f, 0.012f, 0.18f}, color);
-        }
-    };
-    drawBankMarkers(7.56f, reachesNear);
-    drawBankMarkers(12.74f, reachesFar);
-
     const glm::vec3 shadowColor{0.034f, 0.064f, 0.107f};
-    for (const auto& floor : {approach, ledge, farBank}) {
-        renderer_.drawFlatPolygon(clipTo(shadow, floor), 0.020f, shadowColor);
+    constexpr float shadowOffset = 0.020f;
+    for (const auto& floor : banks) {
+        renderer_.drawFlatPolygon(clipTo(shadow, floor), shadowOffset, shadowColor);
     }
-    renderer_.drawFlatPolygon(clipTo(projectPillar(moonCenter, trenchY), gap), trenchY + 0.020f, shadowColor);
-    if (ready) {
-        renderer_.drawFlatPolygon(clipTo(shadow, shadowWalkway), 0.014f, shadowColor);
-    } else if (hasPreview) {
-        const auto color = reachesNear && reachesFar ? alignedColor : glm::vec3{0.32f, 0.46f, 0.58f};
-        for (const auto& floor : {approach, ledge, farBank}) {
-            drawShadowPreview(renderer_, clipTo(shadow, floor), color);
-        }
-        drawShadowPreview(renderer_, clipTo(shadow, gap), color);
-    }
+    renderer_.drawFlatPolygon(clipTo(projectPillar(moonCenter, trenchY), gap), trenchY + shadowOffset, shadowColor);
+    renderer_.drawFlatPolygon(bridge_, shadowOffset, shadowColor);
 
     const float drawnScale = distantMoon ? 1.0f : moonScale_;
     const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * drawnScale);

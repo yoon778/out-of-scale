@@ -5,6 +5,7 @@
 
 #include <array>
 #include <optional>
+#include <vector>
 
 class MilitaryRoom {
 public:
@@ -44,7 +45,8 @@ private:
     bool canPlaceMoon(const glm::vec3& center) const;
     ExitState outpostState() const;
     bool supports(const glm::vec2& point) const;
-    bool canStandAtOutpost(const glm::vec3& position) const;
+    glm::vec3 resolveOutpostMovement(const glm::vec3& previous, const glm::vec3& desired,
+                                    const glm::vec3& facing, bool* grounded);
 
     BoxRenderer renderer_;
     std::array<perspective::Pose, belongingsCount + 1> objects_;
@@ -57,4 +59,6 @@ private:
     std::optional<glm::vec3> placedMoon_;
     float moonScale_ = 0.10f;
     bool moonHeld_ = false;
+    std::vector<glm::vec2> bridge_;
+    bool climbing_ = false;
 };
