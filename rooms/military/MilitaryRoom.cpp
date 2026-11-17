@@ -1074,6 +1074,38 @@ void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction
     }
 }
 
+void MilitaryRoom::drawTrainingReflectors(const glm::vec3& moonCenter, float nearbyLightStrength) const {
+    struct Reflector {
+        glm::vec3 center;
+        glm::vec3 size;
+    };
+    constexpr glm::vec3 railBand{0.088f, 0.20f, 0.090f};
+    constexpr Reflector reflectors[]{
+        {{12.94f, 0.35f, 2.731f}, railBand},
+        {{12.94f, 0.35f, 4.687f}, railBand},
+        {{12.94f, 0.35f, 6.642f}, railBand},
+        {{10.50f, 1.62f, 5.823f}, {0.32f, 0.090f, 0.014f}},
+    };
+    constexpr glm::vec3 unlitTape{0.067f, 0.083f, 0.092f};
+    constexpr glm::vec3 litTape{0.76f, 0.92f, 1.0f};
+    for (const auto& reflector : reflectors) {
+        float light = 0.0f;
+        if (nearbyLightStrength > 0.0f) {
+            const glm::vec3 toMoon = moonCenter - reflector.center;
+            const float reach = 3.50f + 0.65f * nearbyLightStrength;
+            light = 1.0f - glm::smoothstep(0.35f, reach, glm::length(toMoon));
+            if (light > 0.0f && std::any_of(std::begin(pillarParts), std::end(pillarParts), [&](const Bounds& part) {
+                    const auto hit = perspective::rayBoxDistance(reflector.center, toMoon, (part.min + part.max) * 0.5f,
+                                                                 (part.max - part.min) * 0.5f);
+                    return hit && *hit < 1.0f;
+                })) {
+                light = 0.0f;
+            }
+        }
+        renderer_.drawBox(reflector.center, reflector.size, glm::mix(unlitTape, litTape, light));
+    }
+}
+
 void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
     renderer_.begin(viewProjection);
     if (inBarracks()) {
@@ -1090,6 +1122,7 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     renderer_.setNightLighting(eye, moonLight, strength, distantMoon);
     renderer_.drawStaticMesh();
     renderer_.clearNightLighting();
+    drawTrainingReflectors(moonCenter, distantMoon ? 0.0f : strength);
 
     const auto shadow = projectPillar(moonCenter, 0.0f);
     const glm::vec3 shadowColor{0.034f, 0.064f, 0.107f};

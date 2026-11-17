@@ -45,6 +45,7 @@ private:
                             const glm::vec3& facing) const;
     void drawBarracks(const glm::vec3& eye, const glm::vec3& direction) const;
     void drawEquipmentPuzzle() const;
+    void drawTrainingReflectors(const glm::vec3& moonCenter, float nearbyLightStrength) const;
     void drawObject(std::size_t index, const perspective::Pose& pose, const glm::vec3& tint) const;
     void interactMoon(const glm::vec3& eye, const glm::vec3& direction);
     bool canPlaceMoon(const glm::vec3& center) const;
