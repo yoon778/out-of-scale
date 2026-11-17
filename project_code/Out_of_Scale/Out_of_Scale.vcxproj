@@ -95,6 +95,9 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="src\core\Player.cpp" />
+    <ClCompile Include="src\core\PauseMenu.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="..\..\rooms\test\TestRoom.cpp" />
     <ClCompile Include="..\..\rooms\military\MilitaryRoom.cpp" />
     <ClCompile Include="..\..\rooms\military\ParadeGround.cpp">
@@ -116,6 +119,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Player.h" />
+    <ClInclude Include="src\core\PauseMenu.h" />
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\military\MilitaryRoom.h" />
     <ClInclude Include="..\..\rooms\military\MilitaryGeometry.inc" />

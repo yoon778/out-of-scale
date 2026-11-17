@@ -11,9 +11,19 @@ struct PreviewState {
     Camera camera;
 };
 
+struct PreviewPause {
+    void* context;
+    bool (*isPaused)(const void*);
+    void (*setPaused)(void*, bool);
+    bool (*keyPressed)(void*, GLFWwindow*, int);
+    void (*click)(void*, GLFWwindow*);
+    void (*draw)(void*, GLFWwindow*, int, int);
+};
+
 struct PreviewNavigation {
     int requestedKey = 0;
     bool (*restoreFullscreen)(GLFWwindow*) = nullptr;
+    const PreviewPause* pause = nullptr;
 };
 
 int runPreview(GLFWwindow* window, PreviewState& preview, const std::string& captureFolder = {},

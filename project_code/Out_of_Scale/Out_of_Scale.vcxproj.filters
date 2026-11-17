@@ -17,6 +17,9 @@
     <ClCompile Include="src\core\Player.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\PauseMenu.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\rooms\test\TestRoom.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -44,6 +47,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Player.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\PauseMenu.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\..\rooms\test\TestRoom.h">

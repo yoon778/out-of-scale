@@ -12,6 +12,7 @@ struct Application {
     school::SchoolRoom& room;
     school::Camera& camera;
     school::PreviewNavigation* navigation;
+    const school::PreviewPause* sharedPause;
     bool paused = false, jump = false, sample = false;
     double mouseX = 0, mouseY = 0, mouseResumeAt = 0;
 };
@@ -30,6 +31,11 @@ void pause(GLFWwindow* window, bool paused) {
     state.mouseResumeAt = glfwGetTime() + 0.12;
     glfwSetInputMode(window, GLFW_CURSOR, paused ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
     glfwGetCursorPos(window, &state.mouseX, &state.mouseY);
+}
+void syncPause(GLFWwindow* window, const school::PreviewPause& sharedPause) {
+    const bool paused = sharedPause.isPaused(sharedPause.context);
+    if (app(window).paused != paused)
+        pause(window, paused);
 }
 void settle(Application& state) {
     for (int i = 0; i < 180; ++i)
@@ -173,7 +179,8 @@ void stageCapture(Application& state, const std::string& stage) {
 
 int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::string& captureFolder,
                        PreviewNavigation* navigation) {
-    Application state{preview.room, preview.camera, navigation};
+    const auto* sharedPause = navigation ? navigation->pause : nullptr;
+    Application state{preview.room, preview.camera, navigation, sharedPause};
     school::Renderer renderer;
     if (!renderer.initialize())
         return 2;
@@ -197,29 +204,42 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
         a.sample = true;
     });
     glfwSetWindowFocusCallback(window, [](GLFWwindow* w, int focused) {
-        if (!focused)
+        auto& a = app(w);
+        if (!focused) {
+            if (a.sharedPause)
+                a.sharedPause->setPaused(a.sharedPause->context, true);
             pause(w, true);
-        app(w).sample = false;
+        }
+        a.sample = false;
     });
     glfwSetKeyCallback(window, [](GLFWwindow* w, int key, int, int action, int) {
         if (action != GLFW_PRESS || !glfwGetWindowAttrib(w, GLFW_FOCUSED))
             return;
         auto& a = app(w);
+        const auto* sharedPause = a.sharedPause;
+        if (sharedPause) {
+            const bool consumed = sharedPause->keyPressed(sharedPause->context, w, key);
+            syncPause(w, *sharedPause);
+            if (consumed)
+                return;
+        }
         if (a.navigation && key >= GLFW_KEY_F2 && key <= GLFW_KEY_F4) {
             a.navigation->requestedKey = key;
             return;
         }
-        if (key == GLFW_KEY_ESCAPE) {
+        if (!sharedPause && key == GLFW_KEY_ESCAPE) {
             pause(w, !a.paused);
             return;
         }
         if (a.paused) {
-            if (key == GLFW_KEY_Q)
+            if (!sharedPause && key == GLFW_KEY_Q)
                 glfwSetWindowShouldClose(w, true);
             if (key == GLFW_KEY_R) {
                 a.room.reset();
                 a.camera = school::Camera();
                 a.jump = false;
+                if (sharedPause)
+                    sharedPause->setPaused(sharedPause->context, false);
                 pause(w, false);
             }
             return;
@@ -234,8 +254,19 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
         } else if (key == GLFW_KEY_E && !a.room.openCorridorDoor(a.camera))
             a.room.toggleCupboard(a.camera);
     });
-    if (captureFolder.empty())
-        pause(window, false);
+    if (captureFolder.empty()) {
+        if (sharedPause) {
+            glfwSetMouseButtonCallback(window, [](GLFWwindow* w, int button, int action, int) {
+                auto& a = app(w);
+                if (a.paused && button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS &&
+                    glfwGetWindowAttrib(w, GLFW_FOCUSED)) {
+                    a.sharedPause->click(a.sharedPause->context, w);
+                    syncPause(w, *a.sharedPause);
+                }
+            });
+        }
+        pause(window, sharedPause && sharedPause->isPaused(sharedPause->context));
+    }
     if (!captureFolder.empty()) {
         std::filesystem::create_directories(captureFolder);
         for (const std::string stage : {"entrance",
@@ -303,6 +334,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
         glfwPollEvents();
         if (navigation && navigation->requestedKey)
             break;
+        if (sharedPause && glfwWindowShouldClose(window))
+            break;
         if (navigation && navigation->restoreFullscreen && navigation->restoreFullscreen(window))
             pause(window, state.paused);
         double now = glfwGetTime();
@@ -323,7 +356,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
             continue;
         }
         state.room.draw(renderer, state.camera, width, height);
-        if (state.paused) {
+        if (state.paused && sharedPause) {
+            sharedPause->draw(sharedPause->context, window, width, height);
+        } else if (state.paused) {
             float s = std::min(width / 1280.0f, height / 800.0f);
             renderer.overlay(width, height);
             renderer.panel(width / 2.0f - 230 * s, height / 2.0f - 108 * s, 460 * s, 216 * s,
@@ -341,6 +376,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
     glfwSetCursorPosCallback(window, nullptr);
     glfwSetKeyCallback(window, nullptr);
     glfwSetWindowFocusCallback(window, nullptr);
+    if (sharedPause)
+        glfwSetMouseButtonCallback(window, nullptr);
     glfwSetWindowUserPointer(window, nullptr);
     if (navigation)
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
