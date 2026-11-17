@@ -4,7 +4,9 @@ blender --background "군대 방 맵.blend" --python export_geometry.py
 """
 
 import argparse
+import math
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 import bpy
@@ -60,10 +62,15 @@ def object_triangles(obj, depsgraph):
         evaluated.to_mesh_clear()
 
 
-def world_bounds(triangles):
+def triangle_bounds(triangles):
     points = [point for corners, _ in triangles for point in corners]
     minimum = Vector(tuple(min(point[i] for point in points) for i in range(3)))
     maximum = Vector(tuple(max(point[i] for point in points) for i in range(3)))
+    return minimum, maximum
+
+
+def world_bounds(triangles):
+    minimum, maximum = triangle_bounds(triangles)
     return (maximum + minimum) * 0.5, maximum - minimum
 
 
@@ -96,6 +103,43 @@ def write_triangles(output, triangles):
     return count
 
 
+def write_static_batches(output, name, static_objects, is_outpost, depsgraph):
+    cell = Vector((8, 6, 8)) if is_outpost else Vector((3, 2, 3))
+    buckets = defaultdict(list)
+    for obj in static_objects:
+        if obj.name.startswith(OUTPOST_PREFIXES) != is_outpost:
+            continue
+        triangles = object_triangles(obj, depsgraph)
+        if not triangles:
+            continue
+        minimum, maximum = triangle_bounds(triangles)
+        center = (minimum + maximum) * 0.5
+        spans_cells = any(maximum[i] - minimum[i] > cell[i] * 1.5 for i in range(3))
+        # Keep broad walls and horizon cards separate so their bounds cannot
+        # pull small props from an otherwise off-screen cell into the draw.
+        key = (0, 0, 0, 0) if spans_cells else (1, *(math.floor(center[i] / cell[i]) for i in range(3)))
+        buckets[key].append((obj.name, triangles, minimum, maximum))
+
+    offset = 0
+    batches = []
+    output.write(f"const MeshVertex {name}Geometry[] = {{\n")
+    for objects in (buckets[key] for key in sorted(buckets)):
+        count = 0
+        for object_name, triangles, _, _ in objects:
+            output.write(f"    // {object_name}\n")
+            count += write_triangles(output, triangles)
+        minimum = tuple(min(obj[2][axis] for obj in objects) for axis in range(3))
+        maximum = tuple(max(obj[3][axis] for obj in objects) for axis in range(3))
+        batches.append((offset, count, minimum, maximum))
+        offset += count
+    output.write("};\n\n")
+    output.write(f"const MeshBatch {name}Batches[] = {{\n")
+    for first, count, minimum, maximum in batches:
+        output.write(f"    {{{first}, {count}, {cpp_vector(minimum)}, {cpp_vector(maximum)}}},\n")
+    output.write("};\n\n")
+    print(f"Exported {offset} vertices in {len(batches)} {name} batches")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path,
@@ -121,16 +165,8 @@ def main():
     ]
     with args.output.open("w", encoding="utf-8", newline="\n") as output:
         output.write("// Generated from the Military Entry scene by design/export_geometry.py.\n")
-        # The TV links separate play areas. Draw only the static meshes in the current area.
-        for mesh_name, is_outpost in (("barracksGeometry", False), ("outpostGeometry", True)):
-            output.write(f"const MeshVertex {mesh_name}[] = {{\n")
-            vertex_count = 0
-            for obj in static_objects:
-                if obj.name.startswith(OUTPOST_PREFIXES) == is_outpost:
-                    output.write("    // " + obj.name + "\n")
-                    vertex_count += write_triangles(output, object_triangles(obj, depsgraph))
-            output.write("};\n\n")
-            print(f"Exported {vertex_count} vertices for {mesh_name}")
+        write_static_batches(output, "barracks", static_objects, False, depsgraph)
+        write_static_batches(output, "outpost", static_objects, True, depsgraph)
 
         output.write("const MeshVertex barracksGear[] = {\n")
         gear_offsets = [0]

@@ -65,12 +65,15 @@ struct CaveSurface {
     GLint first;
     GLsizei count;
     glm::vec3 center;
+    Bounds bounds;
 };
 
 struct CaveScene {
     std::vector<MeshVertex> vertices;
     std::vector<CaveSurface> surfaces;
     GLsizei exteriorCount = 0;
+    Bounds exteriorBounds{};
+    Bounds interiorBounds{};
 };
 
 void caveTriangle(CaveScene& cave, const glm::vec3& color, const glm::vec3& a,
@@ -90,10 +93,13 @@ void caveSurface(CaveScene& cave, const glm::vec3& color, const glm::vec3& a,
                  const glm::vec3& b, const glm::vec3& c, const glm::vec3& d,
                  const glm::vec3& facetOffset, bool interior) {
     const auto center = (a + b + c + d) * 0.25f;
+    const auto middle = center + facetOffset;
     const auto first = static_cast<GLint>(cave.vertices.size());
-    caveQuad(cave, color, a, b, c, d, center + facetOffset);
+    caveQuad(cave, color, a, b, c, d, middle);
     if (interior) {
-        cave.surfaces.push_back({first, 12, center});
+        const auto lower = glm::min(glm::min(a, b), glm::min(c, d));
+        const auto upper = glm::max(glm::max(a, b), glm::max(c, d));
+        cave.surfaces.push_back({first, 12, center, {glm::min(lower, middle), glm::max(upper, middle)}});
     }
 }
 
@@ -239,6 +245,11 @@ const CaveScene& caveScene() {
         caveBoulder(scene, {6.97f, 2.95f}, 0.62f, 3.92f, 3.16f);
         caveBoulder(scene, {7.01f, 4.57f}, 0.67f, 4.02f, 3.19f);
         scene.exteriorCount = static_cast<GLsizei>(scene.vertices.size());
+        scene.exteriorBounds = {scene.vertices.front().position, scene.vertices.front().position};
+        for (const auto& vertex : scene.vertices) {
+            scene.exteriorBounds.min = glm::min(scene.exteriorBounds.min, vertex.position);
+            scene.exteriorBounds.max = glm::max(scene.exteriorBounds.max, vertex.position);
+        }
 
         for (const auto& section : tunnelSections) {
             caveFloorOrRoof(scene, section, 0.018f, tunnelFloor, true);
@@ -246,6 +257,11 @@ const CaveScene& caveScene() {
         }
         for (const auto& wall : caveWalls) {
             caveWallFaces(scene, wall, true);
+        }
+        scene.interiorBounds = scene.surfaces.front().bounds;
+        for (const auto& surface : scene.surfaces) {
+            scene.interiorBounds.min = glm::min(scene.interiorBounds.min, surface.bounds.min);
+            scene.interiorBounds.max = glm::max(scene.interiorBounds.max, surface.bounds.max);
         }
         return scene;
     }();
@@ -265,22 +281,50 @@ float caveLight(const glm::vec3& point, const std::optional<glm::vec3>& moon, fl
     return 1.0f - glm::smoothstep(0.40f, reach, distance);
 }
 
-void drawCaveScene(const BoxRenderer& renderer, GLint first, const glm::vec3& eye,
+void drawCaveScene(const BoxRenderer& renderer, const military::Frustum& view, GLint first, const glm::vec3& eye,
                    const std::optional<glm::vec3>& moon, float strength) {
     const auto& cave = caveScene();
     constexpr glm::mat4 model{1.0f};
-    renderer.drawMovableMesh(first, cave.exteriorCount, model, glm::vec3{1.0f});
+    if (view.intersects(cave.exteriorBounds.min, cave.exteriorBounds.max)) {
+        renderer.drawMovableMesh(first, cave.exteriorCount, model, glm::vec3{1.0f});
+    }
 
-    constexpr glm::vec3 dark{0.0f};
     // Cave surfaces have zero ambient light because the two bends block the sky.
-    if (!moon || glm::length(*moon - eye) > 13.0f) {
-        renderer.drawMovableMesh(first + cave.exteriorCount,
-                                 static_cast<GLsizei>(cave.vertices.size()) - cave.exteriorCount, model, dark);
-    } else {
-        constexpr glm::vec3 exposed{0.94f, 1.10f, 1.35f};
-        for (const auto& surface : cave.surfaces) {
-            const float light = caveLight(surface.center, moon, strength);
-            renderer.drawMovableMesh(first + surface.first, surface.count, model, exposed * light);
+    const bool nearMoon = moon && glm::dot(*moon - eye, *moon - eye) <= 13.0f * 13.0f;
+    if (view.intersects(cave.interiorBounds.min, cave.interiorBounds.max)) {
+        constexpr glm::vec3 dark{0.0f};
+        if (!nearMoon) {
+            // The unlit tunnel fits in one inexpensive depth-writing draw.
+            renderer.drawMovableMesh(first + cave.exteriorCount,
+                                     static_cast<GLsizei>(cave.vertices.size()) - cave.exteriorCount, model, dark);
+        } else {
+            constexpr glm::vec3 exposed{0.94f, 1.10f, 1.35f};
+            GLint darkFirst = 0;
+            GLsizei darkCount = 0;
+            const auto flushDark = [&] {
+                if (darkCount > 0) {
+                    renderer.drawMovableMesh(first + darkFirst, darkCount, model, dark);
+                    darkCount = 0;
+                }
+            };
+            for (const auto& surface : cave.surfaces) {
+                if (!view.intersects(surface.bounds.min, surface.bounds.max)) {
+                    continue;
+                }
+                const float light = caveLight(surface.center, moon, strength);
+                if (light > 0.0f) {
+                    flushDark();
+                    renderer.drawMovableMesh(first + surface.first, surface.count, model, exposed * light);
+                } else {
+                    // Keep black walls opaque while batching adjacent unlit facets.
+                    if (darkCount == 0 || darkFirst + darkCount != surface.first) {
+                        flushDark();
+                        darkFirst = surface.first;
+                    }
+                    darkCount += surface.count;
+                }
+            }
+            flushDark();
         }
     }
 
@@ -289,6 +333,9 @@ void drawCaveScene(const BoxRenderer& renderer, GLint first, const glm::vec3& ey
     constexpr glm::vec3 tapeLengthAcrossZ{0.045f, 0.14f, 0.29f};
     constexpr glm::vec3 brightTape{0.67f, 0.84f, 1.0f};
     const auto tape = [&](const glm::vec3& center, const glm::vec3& size, float ambient = 0.0f) {
+        if (!view.intersects(center - 0.5f * size, center + 0.5f * size)) {
+            return;
+        }
         const float light = std::clamp(1.65f * caveLight(center, moon, strength), ambient, 1.0f);
         renderer.drawBox(center, size, brightTape * light);
     };

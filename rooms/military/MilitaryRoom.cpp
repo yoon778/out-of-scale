@@ -1,4 +1,5 @@
 #include "MilitaryRoom.h"
+#include "MilitaryVisibility.h"
 
 #include <GL/glm/gtc/matrix_transform.hpp>
 
@@ -10,11 +11,41 @@
 #include <vector>
 
 namespace {
+struct MeshBatch {
+    GLint first;
+    GLsizei count;
+    glm::vec3 min;
+    glm::vec3 max;
+};
+
 #include "MilitaryGeometry.inc"
 
-constexpr GLint outpostMeshFirst = static_cast<GLint>(std::size(barracksGear));
-constexpr GLsizei outpostMeshCount = static_cast<GLsizei>(std::size(outpostGeometry));
-constexpr GLint caveMeshFirst = outpostMeshFirst + outpostMeshCount;
+constexpr GLint barracksMeshFirst = static_cast<GLint>(std::size(barracksGear));
+constexpr GLint outpostMeshFirst = barracksMeshFirst + static_cast<GLint>(std::size(barracksGeometry));
+constexpr GLint caveMeshFirst = outpostMeshFirst + static_cast<GLint>(std::size(outpostGeometry));
+
+void drawVisibleBatches(const BoxRenderer& renderer, const military::Frustum& view, GLint meshFirst,
+                        std::span<const MeshBatch> batches) {
+    GLint first = 0;
+    GLsizei count = 0;
+    const auto flush = [&] {
+        if (count > 0) {
+            renderer.drawMovableMesh(meshFirst + first, count, glm::mat4{1.0f}, glm::vec3{1.0f});
+            count = 0;
+        }
+    };
+    for (const auto& batch : batches) {
+        if (!view.intersects(batch.min, batch.max)) {
+            continue;
+        }
+        if (count == 0 || first + count != batch.first) {
+            flush();
+            first = batch.first;
+        }
+        count += batch.count;
+    }
+    flush();
+}
 
 constexpr float returnClearance = 0.01f;
 constexpr float shelfDropHeight = 0.02f;
@@ -590,11 +621,14 @@ MilitaryRoom::MilitaryRoom() {
 }
 
 bool MilitaryRoom::initialize() {
-    std::vector<MeshVertex> movable(std::begin(barracksGear), std::end(barracksGear));
-    movable.insert(movable.end(), std::begin(outpostGeometry), std::end(outpostGeometry));
     const auto& caveVertices = caveScene().vertices;
+    std::vector<MeshVertex> movable;
+    movable.reserve(caveMeshFirst + caveVertices.size());
+    movable.insert(movable.end(), std::begin(barracksGear), std::end(barracksGear));
+    movable.insert(movable.end(), std::begin(barracksGeometry), std::end(barracksGeometry));
+    movable.insert(movable.end(), std::begin(outpostGeometry), std::end(outpostGeometry));
     movable.insert(movable.end(), caveVertices.begin(), caveVertices.end());
-    return renderer_.initialize(barracksGeometry, movable, moonGeometry);
+    return renderer_.initialize({}, movable, moonGeometry);
 }
 
 bool MilitaryRoom::inBarracks() const {
@@ -1143,8 +1177,9 @@ void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction
 
 void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
     renderer_.begin(viewProjection);
+    const military::Frustum view{viewProjection};
     if (inBarracks()) {
-        renderer_.drawStaticMesh();
+        drawVisibleBatches(renderer_, view, barracksMeshFirst, barracksBatches);
         drawBarracks(eye, direction);
         return;
     }
@@ -1156,9 +1191,9 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     const glm::vec3 moonLight = distantMoon ? glm::normalize(moonCenter - outpostEntrance) : moonCenter;
     const float strength = distantMoon ? distantMoonStrength : std::max(0.70f, 2.7f * moon.scale / maximumMoonScale);
     renderer_.setNightLighting(eye, moonLight, strength, distantMoon);
-    renderer_.drawMovableMesh(outpostMeshFirst, outpostMeshCount, glm::mat4{1.0f}, glm::vec3{1.0f});
+    drawVisibleBatches(renderer_, view, outpostMeshFirst, outpostBatches);
     renderer_.clearNightLighting();
-    drawCaveScene(renderer_, caveMeshFirst, eye,
+    drawCaveScene(renderer_, view, caveMeshFirst, eye,
                   distantMoon ? std::nullopt : std::optional{moonCenter}, strength);
 
     if (moonLightsPillar(moonCenter)) {
@@ -1172,6 +1207,10 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
         renderer_.drawFlatPolygon(bridge_, shadowOffset, shadowColor);
     }
 
-    const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * moon.scale);
-    renderer_.drawMoonMesh(moonModel, glm::vec3{1.0f});
+    const glm::vec3 moonSize = moonWorldSize * moon.scale;
+    const glm::vec3 halfMoon = 0.5f * moonSize;
+    if (view.intersects(moonCenter - halfMoon, moonCenter + halfMoon)) {
+        const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonSize);
+        renderer_.drawMoonMesh(moonModel, glm::vec3{1.0f});
+    }
 }
