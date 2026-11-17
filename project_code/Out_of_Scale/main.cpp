@@ -1,5 +1,6 @@
 #include "src/core/Player.h"
 #include "src/core/PauseMenu.h"
+#include "../../rooms/home/HomeRoom.h"
 #include "../../rooms/military/MilitaryRoom.h"
 #include "../../rooms/shared/MapPreview.h"
 #include "../../rooms/school/SchoolPreview.h"
@@ -70,6 +71,12 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
         return "Out of Scale | Barracks | E Grab/Place";
     }
     return "Out of Scale | Barracks";
+}
+
+const char* windowTitle(HomeRoom::ExitState state) {
+    return state == HomeRoom::ExitState::Escaped
+        ? "Out of Scale | Home escaped | Esc Pause"
+        : "Out of Scale | Home | E Interact | Left Click Fire | Scroll Down Grow | Esc Pause";
 }
 
 template<class Room>
@@ -182,9 +189,11 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         if (wasPaused) {
             scene.pause->click(target);
             updatePauseCursor(target, scene, wasPaused);
+        } else if constexpr (std::is_same_v<Room, HomeRoom>) {
+            scene.room.shoot(scene.player.eyePosition(), scene.player.viewDirection());
         }
     });
-    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+    if constexpr (std::is_same_v<Room, MilitaryRoom> || std::is_same_v<Room, HomeRoom>) {
         glfwSetScrollCallback(window, [](GLFWwindow* target, double, double yOffset) {
             auto& scene = sceneFor<Room>(target);
             if (!scene.pause->isPaused() && glfwGetWindowAttrib(target, GLFW_FOCUSED) == GLFW_TRUE) {
@@ -222,6 +231,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
                 const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye,
                                                                      scene.player.viewDirection(), &grounded);
                 scene.player.setRoomPosition(resolved, grounded);
+            } else if constexpr (std::is_same_v<Room, HomeRoom>) {
+                scene.room.update(elapsed, previousEye);
+                scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
             } else if constexpr (std::is_same_v<Room, TestRoom>) {
                 scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
             }
@@ -250,9 +262,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
     glfwSetWindowFocusCallback(window, nullptr);
     glfwSetKeyCallback(window, nullptr);
     glfwSetMouseButtonCallback(window, nullptr);
-    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
-        glfwSetScrollCallback(window, nullptr);
-    }
+    glfwSetScrollCallback(window, nullptr);
     glfwSetWindowUserPointer(window, nullptr);
     scene.pause = nullptr;
     return 0;
@@ -277,7 +287,7 @@ int runGame(GLFWwindow* window, Map activeMap) {
     school::PreviewState schoolState;
     Scene<MilitaryRoom> military{Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw}, {}};
     Scene<MapPreview> office{Player{}, MapPreview{Theme::Office}};
-    Scene<MapPreview> home{Player{}, MapPreview{Theme::Home}};
+    Scene<HomeRoom> home{Player{HomeRoom::spawnEye, HomeRoom::spawnYaw}, {}};
     Scene<TestRoom> test{Player{}, {}};
 
     glEnable(GL_DEPTH_TEST);
