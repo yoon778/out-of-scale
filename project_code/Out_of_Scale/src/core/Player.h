@@ -27,7 +27,7 @@ private:
     void updateJump(float elapsed, bool roomControlsHeight);
 
     glm::vec3 eye;
-    float yaw = 0.0f;
+    float yaw;
     float pitch;
     float verticalSpeed = 0.0f;
     bool grounded = true;

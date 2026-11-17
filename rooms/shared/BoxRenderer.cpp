@@ -252,10 +252,6 @@ void BoxRenderer::clearNightLighting() const {
 
 void BoxRenderer::drawBox(const glm::vec3& center, const glm::vec3& size, const glm::vec3& tint) const {
     const glm::mat4 model = glm::scale(glm::translate(glm::mat4{1.0f}, center), size);
-    drawBox(model, tint);
-}
-
-void BoxRenderer::drawBox(const glm::mat4& model, const glm::vec3& tint) const {
     glUniformMatrix4fv(modelLocation_, 1, GL_FALSE, glm::value_ptr(model));
     glUniform3fv(cubeTintLocation_, 1, glm::value_ptr(tint));
     glUniform1f(gridHalfSizeLocation_, 0.0f);

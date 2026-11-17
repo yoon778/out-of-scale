@@ -24,7 +24,6 @@ public:
     void setNightLighting(const glm::vec3& eye, const glm::vec3& moonLight, float strength, bool directional) const;
     void clearNightLighting() const;
     void drawBox(const glm::vec3& center, const glm::vec3& size, const glm::vec3& tint) const;
-    void drawBox(const glm::mat4& model, const glm::vec3& tint) const;
     void drawGrid(float halfSize) const;
     void drawStaticMesh() const;
     void drawMovableMesh(GLint first, GLsizei count, const glm::mat4& model, const glm::vec3& tint) const;
