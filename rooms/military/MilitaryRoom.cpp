@@ -58,6 +58,20 @@ struct Solid {
     float top;
 };
 
+constexpr Solid equipmentBase{{{14.91f, -9.46f}, {16.19f, -8.43f}}, 0.0f, 0.28f};
+constexpr Solid equipmentTop{equipmentBase.bounds, 1.36f, 1.48f};
+constexpr Solid equipmentSides[]{
+    {{{14.91f, -9.46f}, {14.98f, -8.43f}}, equipmentBase.top, equipmentTop.bottom},
+    {{{16.12f, -9.46f}, {16.19f, -8.43f}}, equipmentBase.top, equipmentTop.bottom},
+    {{{14.98f, -9.46f}, {16.12f, -9.40f}}, equipmentBase.top, equipmentTop.bottom},
+};
+constexpr Solid equipmentDoor{{{14.98f, -8.49f}, {16.12f, -8.43f}}, equipmentBase.top, equipmentTop.bottom};
+constexpr std::array pressurePads{glm::vec3{10.25f, 0.0f, -6.55f}, glm::vec3{11.95f, 0.0f, -6.55f}};
+constexpr glm::vec2 padHalfSize{0.27f, 0.27f};
+constexpr float padHeight = 0.075f;
+constexpr std::size_t gasMaskIndex = 2;
+constexpr float gasMaskScale = 0.48f;
+
 struct DepthRange {
     float first = 0.0f;
     float last;
@@ -78,13 +92,15 @@ struct ObjectSpec {
     glm::vec3 initialCenter;
     glm::vec3 size;
     float frontOverhang = 0.0f;
+    float initialScale = 1.0f;
 };
 
 constexpr ObjectSpec objectSpecs[]{
     {{4.80f, 0.725f, -5.95f}, {1.20f, 1.45f, 1.00f}},
     {{7.30f, 0.28f, -4.45f}, {1.54f, 0.56f, 1.05f}},
-    {{10.30f, 0.44f, -5.85f}, {1.06f, 0.88f, 0.78f}},
+    {{15.55f, equipmentBase.top + 0.44f * gasMaskScale, -8.94f}, {1.06f, 0.88f, 0.78f}, 0.0f, gasMaskScale},
     {{14.70f, 0.54f, -5.20f}, {0.50f, 1.08f, 1.58f}, 0.03f},
+    {{8.90f, 0.04f, -4.05f}, {0.94f, 0.08f, 0.48f}},
 };
 
 struct ReturnSlot {
@@ -157,7 +173,8 @@ constexpr auto furniture = [] {
     constexpr float bedHeight = 0.85f;
     constexpr float bedAisleOffset = 0.55f;
     constexpr float lockerHeight = returnSlots[1].floor;
-    std::array<Solid, bedCenters.size() * 4 + 1 + std::size(lockerPanels)> layout{};
+    std::array<Solid, bedCenters.size() * 4 + 3 + std::size(lockerPanels) +
+                      std::size(equipmentSides) + pressurePads.size()> layout{};
     std::size_t index = 0;
     for (float x : bedCenters) {
         const float left = x - halfWidth;
@@ -178,7 +195,16 @@ constexpr auto furniture = [] {
         layout[index++] = panel;
     }
     layout[index++] = gunCabinet;
-    layout[index] = clothingBags;
+    layout[index++] = clothingBags;
+    layout[index++] = equipmentBase;
+    layout[index++] = equipmentTop;
+    for (const auto& side : equipmentSides) {
+        layout[index++] = side;
+    }
+    for (const auto& pad : pressurePads) {
+        layout[index++] = {{{pad.x - padHalfSize.x, pad.z - padHalfSize.y},
+                            {pad.x + padHalfSize.x, pad.z + padHalfSize.y}}, 0.0f, padHeight};
+    }
     return layout;
 }();
 constexpr Footprint pillarFoot{{9.865f, 5.745f}, {11.135f, 6.555f}};
@@ -217,16 +243,20 @@ Solid objectSolid(std::size_t index, const perspective::Pose& pose, bool include
     return {bounds, pose.center.y - halfHeight, pose.center.y + halfHeight};
 }
 
-constexpr std::size_t staticSolidCount = furniture.size();
-using RoomSolids = std::array<Solid, staticSolidCount + std::size(objectSpecs)>;
+using RoomSolids = std::array<Solid, furniture.size() + 1 + std::size(objectSpecs)>;
+
+std::span<const Solid> fixedBarracksSolids(RoomSolids& storage, bool cabinetOpen) {
+    auto end = std::copy(furniture.begin(), furniture.end(), storage.begin());
+    if (!cabinetOpen) {
+        *end++ = equipmentDoor;
+    }
+    return {storage.begin(), end};
+}
 
 std::span<const Solid> barracksSolids(
     RoomSolids& storage, const std::array<perspective::Pose, std::size(objectSpecs)>& objects,
-    std::optional<std::size_t> held, bool includeScreen = true) {
-    std::size_t count = 0;
-    for (const auto& obstacle : furniture) {
-        storage[count++] = obstacle;
-    }
+    std::optional<std::size_t> held, bool cabinetOpen, bool includeScreen = true) {
+    std::size_t count = fixedBarracksSolids(storage, cabinetOpen).size();
     for (std::size_t index = 0; index < objects.size(); ++index) {
         if (held != index) {
             storage[count++] = objectSolid(index, objects[index], includeScreen);
@@ -532,11 +562,11 @@ bool containsPoint(const Polygon& outline, const glm::vec2& point) {
 }
 
 MilitaryRoom::MilitaryRoom() {
-    static_assert(std::size(objectSpecs) == belongingsCount + 1);
+    static_assert(std::size(objectSpecs) == objectCount);
     static_assert(std::size(returnSlots) == belongingsCount);
     static_assert(std::size(gearOffsets) == belongingsCount + 1);
     for (std::size_t index = 0; index < objects_.size(); ++index) {
-        objects_[index] = {objectSpecs[index].initialCenter, 1.0f};
+        objects_[index] = {objectSpecs[index].initialCenter, objectSpecs[index].initialScale};
     }
 }
 
@@ -546,6 +576,13 @@ bool MilitaryRoom::initialize() {
 
 bool MilitaryRoom::inBarracks() const {
     return exitState_ == ExitState::Locked || exitState_ == ExitState::Open;
+}
+
+bool MilitaryRoom::pressesPad(const glm::vec3& padCenter) const {
+    const auto plate = objectSolid(steelPlateIndex, objects_[steelPlateIndex], false);
+    return heldObject_ != steelPlateIndex && verticalSpeeds_[steelPlateIndex] == 0.0f &&
+           std::abs(plate.bottom - padHeight) <= contactTolerance &&
+           plate.bounds.contains(horizontal(padCenter));
 }
 
 bool MilitaryRoom::returnToBarracks() {
@@ -566,8 +603,8 @@ std::optional<MilitaryRoom::Placement> MilitaryRoom::placement(
     const std::size_t index = *heldObject_;
     const glm::vec3 half = objectSpecs[index].size * 0.5f;
     RoomSolids storage;
-    const auto solids = barracksSolids(storage, objects_, heldObject_);
-    if (index != televisionIndex) {
+    const auto solids = barracksSolids(storage, objects_, heldObject_, equipmentCabinetOpen_);
+    if (index < belongingsCount) {
         const float obstacleDepth = nearestSolidDepth(eye, direction, solids);
         for (const auto& slot : returnSlots) {
             if (slot.hangs && !returnSlots[index].hangs) {
@@ -617,11 +654,11 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
     });
     auto updated = previous;
     RoomSolids storage;
-    const auto fixed = barracksSolids(storage, objects_, heldObject_).first(staticSolidCount);
+    const auto fixed = fixedBarracksSolids(storage, equipmentCabinetOpen_);
     const Solid player{footprint(playerEye, glm::vec2{playerRadius}), playerEye.y - playerEyeHeight,
                        playerEye.y + headClearance};
     for (const std::size_t index : order) {
-        if (heldObject_ == index || (index != televisionIndex && returned_[index])) {
+        if (heldObject_ == index || (index < belongingsCount && returned_[index])) {
             continue;
         }
         const auto& body = previous[index];
@@ -680,6 +717,10 @@ void MilitaryRoom::update(float elapsed, const glm::vec3& playerEye) {
                                fitsReturnSlot(updated[index], slot);
         }
     }
+    if (!equipmentCabinetOpen_ && std::all_of(pressurePads.begin(), pressurePads.end(),
+                                              [this](const auto& pad) { return pressesPad(pad); })) {
+        equipmentCabinetOpen_ = true;
+    }
     if (exitState_ == ExitState::Locked &&
         std::all_of(returned_.begin(), returned_.end(), [](bool returned) { return returned; })) {
         exitState_ = ExitState::Open;
@@ -708,9 +749,11 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         return;
     }
 
-    float closest = nearestSolidDepth(eye, direction, furniture);
+    RoomSolids storage;
+    float closest = nearestSolidDepth(eye, direction, fixedBarracksSolids(storage, equipmentCabinetOpen_));
     for (std::size_t index = 0; index < objects_.size(); ++index) {
-        if (index == televisionIndex ? exitState_ == ExitState::Locked : returned_[index]) {
+        if ((index == televisionIndex && exitState_ == ExitState::Locked) ||
+            (index < belongingsCount && returned_[index])) {
             continue;
         }
         const auto& object = objects_[index];
@@ -824,7 +867,7 @@ glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::ve
     }
     RoomSolids storage;
     // The screen protrudes from the TV body. Keep the portal reachable before touching its body.
-    const auto solids = barracksSolids(storage, objects_, heldObject_, false);
+    const auto solids = barracksSolids(storage, objects_, heldObject_, equipmentCabinetOpen_, false);
     const auto canMoveTo = [&](const glm::vec3& position) {
         return fitsSupply(footprint(position, glm::vec2{playerRadius})) &&
                std::none_of(solids.begin(), solids.end(), [&](const Solid& solid) {
@@ -922,8 +965,13 @@ MilitaryRoom::ExitState MilitaryRoom::exitState() const {
 
 void MilitaryRoom::drawObject(std::size_t index, const perspective::Pose& pose, const glm::vec3& tint) const {
     const glm::vec3 size = objectSpecs[index].size * pose.scale;
-    if (index != televisionIndex) {
-        const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, pose.center), size);
+    if (index < belongingsCount) {
+        auto model = glm::translate(glm::mat4{1.0f}, pose.center);
+        if (index == gasMaskIndex && pose.center.y < equipmentTop.bottom &&
+            equipmentBase.bounds.contains(horizontal(pose.center))) {
+            model = glm::rotate(model, glm::radians(180.0f), {0.0f, 1.0f, 0.0f});
+        }
+        model = glm::scale(model, size);
         const GLint first = gearOffsets[index];
         renderer_.drawMovableMesh(first, gearOffsets[index + 1] - first, model, tint);
         return;
@@ -932,6 +980,13 @@ void MilitaryRoom::drawObject(std::size_t index, const perspective::Pose& pose, 
     const auto part = [&](const glm::vec3& offset, const glm::vec3& dimensions, const glm::vec3& color) {
         renderer_.drawBox(pose.center + offset * size, dimensions * size, color * tint);
     };
+    if (index == steelPlateIndex) {
+        part({}, {1.0f, 1.0f, 1.0f}, {0.35f, 0.40f, 0.41f});
+        for (const float x : {-0.43f, 0.43f}) {
+            part({x, 0.51f, 0.0f}, {0.09f, 0.02f, 0.93f}, {0.73f, 0.49f, 0.12f});
+        }
+        return;
+    }
     part({}, {1.0f, 1.0f, 1.0f}, {0.27f, 0.27f, 0.25f});
     const bool powered = exitState_ == ExitState::Open;
     const bool portal = powered && pose.scale >= televisionEntryScale;
@@ -945,7 +1000,63 @@ void MilitaryRoom::drawObject(std::size_t index, const perspective::Pose& pose, 
          powered ? glm::vec3{0.28f, 0.91f, 0.43f} : glm::vec3{0.64f, 0.16f, 0.12f});
 }
 
+void MilitaryRoom::drawEquipmentPuzzle() const {
+    constexpr glm::vec3 cabinetColor{0.30f, 0.35f, 0.28f};
+    constexpr glm::vec3 frameColor{0.35f, 0.40f, 0.33f};
+    const auto drawSolid = [&](const Solid& solid, const glm::vec3& color) {
+        const auto center = (solid.bounds.min + solid.bounds.max) * 0.5f;
+        const auto size = solid.bounds.max - solid.bounds.min;
+        renderer_.drawBox({center.x, (solid.bottom + solid.top) * 0.5f, center.y},
+                          {size.x, solid.top - solid.bottom, size.y}, color);
+    };
+    drawSolid(equipmentBase, cabinetColor);
+    drawSolid(equipmentTop, frameColor);
+    for (const auto& side : equipmentSides) {
+        drawSolid(side, cabinetColor);
+    }
+
+    constexpr float cabinetZ = equipmentDoor.bounds.max.y;
+    if (!equipmentCabinetOpen_) {
+        constexpr float doorZ = (equipmentDoor.bounds.min.y + cabinetZ) * 0.5f;
+        for (int column = 0; column < 10; ++column) {
+            renderer_.drawBox({15.02f + 0.118f * column, 0.82f, doorZ},
+                              {0.026f, 1.08f, 0.042f}, frameColor);
+        }
+        for (const float y : {0.31f, 0.81f, 1.33f}) {
+            renderer_.drawBox({15.55f, y, cabinetZ - 0.015f}, {1.13f, 0.044f, 0.028f}, frameColor);
+        }
+    }
+
+    constexpr glm::vec3 cableColor{0.27f, 0.16f, 0.075f};
+    const auto drawCable = [&](const glm::vec2& from, const glm::vec2& to) {
+        constexpr float width = 0.036f;
+        const auto center = (from + to) * 0.5f;
+        const auto length = glm::abs(to - from);
+        renderer_.drawBox({center.x, 0.014f, center.y},
+                          {length.x + width, 0.028f, length.y + width}, cableColor);
+    };
+    for (std::size_t index = 0; index < pressurePads.size(); ++index) {
+        const auto& pad = pressurePads[index];
+        const float laneZ = index == 0 ? -7.22f : -7.03f;
+        const float terminalX = index == 0 ? 15.32f : 15.78f;
+        drawCable({pad.x, pad.z}, {pad.x, laneZ});
+        drawCable({pad.x, laneZ}, {terminalX, laneZ});
+        drawCable({terminalX, laneZ}, {terminalX, cabinetZ});
+        renderer_.drawBox({terminalX, 0.15f, cabinetZ + 0.013f},
+                          {0.036f, 0.30f, 0.028f}, cableColor);
+        const bool pressed = pressesPad(pad);
+        renderer_.drawBox({pad.x, 0.5f * padHeight, pad.z},
+                          {2.0f * padHalfSize.x, padHeight, 2.0f * padHalfSize.y}, {0.32f, 0.25f, 0.13f});
+        renderer_.drawBox({pad.x, padHeight - 0.006f, pad.z}, {0.46f, 0.012f, 0.46f},
+                          pressed ? glm::vec3{0.44f, 0.62f, 0.24f} : glm::vec3{0.70f, 0.52f, 0.19f});
+        renderer_.drawBox({terminalX, 0.20f, cabinetZ + 0.025f}, {0.084f, 0.076f, 0.039f},
+                          pressed || equipmentCabinetOpen_ ? glm::vec3{0.35f, 0.72f, 0.29f}
+                                                         : glm::vec3{0.58f, 0.30f, 0.12f});
+    }
+}
+
 void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction) const {
+    drawEquipmentPuzzle();
     for (std::size_t index = 0; index < objects_.size(); ++index) {
         perspective::Pose displayed = objects_[index];
         glm::vec3 tint{1.0f};
