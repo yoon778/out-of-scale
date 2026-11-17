@@ -15,6 +15,11 @@ BARRICADE = "Barricade_Interactable"
 MOON = "Moon_Pickup"
 MOVABLE_OBJECTS = {BARRICADE, MOON}
 GEAR_MODELS = ("pack", "bedding", "mask")
+OUTPOST_PREFIXES = (
+    "Area 02 ", "Discharge ", "Distant sky ", "Exit ", "Floor direction marker.",
+    "Night exterior | ", "Night polish | ", "Open outpost | ", "Outpost ",
+    "Return ramp ", "Shadow pillar ", "Shadow-casting pillar", "Trench ",
+)
 LIGHT = Vector((0.32, 0.87, 0.37)).normalized()
 
 
@@ -109,17 +114,23 @@ def main():
     moon = object_triangles(scene.objects[MOON], depsgraph)
     moon_center, moon_size = world_bounds(moon)
 
+    static_objects = [
+        obj for obj in sorted(scene.objects, key=lambda item: item.name)
+        if obj.type in {"MESH", "FONT"} and not obj.hide_render
+        and obj.name not in MOVABLE_OBJECTS and obj.get("game_prop") not in GEAR_MODELS
+    ]
     with args.output.open("w", encoding="utf-8", newline="\n") as output:
         output.write("// Generated from the Military Entry scene by design/export_geometry.py.\n")
-        output.write("const MeshVertex staticGeometry[] = {\n")
-        static_count = 0
-        for obj in sorted(scene.objects, key=lambda item: item.name):
-            if (obj.type not in {"MESH", "FONT"} or obj.hide_render or
-                    obj.name in MOVABLE_OBJECTS or obj.get("game_prop") in GEAR_MODELS):
-                continue
-            output.write("    // " + obj.name + "\n")
-            static_count += write_triangles(output, object_triangles(obj, depsgraph))
-        output.write("};\n\n")
+        # The TV links separate play areas. Draw only the static meshes in the current area.
+        for mesh_name, is_outpost in (("barracksGeometry", False), ("outpostGeometry", True)):
+            output.write(f"const MeshVertex {mesh_name}[] = {{\n")
+            vertex_count = 0
+            for obj in static_objects:
+                if obj.name.startswith(OUTPOST_PREFIXES) == is_outpost:
+                    output.write("    // " + obj.name + "\n")
+                    vertex_count += write_triangles(output, object_triangles(obj, depsgraph))
+            output.write("};\n\n")
+            print(f"Exported {vertex_count} vertices for {mesh_name}")
 
         output.write("const MeshVertex barracksGear[] = {\n")
         gear_offsets = [0]
@@ -143,7 +154,7 @@ def main():
         output.write("};\n")
 
     print("Moon center", tuple(moon_center), "dimensions", tuple(moon_size))
-    print("Exported", static_count, "static vertices,", moon_count, "moon vertices")
+    print("Exported", moon_count, "moon vertices")
 
 
 if __name__ == "__main__":

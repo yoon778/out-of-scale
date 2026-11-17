@@ -12,6 +12,10 @@
 namespace {
 #include "MilitaryGeometry.inc"
 
+constexpr GLint outpostMeshFirst = static_cast<GLint>(std::size(barracksGear));
+constexpr GLsizei outpostMeshCount = static_cast<GLsizei>(std::size(outpostGeometry));
+constexpr GLint caveMeshFirst = outpostMeshFirst + outpostMeshCount;
+
 constexpr float returnClearance = 0.01f;
 constexpr float shelfDropHeight = 0.02f;
 constexpr float placementClearance = 0.025f;
@@ -587,9 +591,10 @@ MilitaryRoom::MilitaryRoom() {
 
 bool MilitaryRoom::initialize() {
     std::vector<MeshVertex> movable(std::begin(barracksGear), std::end(barracksGear));
+    movable.insert(movable.end(), std::begin(outpostGeometry), std::end(outpostGeometry));
     const auto& caveVertices = caveScene().vertices;
     movable.insert(movable.end(), caveVertices.begin(), caveVertices.end());
-    return renderer_.initialize(staticGeometry, movable, moonGeometry);
+    return renderer_.initialize(barracksGeometry, movable, moonGeometry);
 }
 
 bool MilitaryRoom::inBarracks() const {
@@ -1151,9 +1156,9 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     const glm::vec3 moonLight = distantMoon ? glm::normalize(moonCenter - outpostEntrance) : moonCenter;
     const float strength = distantMoon ? distantMoonStrength : std::max(0.70f, 2.7f * moon.scale / maximumMoonScale);
     renderer_.setNightLighting(eye, moonLight, strength, distantMoon);
-    renderer_.drawStaticMesh();
+    renderer_.drawMovableMesh(outpostMeshFirst, outpostMeshCount, glm::mat4{1.0f}, glm::vec3{1.0f});
     renderer_.clearNightLighting();
-    drawCaveScene(renderer_, static_cast<GLint>(std::size(barracksGear)), eye,
+    drawCaveScene(renderer_, caveMeshFirst, eye,
                   distantMoon ? std::nullopt : std::optional{moonCenter}, strength);
 
     if (moonLightsPillar(moonCenter)) {

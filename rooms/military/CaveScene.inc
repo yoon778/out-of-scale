@@ -116,16 +116,28 @@ void caveFloorOrRoof(CaveScene& cave, const Footprint& bounds, float height,
     }
 }
 
+glm::vec2 caveOuterCorner(const CaveWall& wall, const glm::vec2& corner) {
+    glm::vec2 outside = wall.outside;
+    for (const auto& neighbor : caveWalls) {
+        if (&neighbor != &wall && (neighbor.first == corner || neighbor.last == corner)) {
+            outside += neighbor.outside;
+            break;
+        }
+    }
+    return corner + caveWallThickness * outside;
+}
+
 void caveWallFaces(CaveScene& cave, const CaveWall& wall, bool interior) {
-    const auto span = wall.last - wall.first;
+    const auto start = interior ? wall.first : caveOuterCorner(wall, wall.first);
+    const auto end = interior ? wall.last : caveOuterCorner(wall, wall.last);
+    const auto span = end - start;
     const int pieces = static_cast<int>(std::ceil(glm::length(span) / 1.15f));
     constexpr float levels[]{0.0f, 0.73f, 1.96f, caveCeiling + caveRoofThickness};
     const auto outside = cavePosition(wall.outside, 0.0f);
     const auto stone = interior ? glm::vec3{0.37f, 0.40f, 0.45f} : glm::vec3{0.105f, 0.127f, 0.16f};
-    const auto offset = wall.outside * (interior ? 0.0f : caveWallThickness);
     for (int piece = 0; piece < pieces; ++piece) {
-        const auto left = wall.first + span * (static_cast<float>(piece) / pieces) + offset;
-        const auto right = wall.first + span * (static_cast<float>(piece + 1) / pieces) + offset;
+        const auto left = start + span * (static_cast<float>(piece) / pieces);
+        const auto right = start + span * (static_cast<float>(piece + 1) / pieces);
         for (std::size_t level = 1; level < std::size(levels); ++level) {
             const float shade = 0.79f + (piece * 3 + level * 5) % 9 * 0.026f;
             const glm::vec3 facetOffset = outside * (0.065f + 0.055f * (piece % 3)) +
@@ -138,7 +150,7 @@ void caveWallFaces(CaveScene& cave, const CaveWall& wall, bool interior) {
     }
 }
 
-void caveBoulder(CaveScene& cave, const glm::vec2& location, float radius, float height) {
+void caveBoulder(CaveScene& cave, const glm::vec2& location, float radius, float height, float base = -0.09f) {
     constexpr glm::vec2 outline[]{
         {-0.87f, -0.24f}, {-0.40f, -0.85f}, {0.52f, -0.76f},
         {0.91f, 0.00f}, {0.39f, 0.76f}, {-0.56f, 0.70f},
@@ -150,13 +162,28 @@ void caveBoulder(CaveScene& cave, const glm::vec2& location, float radius, float
         const auto b = location + outline[(index + 1) % std::size(outline)] * radius;
         const auto upperA = glm::mix(a, location, 0.22f);
         const auto upperB = glm::mix(b, location, 0.22f);
-        const float shoulder = height * (0.47f + 0.05f * (index % 3));
-        const float nextShoulder = height * (0.47f + 0.05f * ((index + 1) % std::size(outline) % 3));
+        const float shoulder = glm::mix(base, height, 0.47f + 0.05f * (index % 3));
+        const float nextShoulder = glm::mix(base, height, 0.47f + 0.05f * ((index + 1) % std::size(outline) % 3));
         const auto c = cavePosition(upperA, shoulder);
         const auto d = cavePosition(upperB, nextShoulder);
-        caveTriangle(cave, stone * 0.78f, cavePosition(a, -0.09f), cavePosition(b, -0.09f), c);
-        caveTriangle(cave, stone * 0.87f, cavePosition(b, -0.09f), d, c);
+        caveTriangle(cave, stone * 0.78f, cavePosition(a, base), cavePosition(b, base), c);
+        caveTriangle(cave, stone * 0.87f, cavePosition(b, base), d, c);
         caveTriangle(cave, stone * (0.9f + index * 0.04f), c, d, crown);
+    }
+}
+
+void clearingApron(CaveScene& cave, const glm::vec3& slate) {
+    constexpr glm::vec2 corners[]{
+        clearing.min, {clearing.max.x, clearing.min.y}, clearing.max, {clearing.min.x, clearing.max.y},
+    };
+    constexpr glm::vec2 slopeFoot[]{
+        {-12.65f, 5.70f}, {-3.48f, 5.85f}, {-2.92f, 15.22f}, {-12.80f, 15.00f},
+    };
+    for (std::size_t index = 0; index < std::size(corners); ++index) {
+        const auto next = (index + 1) % std::size(corners);
+        caveSurface(cave, slate * 0.86f, cavePosition(corners[index], 0.016f),
+                    cavePosition(corners[next], 0.016f), cavePosition(slopeFoot[next], -0.67f),
+                    cavePosition(slopeFoot[index], -0.67f), {0.0f, 0.055f, 0.0f}, false);
     }
 }
 
@@ -174,11 +201,16 @@ const CaveScene& caveScene() {
             {{1.40f, 2.50f}, {7.25f, 5.10f}},
         };
         caveFloorOrRoof(scene, clearing, 0.016f, slate, false);
+        clearingApron(scene, slate);
         for (const auto& section : tunnelSections) {
             caveFloorOrRoof(scene, section, caveCeiling + caveRoofThickness, rock, false);
         }
         for (const auto& wall : caveWalls) {
             caveWallFaces(scene, wall, false);
+            constexpr float roofTop = caveCeiling + caveRoofThickness;
+            caveSurface(scene, rock, cavePosition(wall.first, roofTop), cavePosition(wall.last, roofTop),
+                        cavePosition(caveOuterCorner(wall, wall.last), roofTop),
+                        cavePosition(caveOuterCorner(wall, wall.first), roofTop), {0.0f, 0.0f, 0.0f}, false);
         }
         for (float x : {-5.20f, 7.25f}) {
             const auto& passage = x < 0.0f ? cavePassages.front() : cavePassages.back();
@@ -201,6 +233,11 @@ const CaveScene& caveScene() {
         caveBoulder(scene, {-7.98f, 7.34f}, 0.68f, 0.48f);
         caveBoulder(scene, {-5.33f, 7.41f}, 0.81f, 1.60f);
         caveBoulder(scene, {-5.15f, 10.67f}, 0.43f, 0.78f);
+        caveBoulder(scene, {-5.05f, 8.18f}, 0.75f, 4.01f, 3.08f);
+        caveBoulder(scene, {-4.97f, 9.04f}, 0.87f, 4.28f, 3.17f);
+        caveBoulder(scene, {-4.81f, 10.05f}, 0.68f, 3.85f, 3.19f);
+        caveBoulder(scene, {6.97f, 2.95f}, 0.62f, 3.92f, 3.16f);
+        caveBoulder(scene, {7.01f, 4.57f}, 0.67f, 4.02f, 3.19f);
         scene.exteriorCount = static_cast<GLsizei>(scene.vertices.size());
 
         for (const auto& section : tunnelSections) {
