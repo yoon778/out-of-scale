@@ -28,6 +28,20 @@ std::optional<Map> mapForKey(int key) {
     }
 }
 
+bool restoreFullscreen(GLFWwindow* window) {
+    // GLFW makes a fullscreen window windowed when its monitor disconnects.
+    if (glfwGetWindowMonitor(window)) {
+        return false;
+    }
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+    if (!mode) {
+        return false;
+    }
+    glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+    return glfwGetWindowMonitor(window) == monitor;
+}
+
 const char* windowTitle(TestRoom::ExitState state) {
     switch (state) {
     case TestRoom::ExitState::Open:
@@ -148,6 +162,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap) {
         if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
             break;
+        }
+        if (restoreFullscreen(window)) {
+            scene.player.resetMouseSample();
         }
         // F2 can return from the training ground within the military map.
         if (scene.destination && (*scene.destination != activeMap || *scene.destination == Map::Military)) {
