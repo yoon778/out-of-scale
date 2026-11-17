@@ -1,0 +1,10 @@
+Mode: built-in image_gen, new image, opaque background.
+Destination: rooms/school/assets/art-class-still-life-v2.png
+
+Use case: scientific-educational
+Asset type: panoramic graphite still-life drawing used as a projected art-class reference in a school puzzle game.
+Generate a brand new complete drawing on warm ivory drawing paper. Exact requested canvas 3072 by 1120 pixels, very wide landscape aspect about 2.75:1.
+Subject: a ceramic water jug with its entire handle and spout visible, two pears, a plaster sphere and a plaster rectangular block, arranged across a long staggered pile of six thick closed sketchbooks on a softly folded cloth. The books are the strongest visual subject: natural offset placement, clearly observed page edges and dark thin covers, a low gently stepped silhouette spanning most of the width, their perspective edges drawn accurately. Spread the jug toward the left third, the pears in the center and plaster forms toward the right, leaving clear page-edge rhythms along the lower portion.
+Style: believable teacher-made observational graphite drawing for a secondary-school still-life lesson, soft hand shading, restrained crosshatching, varied pencil pressure, visible fine paper grain. Quiet warm gray pencil, not paint and not a photograph.
+Composition: full arrangement entirely inside the panoramic canvas with modest breathing room on ALL FOUR sides. No cut-off jug, no cut-off books. Objects together as one cohesive still life. Eye level slightly above the books, normal one-point-compatible perspective, no exaggerated lens or decorative borders.
+Constraints: no actual stairway, no architectural staircase, no railings, no puzzle symbols, no glowing outlines, no arrows, no text, no labels, no watermark, no classroom background. All edges and shading should look drawn by hand, useful as an actual art lesson reference.
