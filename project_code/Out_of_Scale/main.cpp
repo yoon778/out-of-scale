@@ -1,6 +1,7 @@
 #include "src/core/Player.h"
 #include "../../rooms/military/MilitaryRoom.h"
 #include "../../rooms/shared/MapPreview.h"
+#include "../../rooms/school/SchoolPreview.h"
 #include "../../rooms/test/TestRoom.h"
 
 #include <GL/glew.h>
@@ -215,7 +216,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap) {
 
 int runGame(GLFWwindow* window, Map activeMap) {
     using Theme = MapPreview::Theme;
-    Scene<MapPreview> school{Player{}, MapPreview{Theme::School}};
+    school::PreviewState schoolState;
     Scene<MilitaryRoom> military{Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw}, {}};
     Scene<MapPreview> office{Player{}, MapPreview{Theme::Office}};
     Scene<MapPreview> home{Player{}, MapPreview{Theme::Home}};
@@ -226,7 +227,15 @@ int runGame(GLFWwindow* window, Map activeMap) {
     while (!glfwWindowShouldClose(window)) {
         int result = 0;
         switch (activeMap) {
-        case Map::School: result = run(window, school, activeMap); break;
+        case Map::School: {
+            glfwSetWindowTitle(window, "Out of Scale | School");
+            school::PreviewNavigation navigation{0, restoreFullscreen};
+            result = school::runPreview(window, schoolState, {}, &navigation);
+            if (const auto map = mapForKey(navigation.requestedKey)) {
+                activeMap = *map;
+            }
+            break;
+        }
         case Map::Military:
             if (military.room.returnToBarracks()) {
                 military.player = Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw};
@@ -246,7 +255,9 @@ int runGame(GLFWwindow* window, Map activeMap) {
 }
 
 int main(int argc, char* argv[]) {
-    const bool useTestRoom = argc > 1 && std::string_view{argv[1]} == "--test-room";
+    const std::string_view modeArgument = argc > 1 ? argv[1] : "";
+    const Map startMap = modeArgument == "--school" ? Map::School
+                       : modeArgument == "--test-room" ? Map::Test : Map::Military;
     glfwSetErrorCallback([](int, const char* message) { std::cerr << message << '\n'; });
     if (!glfwInit()) {
         return 1;
@@ -255,7 +266,9 @@ int main(int argc, char* argv[]) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    const char* initialTitle = useTestRoom ? lockedTitle : windowTitle(MilitaryRoom::ExitState::Locked);
+    const char* initialTitle = startMap == Map::Test ? lockedTitle
+                             : startMap == Map::School ? "Out of Scale | School"
+                             : windowTitle(MilitaryRoom::ExitState::Locked);
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
     if (mode) {
@@ -277,7 +290,7 @@ int main(int argc, char* argv[]) {
     const GLenum status = glewInit();
     int result = 1;
     if (status == GLEW_OK) {
-        result = runGame(window, useTestRoom ? Map::Test : Map::Military);
+        result = runGame(window, startMap);
     } else {
         std::cerr << glewGetErrorString(status) << '\n';
     }

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64"><Configuration>Debug</Configuration><Platform>x64</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64"><Configuration>Release</Configuration><Platform>x64</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{50E1B94B-C0F6-4B73-A108-B5D986C20919}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword><WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType><PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet><UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup>
+    <OpenGLRoot Condition="'$(OpenGLRoot)'==''">$(USERPROFILE)\source\libs\OpenGL</OpenGLRoot>
+    <OutDir>$(ProjectDir)bin\$(Configuration)\</OutDir>
+    <IntDir>$(LOCALAPPDATA)\out-of-scale\school\$([MSBuild]::StableStringHash('$(MSBuildProjectFullPath)'))\$(Configuration)\</IntDir>
+    <TargetName>SchoolPreview</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel><SDLCheck>true</SDLCheck><ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard><RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PreprocessorDefinitions>GLFW_INCLUDE_NONE;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(OpenGLRoot)\include;$(OpenGLRoot)\include\GL;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem><GenerateDebugInformation>true</GenerateDebugInformation>
+      <!-- This toolchain skipped linking after objects in LocalAppData changed. Keep compilation
+           incremental, but always relink this small preview so F5 runs the current sources. -->
+      <MinimalRebuildFromTracking>false</MinimalRebuildFromTracking>
+      <AdditionalLibraryDirectories>$(OpenGLRoot)\lib\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;glew32.lib;opengl32.lib;user32.lib;gdi32.lib;gdiplus.lib;shell32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" /><ClCompile Include="..\SchoolRoom.cpp" />
+    <ClCompile Include="..\SchoolRenderer.cpp" /><ClCompile Include="..\tests\SchoolRoomTests.cpp" />
+    <ClCompile Include="..\SchoolCorridor.cpp" /><ClCompile Include="..\SchoolPreview.cpp" />
+    <ClInclude Include="..\SchoolCorridor.h" /><ClInclude Include="..\SchoolPreview.h" />
+    <ClInclude Include="..\SchoolRoom.h" /><ClInclude Include="..\SchoolRenderer.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopySchoolGLEW" AfterTargets="Build">
+    <Copy SourceFiles="$(OpenGLRoot)\bin\x64\glew32.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)..\assets\art-class-still-life-v2.png" DestinationFolder="$(TargetDir)assets\" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
