@@ -256,8 +256,7 @@ int runGame(GLFWwindow* window, Map activeMap) {
 
 int main(int argc, char* argv[]) {
     const std::string_view modeArgument = argc > 1 ? argv[1] : "";
-    const Map startMap = modeArgument == "--school" ? Map::School
-                       : modeArgument == "--test-room" ? Map::Test : Map::Military;
+    const Map startMap = modeArgument == "--test-room" ? Map::Test : Map::School;
     glfwSetErrorCallback([](int, const char* message) { std::cerr << message << '\n'; });
     if (!glfwInit()) {
         return 1;
@@ -266,9 +265,7 @@ int main(int argc, char* argv[]) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    const char* initialTitle = startMap == Map::Test ? lockedTitle
-                             : startMap == Map::School ? "Out of Scale | School"
-                             : windowTitle(MilitaryRoom::ExitState::Locked);
+    const char* initialTitle = startMap == Map::Test ? lockedTitle : "Out of Scale | School";
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
     if (mode) {
