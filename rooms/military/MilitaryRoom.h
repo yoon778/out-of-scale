@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ParadeGround.h"
 #include "../shared/BoxRenderer.h"
 #include "../shared/PerspectiveCarry.h"
 
@@ -10,7 +9,7 @@
 
 class MilitaryRoom {
 public:
-    enum class ExitState { Locked, Open, OutpostReached, BridgeReady, ParadeReached, Escaped };
+    enum class ExitState { Locked, Open, OutpostReached, BridgeReady, Escaped };
 
     MilitaryRoom();
     bool initialize();
@@ -38,7 +37,6 @@ private:
     static constexpr std::size_t belongingsCount = 3;
     static constexpr std::size_t televisionIndex = belongingsCount;
     bool inBarracks() const;
-    bool inParadeGround() const;
     std::optional<Placement> placement(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canEnterTelevision(const glm::vec3& previous, const glm::vec3& desired,
                             const glm::vec3& facing) const;
@@ -52,7 +50,6 @@ private:
                                     const glm::vec3& facing, bool* grounded);
 
     BoxRenderer renderer_;
-    ParadeGround parade_;
     std::array<perspective::Pose, belongingsCount + 1> objects_;
     std::array<float, belongingsCount + 1> verticalSpeeds_{};
     std::array<float, belongingsCount + 1> fallGrowthRates_{};

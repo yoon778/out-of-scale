@@ -62,8 +62,6 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
         return "Out of Scale | E Grab moon | Scroll down to grow | E Place | Esc Exit";
     case MilitaryRoom::ExitState::BridgeReady:
         return "Out of Scale | Follow the shadow | E Move moon | Esc Exit";
-    case MilitaryRoom::ExitState::ParadeReached:
-        return "Out of Scale | Parade ground | E Grab/Place | Scroll Reach | Space Jump";
     case MilitaryRoom::ExitState::Escaped:
         return "Out of Scale | Military escaped | Esc Exit";
     case MilitaryRoom::ExitState::Locked:
@@ -96,6 +94,43 @@ void drawAimDot(int width, int height) {
     glDisable(GL_SCISSOR_TEST);
 }
 
+void drawClearBadge(int width, int height) {
+    constexpr std::string_view rows[] = {
+        "01110 10000 11111 01110 11110",
+        "10001 10000 10000 10001 10001",
+        "10000 10000 10000 10001 10001",
+        "10000 10000 11110 11111 11110",
+        "10000 10000 10000 10001 10100",
+        "10001 10000 10000 10001 10010",
+        "01110 11111 11111 10001 10001",
+    };
+    const int pixelSize = std::clamp(std::min(width, height) / 150, 2, 10);
+    const int padding = 3 * pixelSize;
+    const int textWidth = static_cast<int>(rows[0].size()) * pixelSize;
+    const int textHeight = 7 * pixelSize;
+    const int left = (width - textWidth) / 2;
+    const int top = height - height / 8;
+
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(left - padding, top - textHeight - padding, textWidth + 2 * padding, textHeight + 2 * padding);
+    glClearColor(0.05f, 0.10f, 0.11f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glClearColor(0.77f, 1.0f, 0.88f, 1.0f);
+    int rowY = top - pixelSize;
+    for (std::string_view row : rows) {
+        int columnX = left;
+        for (char pixel : row) {
+            if (pixel == '1') {
+                glScissor(columnX, rowY, pixelSize, pixelSize);
+                glClear(GL_COLOR_BUFFER_BIT);
+            }
+            columnX += pixelSize;
+        }
+        rowY -= pixelSize;
+    }
+    glDisable(GL_SCISSOR_TEST);
+}
+
 template<class Room>
 void drawFrame(const Player& player, const Room& room, int width, int height) {
     glViewport(0, 0, width, height);
@@ -105,6 +140,11 @@ void drawFrame(const Player& player, const Room& room, int width, int height) {
         glm::radians(68.0f), static_cast<float>(width) / static_cast<float>(height), 0.05f, 600.0f);
     room.draw(projection * player.view(), player.eyePosition(), player.viewDirection());
     drawAimDot(width, height);
+    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+        if (room.exitState() == MilitaryRoom::ExitState::Escaped) {
+            drawClearBadge(width, height);
+        }
+    }
 }
 
 template<class Room>
