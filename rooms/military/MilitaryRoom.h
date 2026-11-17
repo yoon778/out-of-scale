@@ -38,6 +38,7 @@ private:
     static constexpr std::size_t televisionIndex = belongingsCount;
     static constexpr std::size_t steelPlateIndex = televisionIndex + 1;
     static constexpr std::size_t objectCount = steelPlateIndex + 1;
+    static constexpr float initialMoonScale = 0.10f;
     bool inBarracks() const;
     bool pressesPad(const glm::vec3& padCenter) const;
     std::optional<Placement> placement(const glm::vec3& eye, const glm::vec3& direction) const;
@@ -45,10 +46,10 @@ private:
                             const glm::vec3& facing) const;
     void drawBarracks(const glm::vec3& eye, const glm::vec3& direction) const;
     void drawEquipmentPuzzle() const;
-    void drawTrainingReflectors(const glm::vec3& moonCenter, float nearbyLightStrength) const;
     void drawObject(std::size_t index, const perspective::Pose& pose, const glm::vec3& tint) const;
     void interactMoon(const glm::vec3& eye, const glm::vec3& direction);
-    bool canPlaceMoon(const glm::vec3& center) const;
+    perspective::Pose carriedMoonPose(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool canPlaceMoon(const perspective::Pose& pose) const;
     ExitState outpostState() const;
     bool supports(const glm::vec2& point) const;
     glm::vec3 resolveOutpostMovement(const glm::vec3& previous, const glm::vec3& desired,
@@ -64,7 +65,7 @@ private:
     float heldRatio_ = 0.0f;
     ExitState exitState_ = ExitState::Locked;
     std::optional<glm::vec3> placedMoon_;
-    float moonScale_ = 0.10f;
+    float moonScale_ = initialMoonScale;
     bool moonHeld_ = false;
     std::vector<glm::vec2> bridge_;
     bool climbing_ = false;

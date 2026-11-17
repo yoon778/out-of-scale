@@ -25,8 +25,10 @@ constexpr float minimumScale = 0.05f;
 constexpr float televisionEntryScale = 1.9f;
 constexpr glm::vec3 screenSize{0.025f, 0.88f, 1.30f};
 constexpr glm::vec3 screenOffset{-0.255f, 0.03f, 0.0f};
-constexpr glm::vec3 outpostEntrance{9.75f, 1.65f, 1.60f};
+constexpr glm::vec3 outpostEntrance{-8.30f, 1.65f, 9.60f};
 constexpr float moonCarryDepth = 3.2f;
+constexpr float caveCarryDepth = 1.25f;
+constexpr float caveMaximumMoonScale = 0.18f;
 constexpr float maximumMoonScale = 0.52f;
 constexpr float distantMoonStrength = 0.23f;
 constexpr float gapNear = 7.8f;
@@ -221,6 +223,14 @@ constexpr Bounds pillarParts[]{
     {{9.945f, 2.255f, 5.815f}, {11.055f, 2.345f, 6.485f}},
 };
 
+#include "CaveScene.inc"
+
+bool moonLightsPillar(const glm::vec3& moonCenter) {
+    const auto& pillar = pillarParts[0];
+    const glm::vec3 toPillar = (pillar.min + pillar.max) * 0.5f - moonCenter;
+    return caveWallDepth(moonCenter, toPillar, 1.0f) >= 1.0f;
+}
+
 glm::vec2 horizontal(const glm::vec3& position) {
     return {position.x, position.z};
 }
@@ -293,9 +303,14 @@ float nearestSolidDepth(const glm::vec3& eye, const glm::vec3& direction, std::s
 }
 
 bool onOutpostRoute(const glm::vec2& point) {
-    return std::any_of(std::begin(banks), std::end(banks), [&](const Footprint& bank) {
-        return bank.contains(point);
-    });
+    const auto contains = [&](const Footprint& area) { return area.contains(point); };
+    return clearing.contains(point) || std::any_of(cavePassages.begin(), cavePassages.end(), contains) ||
+           std::any_of(std::begin(banks), std::end(banks), contains);
+}
+
+bool inCavePassage(const glm::vec2& point) {
+    return std::any_of(cavePassages.begin(), cavePassages.end(),
+                       [&](const Footprint& area) { return area.contains(point); });
 }
 
 glm::vec3 groundAt(glm::vec3 position, float height, bool* grounded) {
@@ -571,7 +586,10 @@ MilitaryRoom::MilitaryRoom() {
 }
 
 bool MilitaryRoom::initialize() {
-    return renderer_.initialize(staticGeometry, barracksGear, moonGeometry);
+    std::vector<MeshVertex> movable(std::begin(barracksGear), std::end(barracksGear));
+    const auto& caveVertices = caveScene().vertices;
+    movable.insert(movable.end(), caveVertices.begin(), caveVertices.end());
+    return renderer_.initialize(staticGeometry, movable, moonGeometry);
 }
 
 bool MilitaryRoom::inBarracks() const {
@@ -772,31 +790,68 @@ void MilitaryRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
     }
 }
 
-bool MilitaryRoom::canPlaceMoon(const glm::vec3& center) const {
-    const glm::vec3 half = moonWorldSize * (moonScale_ * 0.5f);
-    const auto bounds = footprint(center, horizontal(half));
-    const auto min = center - half;
-    const auto max = center + half;
+perspective::Pose MilitaryRoom::carriedMoonPose(const glm::vec3& eye, const glm::vec3& direction) const {
+    const bool inside = inCavePassage(horizontal(eye));
+    float depth = inside ? caveCarryDepth : moonCarryDepth;
+    float scale = inside ? std::min(moonScale_, caveMaximumMoonScale) : moonScale_;
+    const float largestHalf = 0.5f * std::max({moonWorldSize.x, moonWorldSize.y, moonWorldSize.z});
+    const float probeDepth = depth + largestHalf * scale + placementClearance;
+    const float wallDepth = caveWallDepth(eye, direction, probeDepth);
+    if (wallDepth < probeDepth) {
+        depth = std::min(depth, wallDepth * 0.58f);
+        scale = std::min(scale, std::max(0.01f, (wallDepth - depth - placementClearance) / largestHalf));
+    }
+    const glm::vec3 center = eye + direction * depth;
+    const auto touchesRock = [&](float candidateScale) {
+        const glm::vec3 half = moonWorldSize * (candidateScale * 0.5f);
+        return caveRockIntersects({center - half, center + half});
+    };
+    if (touchesRock(scale)) {
+        // The moon can graze a side wall even if the sight ray is clear.
+        float limit = scale;
+        scale = 0.0f;
+        for (int iteration = 0; iteration < 8; ++iteration) {
+            const float candidate = (scale + limit) * 0.5f;
+            if (touchesRock(candidate)) {
+                limit = candidate;
+            } else {
+                scale = candidate;
+            }
+        }
+    }
+    return {center, scale};
+}
+
+bool MilitaryRoom::canPlaceMoon(const perspective::Pose& pose) const {
+    if (pose.scale < 0.01f) {
+        return false;
+    }
+    const glm::vec3 half = moonWorldSize * (pose.scale * 0.5f);
+    const auto bounds = footprint(pose.center, horizontal(half));
+    const auto min = pose.center - half;
+    const auto max = pose.center + half;
     if (min.y < trenchY || (min.y < barracksCeiling && bounds.overlaps(supply))) {
         return false;
     }
-    if (min.y < 0.0f && std::any_of(std::begin(banks), std::end(banks), [&](const Footprint& bank) {
-        return bounds.overlaps(bank);
-    })) {
+    const auto overlaps = [&](const Footprint& floor) { return bounds.overlaps(floor); };
+    if (min.y < 0.0f && (overlaps(clearing) || std::any_of(cavePassages.begin(), cavePassages.end(), overlaps) ||
+                          std::any_of(std::begin(banks), std::end(banks), overlaps))) {
         return false;
     }
-    return std::none_of(std::begin(pillarParts), std::end(pillarParts), [&](const Bounds& part) {
-        return glm::all(glm::lessThan(min, part.max)) && glm::all(glm::greaterThan(max, part.min));
-    });
+    return !caveRockIntersects({min, max}) &&
+           std::none_of(std::begin(pillarParts), std::end(pillarParts), [&](const Bounds& part) {
+               return glm::all(glm::lessThan(min, part.max)) && glm::all(glm::greaterThan(max, part.min));
+           });
 }
 
 void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction) {
     if (moonHeld_) {
-        const glm::vec3 center = eye + direction * moonCarryDepth;
-        if (canPlaceMoon(center)) {
-            placedMoon_ = center;
+        const auto pose = carriedMoonPose(eye, direction);
+        if (canPlaceMoon(pose)) {
+            placedMoon_ = pose.center;
+            moonScale_ = pose.scale;
             moonHeld_ = false;
-            bridge_ = clipTo(projectPillar(center, 0.0f), gap);
+            bridge_ = moonLightsPillar(pose.center) ? clipTo(projectPillar(pose.center, 0.0f), gap) : Polygon{};
             exitState_ = outpostState();
         }
         return;
@@ -813,7 +868,7 @@ void MilitaryRoom::interactMoon(const glm::vec3& eye, const glm::vec3& direction
                                                           (part.max - part.min) * 0.5f);
         return obstacle && *obstacle < *hit;
     });
-    if (!behindPillar) {
+    if (!behindPillar && caveWallDepth(eye, direction, *hit) >= *hit) {
         moonHeld_ = true;
         bridge_.clear();
         exitState_ = outpostState();
@@ -859,8 +914,12 @@ bool MilitaryRoom::canEnterTelevision(const glm::vec3& previous, const glm::vec3
 glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired,
                                         const glm::vec3& facing, bool* grounded) {
     if (canEnterTelevision(previous, desired, facing)) {
-        exitState_ = outpostState();
-        return groundAt({outpostEntrance.x, desired.y, outpostEntrance.z}, 0.0f, grounded);
+        placedMoon_.reset();
+        moonHeld_ = false;
+        moonScale_ = initialMoonScale;
+        bridge_.clear();
+        exitState_ = ExitState::OutpostReached;
+        return groundAt(outpostEntrance, 0.0f, grounded);
     }
     if (!inBarracks()) {
         return resolveOutpostMovement(previous, desired, facing, grounded);
@@ -946,6 +1005,9 @@ glm::vec3 MilitaryRoom::resolveOutpostMovement(const glm::vec3& previous, const 
         position.z = previous.z;
     }
 
+    if (inCavePassage(horizontal(position))) {
+        position.y = std::min(position.y, caveCeiling - headClearance);
+    }
     const auto bounds = footprint(position, glm::vec2{playerRadius});
     const bool inTrench = gap.contains(bounds.min) && gap.contains(bounds.max);
     const bool supported = supports(bounds.min) && supports(bounds.max) &&
@@ -1074,38 +1136,6 @@ void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction
     }
 }
 
-void MilitaryRoom::drawTrainingReflectors(const glm::vec3& moonCenter, float nearbyLightStrength) const {
-    struct Reflector {
-        glm::vec3 center;
-        glm::vec3 size;
-    };
-    constexpr glm::vec3 railBand{0.088f, 0.20f, 0.090f};
-    constexpr Reflector reflectors[]{
-        {{12.94f, 0.35f, 2.731f}, railBand},
-        {{12.94f, 0.35f, 4.687f}, railBand},
-        {{12.94f, 0.35f, 6.642f}, railBand},
-        {{10.50f, 1.62f, 5.823f}, {0.32f, 0.090f, 0.014f}},
-    };
-    constexpr glm::vec3 unlitTape{0.067f, 0.083f, 0.092f};
-    constexpr glm::vec3 litTape{0.76f, 0.92f, 1.0f};
-    for (const auto& reflector : reflectors) {
-        float light = 0.0f;
-        if (nearbyLightStrength > 0.0f) {
-            const glm::vec3 toMoon = moonCenter - reflector.center;
-            const float reach = 3.50f + 0.65f * nearbyLightStrength;
-            light = 1.0f - glm::smoothstep(0.35f, reach, glm::length(toMoon));
-            if (light > 0.0f && std::any_of(std::begin(pillarParts), std::end(pillarParts), [&](const Bounds& part) {
-                    const auto hit = perspective::rayBoxDistance(reflector.center, toMoon, (part.min + part.max) * 0.5f,
-                                                                 (part.max - part.min) * 0.5f);
-                    return hit && *hit < 1.0f;
-                })) {
-                light = 0.0f;
-            }
-        }
-        renderer_.drawBox(reflector.center, reflector.size, glm::mix(unlitTape, litTape, light));
-    }
-}
-
 void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
     renderer_.begin(viewProjection);
     if (inBarracks()) {
@@ -1115,25 +1145,28 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     }
 
     const bool distantMoon = !moonHeld_ && !placedMoon_;
-    const glm::vec3 moonCenter = moonHeld_ ? eye + direction * moonCarryDepth
-                                          : placedMoon_.value_or(moonWorldCenter);
+    const perspective::Pose moon = moonHeld_ ? carriedMoonPose(eye, direction)
+        : perspective::Pose{placedMoon_.value_or(moonWorldCenter), distantMoon ? 1.0f : moonScale_};
+    const glm::vec3& moonCenter = moon.center;
     const glm::vec3 moonLight = distantMoon ? glm::normalize(moonCenter - outpostEntrance) : moonCenter;
-    const float strength = distantMoon ? distantMoonStrength : std::max(0.70f, 2.7f * moonScale_ / maximumMoonScale);
+    const float strength = distantMoon ? distantMoonStrength : std::max(0.70f, 2.7f * moon.scale / maximumMoonScale);
     renderer_.setNightLighting(eye, moonLight, strength, distantMoon);
     renderer_.drawStaticMesh();
     renderer_.clearNightLighting();
-    drawTrainingReflectors(moonCenter, distantMoon ? 0.0f : strength);
+    drawCaveScene(renderer_, static_cast<GLint>(std::size(barracksGear)), eye,
+                  distantMoon ? std::nullopt : std::optional{moonCenter}, strength);
 
-    const auto shadow = projectPillar(moonCenter, 0.0f);
-    const glm::vec3 shadowColor{0.034f, 0.064f, 0.107f};
-    constexpr float shadowOffset = 0.020f;
-    for (const auto& floor : banks) {
-        renderer_.drawFlatPolygon(clipTo(shadow, floor), shadowOffset, shadowColor);
+    if (moonLightsPillar(moonCenter)) {
+        const auto shadow = projectPillar(moonCenter, 0.0f);
+        const glm::vec3 shadowColor{0.034f, 0.064f, 0.107f};
+        constexpr float shadowOffset = 0.020f;
+        for (const auto& floor : banks) {
+            renderer_.drawFlatPolygon(clipTo(shadow, floor), shadowOffset, shadowColor);
+        }
+        renderer_.drawFlatPolygon(clipTo(projectPillar(moonCenter, trenchY), gap), trenchY + shadowOffset, shadowColor);
+        renderer_.drawFlatPolygon(bridge_, shadowOffset, shadowColor);
     }
-    renderer_.drawFlatPolygon(clipTo(projectPillar(moonCenter, trenchY), gap), trenchY + shadowOffset, shadowColor);
-    renderer_.drawFlatPolygon(bridge_, shadowOffset, shadowColor);
 
-    const float drawnScale = distantMoon ? 1.0f : moonScale_;
-    const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * drawnScale);
+    const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * moon.scale);
     renderer_.drawMoonMesh(moonModel, glm::vec3{1.0f});
 }
