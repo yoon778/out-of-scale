@@ -6,6 +6,7 @@ Use -- --create to regenerate the editable scene from the dimensions below.
 
 import argparse
 import math
+from random import Random
 from pathlib import Path
 import runpy
 import sys
@@ -18,10 +19,22 @@ SCENE = "Military | Parade ground"
 STATIC_COLLECTION = "Parade ground"
 PROP_COLLECTION = "Carryable models"
 PROP_NAMES = ("Jeep", "Tank", "Barracks model")
-PROP_SIZES = ((0.70, 0.40, 0.98), (0.85, 0.55, 1.10), (0.90, 0.75, 0.92))
+PROP_SIZES = ((2.20, 2.00, 4.90), (3.60, 2.40, 10.80), (0.90, 0.75, 0.92))
+PROP_STARTS = ((-5.0, 1.0, -12.5), (6.5, 1.2, -8.5), (0.0, .375, -10.5))
 
 PALETTE = {
-    "asphalt": (0.39, 0.44, 0.47),
+    "asphalt": (0.36, 0.40, 0.44),
+    "base_concrete": (0.33, 0.37, 0.39),
+    "recess": (0.08, 0.12, 0.16),
+    "lit_glass": (0.49, 0.47, 0.35),
+    "fir": (0.19, 0.27, 0.24),
+    "fir_dark": (0.14, 0.20, 0.18),
+    "ridge_2": (0.19, 0.24, 0.28),
+    "ridge_3": (0.17, 0.22, 0.26),
+    "ridge_4": (0.22, 0.28, 0.33),
+    "ridge_5": (0.20, 0.26, 0.32),
+    "ridge_6": (0.27, 0.33, 0.39),
+    "ridge_7": (0.25, 0.31, 0.37),
     "concrete": (0.47, 0.51, 0.50),
     "edge": (0.27, 0.34, 0.34),
     "seam": (0.28, 0.33, 0.35),
@@ -34,7 +47,6 @@ PALETTE = {
     "lamp": (1.0, 0.73, 0.32),
     "glass": (0.27, 0.41, 0.43),
     "grass": (0.25, 0.30, 0.23),
-    "gravel": (0.34, 0.37, 0.32),
     "rubber": (0.18, 0.20, 0.18),
     "olive": (0.47, 0.54, 0.30),
     "army": (0.37, 0.44, 0.29),
@@ -122,141 +134,223 @@ class Mesh:
 
 def ground(collection):
     mesh = Mesh()
-    mesh.box((5.2, 16.2), (-0.20, 0.0), (16.18, 29.0), "asphalt")
-    mesh.box((5.2, 16.2), (-0.004, 0.002), (16.18, 17.08), "concrete")
-    for x in (8.0, 10.7, 13.4):
-        mesh.block((x, 0.001, 22.96), (0.025, 0.002, 11.40), "seam")
-    for z in (17.25, 20.08, 22.86, 25.66, 28.4):
-        mesh.block((10.7, 0.001, z), (10.84, 0.002, 0.027), "seam")
-    for x in (5.42, 15.98):
-        mesh.block((x, 0.003, 22.57), (0.043, 0.004, 12.45), "mark")
-    for x in (9.84, 11.16):
-        mesh.block((x, 0.003, 17.07), (0.043, 0.004, 1.44), "mark")
-    for z in (23.5, 24.16, 24.82, 25.48):
-        mesh.block((10.5, 0.003, z), (0.055, 0.004, 0.38), "mark")
-    for x in (7.8, 8.9, 10.0):
-        # Flat paint defines the initial staging bays, without an obstacle to approach.
+    mesh.box((-27.0, 27.0), (-0.20, 0.0), (-24.0, 34.0), "asphalt")
+    mesh.box((-75.0, 75.0), (-0.45, -0.21), (-78.0, 78.0), "grass")
+    for x in range(-25, 26, 5):
+        mesh.block((x, 0.002, 5.0), (0.024, 0.004, 56.0), "seam")
+    for z in range(-20, 34, 5):
+        mesh.block((0.0, 0.001, z), (53.6, 0.002, 0.026), "seam")
+    for x in (-26.60, 26.60):
+        mesh.block((x, 0.005, 5.0), (0.06, 0.006, 57.3), "mark")
+    for z in (8.0, 10.6, 13.2, 15.8):
+        mesh.block((0.0, 0.005, z), (0.11, 0.006, 1.20), "mark")
+    for (x, _, z), (width, _, length) in zip(PROP_STARTS[:2], PROP_SIZES[:2]):
+        bay_width = width + 1.1
+        bay_length = length + 1.3
         for side in (-1, 1):
-            mesh.block((x + side * 0.49, 0.003, 18.5), (0.036, 0.004, 1.22), "mark")
-            mesh.block((x, 0.003, 18.5 + side * 0.61), (1.01, 0.004, 0.036), "mark")
-    mesh.object("Paved square and staging paint", collection)
-
-    margin = Mesh()
-    margin.box((3.7, 5.2), (-0.23, -0.09), (16.18, 30.30), "gravel")
-    margin.box((16.2, 17.7), (-0.23, -0.09), (16.18, 30.30), "gravel")
-    margin.box((5.2, 16.2), (-0.23, -0.09), (29.0, 30.30), "grass")
-    for x, z in ((4.30, 19.28), (4.15, 25.60), (17.18, 22.34), (17.28, 27.38), (7.1, 29.74), (14.5, 29.78)):
-        margin.prism([(x - .29, z - .22), (x + .12, z - .27), (x + .33, z + .12),
-                      (x + .08, z + .30), (x - .35, z + .18)], -.10, .12, "grass")
-    margin.object("Gravel shoulders", collection)
+            mesh.block((x + side * bay_width / 2, 0.005, z), (.065, .006, bay_length), "mark")
+            mesh.block((x, 0.005, z + side * bay_length / 2), (bay_width, .006, .065), "mark")
+    for x in (-2.32, 2.32):
+        mesh.block((x, .005, -22.2), (.055, .006, 3.5), "mark")
+    mesh.object("Paved parade square and parking lines", collection)
 
 
-def edge_rails(collection):
-    mesh = Mesh()
-    for x in (5.13, 16.27):
-        for z in (16.23, 18.34, 20.46, 22.58, 24.70, 26.82, 28.94):
-            mesh.block((x, 0.52, z), (0.105, 1.20, 0.105), "steel")
-            mesh.block((x, 1.14, z), (0.12, 0.045, 0.12), "sill")
-        for y in (0.41, 0.88):
-            mesh.block((x, y, 22.585), (0.07, 0.075, 12.71), "rail")
-    for x0, x1, z in ((5.2, 9.73, 16.13), (11.27, 16.2, 16.13), (5.2, 16.2, 29.05)):
-        for x in (x0, (x0 + x1) / 2, x1):
-            mesh.block((x, 0.52, z), (0.10, 1.20, 0.10), "steel")
-        for y in (0.41, 0.88):
-            mesh.box((x0, x1), (y - 0.038, y + 0.038), (z - 0.035, z + 0.035), "rail")
-    mesh.object("Perimeter barrier", collection)
-
-
-def watch_post(collection):
-    mesh = Mesh()
-    mesh.box((9.35, 11.65), (0.0, 2.87), (26.85, 28.8), "edge")
-    mesh.box((9.347, 11.653), (0.025, 0.21), (26.847, 28.803), "steel")
-    for y in (0.90, 1.78, 2.66):
-        mesh.box((9.35, 11.65), (y, y + 0.022), (26.847, 26.851), "seam")
-    mesh.box((9.35, 11.65), (2.87, 3.05), (26.85, 28.8), "concrete")
-    mesh.box((9.35, 11.65), (3.048, 3.053), (26.85, 26.96), "sill")
-    mesh.box((9.68, 11.32), (3.048, 3.053), (28.245, 28.32), "sill")
-    for x in (9.48, 11.52):
-        for z in (27.17, 28.6):
-            mesh.block((x, 1.43, z), (0.21, 2.89, 0.21), "steel")
-            mesh.block((x, 0.11, z), (0.32, 0.22, 0.32), "concrete")
-        mesh.block((x, 2.74, 27.88), (0.16, 0.19, 1.63), "steel")
-        mesh.block((x, 0.98, 27.88), (0.12, 0.11, 1.63), "steel")
-        mesh.block((x, 3.1, 27.15), (0.095, 0.10, 0.10), "sill")
-    mesh.block((10.50, 2.70, 28.58), (2.15, 0.16, 0.17), "steel")
-
-    # Two jambs stop exactly at the edges of the door opening.
-    mesh.box((9.35, 9.8), (3.05, 5.20), (28.27, 28.45), "tower")
-    mesh.box((11.2, 11.65), (3.05, 5.20), (28.27, 28.45), "tower")
-    mesh.box((9.35, 9.45), (3.05, 5.41), (28.45, 28.88), "tower")
-    mesh.box((11.55, 11.65), (3.05, 5.41), (28.45, 28.88), "tower")
-    mesh.box((9.35, 11.65), (5.20, 5.41), (28.27, 28.80), "tower")
-    mesh.box((9.8, 11.2), (3.05, 5.20), (28.80, 28.88), "dark")
-    mesh.box((9.28, 11.72), (5.41, 5.51), (28.03, 28.90), "steel")
-    for x in (9.61, 11.39):
-        mesh.block((x, 4.97, 28.228), (0.14, 0.12, 0.12), "dark")
-        mesh.block((x, 4.97, 28.156), (0.101, 0.084, 0.028), "lamp")
-    for x in (9.397, 11.603):
-        for z in (27.18, 27.68):
-            mesh.block((x, 3.49, z), (0.087, 0.88, 0.087), "steel")
-        mesh.block((x, 3.82, 27.47), (0.06, 0.059, 0.75), "rail")
-        mesh.block((x, 3.43, 27.47), (0.05, 0.054, 0.75), "rail")
-    mesh.object("Elevated watch post and open door", collection)
+def perimeter(collection):
+    rails = Mesh()
+    for x in (-27.05, 27.05):
+        for z in range(-22, 34, 4):
+            rails.block((x, .56, z), (.16, 1.15, .16), "steel")
+            rails.block((x, 1.15, z), (.19, .055, .19), "sill")
+        for y in (.44, .94):
+            rails.block((x, y, 5.0), (.075, .085, 58.0), "rail")
+    for x0, x1, z in ((-27.0, -2.3, -24.03), (2.3, 27.0, -24.03), (-27.0, 27.0, 34.03)):
+        divisions = math.ceil((x1 - x0) / 4)
+        for index in range(divisions + 1):
+            x = x0 + index * (x1 - x0) / divisions
+            rails.block((x, .56, z), (.16, 1.15, .16), "steel")
+        for y in (.44, .94):
+            rails.box((x0, x1), (y - .04, y + .04), (z - .04, z + .04), "rail")
+    rails.object("Perimeter barrier", collection)
 
     lights = Mesh()
-    for x in (5.02, 16.41):
-        for z in (19.98, 26.5):
-            lights.block((x, 1.45, z), (0.09, 2.92, 0.09), "steel")
-            arm = .17 if x < 10 else -.17
-            lights.block((x + arm / 2, 2.88, z), (abs(arm) + .09, .08, .09), "steel")
-            lights.block((x + arm, 2.84, z), (.24, .105, .20), "dark")
-            lights.block((x + arm, 2.78, z), (.19, .02, .15), "lamp")
+    for side in (-1, 1):
+        for z in (-17.0, -3.0, 11.0, 27.0):
+            x = side * 27.30
+            lights.block((x, 2.45, z), (.17, 4.94, .17), "steel")
+            lights.block((x - side * .32, 4.85, z), (.78, .14, .12), "steel")
+            lights.block((x - side * .70, 4.80, z), (.50, .19, .32), "dark")
+            lights.block((x - side * .70, 4.69, z), (.37, .03, .26), "lamp")
     lights.object("Perimeter lamp posts", collection)
+
+
+def return_gate(collection):
+    mesh = Mesh()
+    for x in (-2.46, 2.46):
+        mesh.block((x, 1.59, -23.30), (.32, 3.18, .42), "steel")
+        mesh.block((x, 2.63, -23.05), (.15, .21, .08), "lamp")
+    mesh.box((-2.62, 2.62), (2.96, 3.23), (-23.55, -23.05), "steel")
+    mesh.box((-1.85, 1.85), (3.025, 3.155), (-23.04, -23.015), "edge")
+    for x in (-.9, 0.0, .9):
+        mesh.block((x, 3.09, -23.005), (.64, .075, .016), "lamp")
+    mesh.object("Return gate", collection)
+
+
+def barracks_building(collection):
+    shell = Mesh()
+    shell.box((-10.0, 10.0), (0.0, 3.20), (20.0, 32.0), "base_concrete")
+    for x0, x1 in ((-10.0, -.90), (.90, 10.0)):
+        shell.box((x0, x1), (3.20, 12.80), (20.0, 32.0), "tower")
+    # The dark wall behind the second-floor opening closes the building beyond the
+    # walkable threshold and leaves usable clearance inside the portal.
+    shell.box((-.90, .90), (3.20, 5.4), (20.90, 32.0), "recess")
+    shell.box((-.90, .90), (5.4, 12.80), (20.0, 32.0), "tower")
+    shell.box((-10.0, 10.0), (12.80, 13.20), (20.0, 32.0), "edge")
+    shell.object("Four-story barracks structure", collection)
+
+    facade = Mesh()
+    for y in (3.20, 6.40, 9.60, 12.75):
+        facade.box((-10.0, 10.0), (y - .105, y), (19.96, 20.01), "concrete")
+        facade.box((-10.0, 10.0), (y - .105, y), (31.99, 32.03), "concrete")
+        for x in (-10.02, 10.02):
+            facade.block((x, y - .0525, 26.0), (.06, .105, 12.0), "concrete")
+    for x in (-9.8, -2.27, 2.27, 9.8):
+        facade.box((x - .16, x + .16), (.30, 12.77), (19.95, 20.02), "concrete")
+    for level in range(4):
+        y = 1.62 + 3.20 * level
+        for bay, x in enumerate((-8.50, -6.65, -4.85, -3.15, 3.15, 4.85, 6.65, 8.50)):
+            for z in (19.924, 32.025):
+                facade.block((x, y, z), (1.35, 1.48, .048), "edge")
+                facade.block((x, y + .033, z + (-.026 if z < 20 else .026)), (1.14, 1.25, .022),
+                             "lit_glass" if (level + bay * 3) % 7 == 3 else "glass")
+                facade.block((x, y, z + (-.048 if z < 20 else .048)), (.033, 1.26, .020), "edge")
+                facade.block((x, y - .72, z + (-.04 if z < 20 else .04)), (1.46, .095, .09), "concrete")
+        for x in (-10.025, 10.025):
+            for z in (22.4, 25.95, 29.50):
+                facade.block((x, y, z), (.062, 1.48, 1.48), "edge")
+                offset = math.copysign(.039, x)
+                facade.block((x + offset, y, z), (.021, 1.24, 1.28), "glass")
+                facade.block((x + offset * 1.43, y, z), (.019, 1.24, .035), "edge")
+    facade.object("Barracks facade bands and window rows", collection)
+
+    entry = Mesh()
+    entry.box((-2.30, 2.30), (0.0, 3.075), (16.75, 20.0), "base_concrete")
+    entry.box((-2.30, 2.30), (3.075, 3.20), (16.749, 20.0), "concrete")
+    entry.box((-2.30, 2.30), (3.200, 3.204), (16.75, 16.92), "sill")
+    entry.box((-.90, .90), (3.200, 3.204), (19.84, 20.40), "sill")
+    for x in (-.98, .98):
+        entry.block((x, 4.30, 19.965), (.16, 2.20, .11), "sill")
+    entry.box((-1.06, 1.06), (5.40, 5.57), (19.90, 20.01), "sill")
+    for x in (-1.30, 1.30):
+        entry.block((x, 5.03, 19.94), (.22, .28, .12), "edge")
+        entry.block((x, 5.03, 19.86), (.14, .19, .055), "lamp")
+    entry.object("Second-floor entrance and solid landing", collection)
+
+
+def mountain_ring(collection):
+    random = Random(1207)
+    for layer, (radius, height, width) in enumerate(((58, 16, 12), (83, 30, 17), (132, 47, 23))):
+        mesh = Mesh()
+        count = 96
+        rows = [[], [], [], []]
+        for index in range(count):
+            angle = 2 * math.pi * index / count
+            radius_noise = 2.8 * math.sin(5 * angle + layer) + 2.0 * math.cos(11 * angle)
+            ridge = radius + radius_noise
+            peaks = .61 + .19 * math.sin(5 * angle + layer) + .12 * math.sin(13 * angle - .8 * layer)
+            peak = height * (peaks + random.uniform(-.08, .12))
+            crest_angle = angle + .022 * math.sin(21 * angle)
+            section = ((ridge - width, -.22, angle), (ridge - width * .45, peak * .38, angle),
+                       (ridge, peak, crest_angle), (ridge + width, -.26, angle))
+            for row, (distance, y, bearing) in zip(rows, section):
+                row.append((distance * math.cos(bearing), y, 4.0 + distance * math.sin(bearing)))
+        for index in range(count):
+            other = (index + 1) % count
+            for band in range(len(rows) - 1):
+                low, high = rows[band], rows[band + 1]
+                tone = (layer + 1) * 2
+                mesh.add((low[index], high[index], low[other], high[other]),
+                         ((0, 1, 2),), f"ridge_{tone}")
+                mesh.add((low[index], high[index], low[other], high[other]),
+                         ((1, 3, 2),), f"ridge_{tone + 1}")
+        mesh.object(f"Mountain ridge layer {layer + 1}", collection)
+
+    trees = Mesh()
+    for index in range(111):
+        angle = (index + random.uniform(-.35, .35)) * 2 * math.pi / 111
+        radius = random.uniform(32.0, 47.0)
+        x = radius * math.cos(angle)
+        z = 4.0 + radius * math.sin(angle)
+        if -28.0 < x < 28.0 and -25.0 < z < 35.0:
+            continue
+        height = random.uniform(2.1, 5.2)
+        trees.block((x, .29, z), (.15, .66, .15), "edge")
+        for tier in range(3):
+            y = height * (.13 + .23 * tier)
+            reach = height * (.22 - .044 * tier)
+            ring = [(x + reach * math.cos(side * math.tau / 5 + angle), y,
+                     z + reach * math.sin(side * math.tau / 5 + angle)) for side in range(5)]
+            vertices = ring + [(x, y + height * .43, z)]
+            trees.add(vertices, [((edge + 1) % 5, edge, 5) for edge in range(5)],
+                      "fir_dark" if tier == 0 else "fir")
+    trees.object("Evergreen treeline", collection)
 
 
 def jeep():
     mesh = Mesh()
-    mesh.box((-.31, .31), (-.108, .01), (-.46, .46), "army")
-    mesh.box((-.323, .323), (-.005, .097), (.13, .462), "olive")
-    mesh.box((-.31, .31), (-.005, .068), (-.442, .132), "olive")
-    mesh.box((-.318, .318), (-.072, -.037), (.46, .49), "dark")
-    mesh.box((-.31, .31), (-.072, -.037), (-.49, -.452), "steel")
-    mesh.box((-.272, .272), (.092, .161), (.165, .189), "glass")
-    mesh.box((-.325, .325), (.162, .20), (-.40, .33), "canvas")
+    mesh.box((-.92, .92), (-.58, .12), (-2.45, 2.45), "army")
+    mesh.prism([(-.95, -2.40), (.95, -2.40), (1.01, -1.85), (1.01, -.6),
+                (-1.01, -.6), (-1.01, -1.85)], -.12, .36, "olive")
+    mesh.box((-.94, .94), (.08, .37), (.87, 2.30), "olive")
+    mesh.box((-.88, .88), (.16, .65), (-.68, 1.99), "army")
+    mesh.box((-.99, .99), (.91, 1.0), (-.64, 2.02), "olive")
+    mesh.box((-.87, .87), (.40, .87), (-.72, -.63), "glass")
+    mesh.box((-.87, .87), (.43, .87), (1.93, 1.99), "glass")
+    for x in (-.82, 0.0, .82):
+        mesh.block((x, .65, -.735), (.061, .48, .08), "dark")
     for side in (-1, 1):
-        mesh.block((side * .289, .112, -.367), (.047, .12, .046), "army")
-        mesh.block((side * .284, .127, .171), (.043, .074, .044), "army")
-        mesh.block((side * .317, .037, .003), (.020, .025, .118), "dark")
-        mesh.block((side * .227, .037, .465), (.107, .049, .013), "paint")
-        mesh.block((side * .228, .015, -.451), (.062, .038, .017), "sill")
-        tire = tuple(sorted((side * .239, side * .348)))
-        hub = tuple(sorted((side * .346, side * .350)))
-        for z in (-.29, .30):
-            mesh.cylinder("x", tire, (-.087, z), .113, "rubber")
-            mesh.cylinder("x", hub, (-.087, z), .048, "steel")
-    for x in (-.13, -.065, 0.0, .065, .13):
-        mesh.block((x, .031, .466), (.023, .052, .016), "dark")
+        x = side * .92
+        mesh.block((x, .65, .56), (.055, .47, 2.29), "glass")
+        for z in (-.57, .61, 1.68):
+            mesh.block((x, .64, z), (.076, .56, .11), "olive")
+        for z in (.18, 1.34):
+            mesh.block((x, .29, z), (.085, .07, .22), "dark")
+        mesh.block((side * .67, .092, -2.426), (.31, .18, .045), "paint")
+        mesh.block((side * .69, -.02, 2.424), (.20, .14, .043), "sill")
+        for z in (-1.54, 1.60):
+            tire = tuple(sorted((side * .79, side * 1.085)))
+            hub = tuple(sorted((side * 1.08, side * 1.10)))
+            mesh.cylinder("x", tire, (-.56, z), .44, "rubber", sides=16)
+            mesh.cylinder("x", hub, (-.56, z), .22, "steel", sides=12)
+            mesh.block((side * .97, -.045, z), (.25, .10, 1.08), "army")
+    for x in (-.32, -.20, -.08, .08, .20, .32):
+        mesh.block((x, .067, -2.428), (.048, .20, .043), "dark")
     return mesh
 
 
 def tank():
     mesh = Mesh()
     for side in (-1, 1):
-        x = side * .315
-        mesh.box((x - .11, x + .11), (-.275, -.048), (-.55, .55), "rubber")
-        hub = tuple(sorted((side * .419, side * .425)))
-        for z in (-.406, -.203, 0, .203, .406):
-            mesh.cylinder("x", hub, (-.17, z), .085, "steel")
-        for z in (-.43, -.23, -.03, .17, .37):
-            mesh.block((x, -.034, z), (.22, .024, .055), "dark")
-    mesh.prism([(-.41, -.47), (.41, -.47), (.406, .38), (.305, .54),
-                (-.305, .54), (-.406, .38)], -.048, .222, "army")
-    mesh.box((-.376, .376), (.221, .235), (-.453, .39), "olive")
-    mesh.prism([(-.265, -.25), (.265, -.25), (.305, -.14), (.27, .14),
-                (.18, .21), (-.18, .21), (-.27, .14), (-.305, -.14)], .235, .275, "olive_light")
-    mesh.cylinder("z", (.17, .545), (0.0, .181), .042, "steel")
-    mesh.cylinder("z", (.493, .544), (0.0, .181), .060, "army")
-    mesh.box((.137, .249), (.234, .250), (-.396, -.284), "dark")
+        x = side * 1.46
+        track_left, track_right = sorted((x - side * .34, side * 1.79))
+        track_outline = [(track_left, -2.0), (track_right, -2.0), (track_right, 5.40), (track_left, 5.40)]
+        mesh.prism(track_outline, -1.20, -.20, "rubber")
+        hub = tuple(sorted((side * 1.765, side * 1.80)))
+        for z in (-1.57, -.51, .55, 1.61, 2.67, 3.73, 4.79):
+            mesh.cylinder("x", hub, (-.68, z), .36, "steel")
+        for z in (-1.45, -.37, .71, 1.79, 2.87, 3.95, 5.03):
+            mesh.block((x, -.185, z), (.63, .065, .14), "dark")
+    mesh.prism([(-1.66, -1.65), (-1.33, -2.08), (1.33, -2.08), (1.66, -1.65),
+                (1.66, 4.98), (1.43, 5.35), (-1.43, 5.35), (-1.66, 4.98)], -.27, .78, "army")
+    mesh.box((-1.53, 1.53), (.76, .84), (-1.66, 5.20), "olive")
+    mesh.prism([(-.94, -.81), (.94, -.81), (1.27, -.40), (1.21, 1.75),
+                (.91, 2.06), (-.91, 2.06), (-1.21, 1.75), (-1.27, -.40)], .79, 1.20, "olive_light")
+    mesh.cylinder("z", (-5.40, -.66), (.955, 0.0), .135, "steel")
+    mesh.cylinder("z", (-4.92, -4.41), (.955, 0.0), .186, "army")
+    mesh.box((-.37, .35), (.842, .896), (3.55, 4.2), "dark")
+    for side in (-1, 1):
+        mesh.block((side * .96, .965, -.89), (.20, .12, .15), "dark")
+        for z in (.72, 1.12, 1.52):
+            mesh.block((side * 1.24, 1.00, z), (.09, .19, .19), "edge")
     return mesh
 
 
@@ -291,19 +385,21 @@ def create_scene(path):
     scene.collection.children.link(environment)
     scene.collection.children.link(props)
     ground(environment)
-    edge_rails(environment)
-    watch_post(environment)
-    for name, make, size, x in zip(PROP_NAMES, (jeep, tank, barracks), PROP_SIZES, (7.8, 8.9, 10.0)):
+    perimeter(environment)
+    return_gate(environment)
+    barracks_building(environment)
+    mountain_ring(environment)
+    for name, make, (x, y, z) in zip(PROP_NAMES, (jeep, tank, barracks), PROP_STARTS):
         prop = make().object(name, props)
-        prop.location = (x, -18.50, size[1] / 2)
+        prop.location = (x, -z, y)
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type == "VIEW_3D":
                 viewport = area.spaces.active
                 viewport.shading.color_type = "MATERIAL"
-                viewport.region_3d.view_location = (10.52, -23.3, 0.65)
-                viewport.region_3d.view_rotation = Vector((0.32, -0.91, -0.36)).to_track_quat("-Z", "Y")
-                viewport.region_3d.view_distance = 15.5
+                viewport.region_3d.view_location = (0.0, -10.5, 1.8)
+                viewport.region_3d.view_rotation = Vector((0.25, -0.92, -0.29)).to_track_quat("-Z", "Y")
+                viewport.region_3d.view_distance = 44.0
     bpy.context.preferences.filepaths.save_version = 0
     bpy.ops.wm.save_as_mainfile(filepath=str(path), compress=True)
 

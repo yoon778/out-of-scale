@@ -31,8 +31,11 @@ constexpr float maximumMoonScale = 0.52f;
 constexpr float distantMoonStrength = 0.23f;
 constexpr float gapNear = 7.8f;
 constexpr float gapFar = 12.5f;
-constexpr float paradeEntranceZ = 16.0f;
-constexpr float paradeReturnZ = 15.70f;
+constexpr float outpostGateZ = 15.80f;
+constexpr glm::vec3 outpostReturnEye{10.50f, playerEyeHeight, 15.50f};
+constexpr glm::vec3 paradeEntrance{0.0f, playerEyeHeight, -21.40f};
+constexpr float paradeReturnZ = -23.30f;
+constexpr float paradeGateHalfWidth = 2.30f;
 constexpr float trenchY = -4.0f;
 constexpr float ladderX = 11.82f;
 constexpr float ladderZ = gapNear + playerRadius;
@@ -151,7 +154,7 @@ constexpr Footprint approach{{8.25f, 0.0f}, {12.6f, gapNear}};
 constexpr Footprint ledge{{7.20f, 0.0f}, {8.25f, 5.15f}};
 constexpr Footprint gap{{8.4f, gapNear}, {12.6f, gapFar}};
 constexpr Footprint farBank{{8.4f, gapFar}, {12.6f, 15.4f}};
-constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f + playerRadius}};
+constexpr Footprint exitWalkway{{9.80f, 15.4f}, {11.20f, 16.18f}};
 constexpr Footprint banks[]{approach, ledge, farBank, exitWalkway};
 constexpr auto furniture = [] {
     constexpr std::array bedCenters{2.0f, 4.2f, 6.4f, 8.6f, 10.8f};
@@ -835,9 +838,11 @@ glm::vec3 MilitaryRoom::resolveMovement(const glm::vec3& previous, const glm::ve
     }
     if (inParadeGround()) {
         const auto position = parade_.resolveMovement(previous, desired, grounded);
-        if (position.z < paradeReturnZ) {
+        if (previous.z > paradeReturnZ && position.z <= paradeReturnZ &&
+            std::abs(position.x) <= paradeGateHalfWidth - playerRadius) {
             parade_.cancelCarry();
             exitState_ = outpostState();
+            return groundAt(outpostReturnEye, 0.0f, grounded);
         } else if (parade_.reachedExit()) {
             exitState_ = ExitState::Escaped;
         }
@@ -932,13 +937,14 @@ glm::vec3 MilitaryRoom::resolveOutpostMovement(const glm::vec3& previous, const 
     const bool supported = supports(bounds.min) && supports(bounds.max) &&
                            supports({bounds.min.x, bounds.max.y}) && supports({bounds.max.x, bounds.min.y});
     const float floor = inTrench && (belowLip || !supported) ? trenchY : 0.0f;
-    if (position.z >= paradeEntranceZ) {
+    if (position.z >= outpostGateZ) {
         // Keep the moon in the training ground when crossing the gate.
         moonHeld_ = false;
         if (placedMoon_) {
             bridge_ = clipTo(projectPillar(*placedMoon_, 0.0f), gap);
         }
         exitState_ = parade_.reachedExit() ? ExitState::Escaped : ExitState::ParadeReached;
+        return groundAt(paradeEntrance, 0.0f, grounded);
     }
     return groundAt(position, floor, grounded);
 }
@@ -991,6 +997,10 @@ void MilitaryRoom::drawBarracks(const glm::vec3& eye, const glm::vec3& direction
 }
 
 void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
+    if (inParadeGround()) {
+        parade_.draw(viewProjection, eye, direction);
+        return;
+    }
     renderer_.begin(viewProjection);
     if (inBarracks()) {
         renderer_.drawStaticMesh();
@@ -1019,5 +1029,5 @@ void MilitaryRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, c
     const float drawnScale = distantMoon ? 1.0f : moonScale_;
     const auto moonModel = glm::scale(glm::translate(glm::mat4{1.0f}, moonCenter), moonWorldSize * drawnScale);
     renderer_.drawMoonMesh(moonModel, glm::vec3{1.0f});
-    parade_.draw(viewProjection, eye, direction);
+    renderer_.drawBox({10.50f, 1.16f, 15.88f}, {1.42f, 2.32f, 0.035f}, {0.009f, 0.014f, 0.021f});
 }

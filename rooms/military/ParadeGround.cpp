@@ -9,14 +9,16 @@
 namespace {
 #include "ParadeGeometry.inc"
 
-constexpr glm::vec3 sizes[]{
-    {0.70f, 0.40f, 0.98f}, {0.85f, 0.55f, 1.10f}, {0.90f, 0.75f, 0.92f}
+constexpr std::array sizes{
+    glm::vec3{2.20f, 2.00f, 4.90f}, glm::vec3{3.60f, 2.40f, 10.80f}, glm::vec3{0.90f, 0.75f, 0.92f}
 };
-constexpr glm::vec3 yardMin{5.2f, 0.0f, 16.18f};
-constexpr glm::vec3 yardMax{16.2f, 8.0f, 29.0f};
-constexpr glm::vec3 deckMin{9.35f, 0.0f, 26.85f};
-constexpr glm::vec3 deckMax{11.65f, 3.05f, 28.8f};
-constexpr float exitZ = 28.3f;
+constexpr glm::vec3 yardMin{-27.0f, 0.0f, -24.0f};
+constexpr glm::vec3 yardMax{27.0f, 16.0f, 34.0f};
+constexpr float doorHalfWidth = 0.90f;
+constexpr float facadeZ = 20.0f;
+constexpr float alcoveBackZ = 20.90f;
+constexpr float alcoveTop = 5.40f;
+constexpr float exitZ = 20.15f;
 constexpr float eyeHeight = 1.65f;
 constexpr float playerRadius = 0.25f;
 constexpr float clearance = 0.025f;
@@ -37,7 +39,15 @@ struct Box {
     }
 };
 
-constexpr Box deck{deckMin, deckMax};
+constexpr Box deck{{-2.3f, 0.0f, 16.75f}, {2.3f, 3.20f, alcoveBackZ}};
+// The courtyard-facing wall leaves a recessed opening above the landing.
+constexpr std::array structures{
+    deck,
+    Box{{-10.0f, 0.0f, facadeZ}, {-doorHalfWidth, 13.20f, 32.0f}},
+    Box{{doorHalfWidth, 0.0f, facadeZ}, {10.0f, 13.20f, 32.0f}},
+    Box{{-doorHalfWidth, alcoveTop, facadeZ}, {doorHalfWidth, 13.20f, 32.0f}},
+    Box{{-doorHalfWidth, 0.0f, alcoveBackZ}, {doorHalfWidth, alcoveTop, 32.0f}},
+};
 
 Box propBox(std::size_t index, const perspective::Pose& pose) {
     const auto half = sizes[index] * (pose.scale * 0.5f);
@@ -49,14 +59,9 @@ Box playerBox(const glm::vec3& eye) {
             eye + glm::vec3{playerRadius, 0.12f, playerRadius}};
 }
 
-bool onGround(float x, float z) {
-    return (x >= yardMin.x && x <= yardMax.x && z >= yardMin.z && z <= yardMax.z) ||
-           (x >= 9.8f && x <= 11.2f && z >= 15.4f && z <= yardMin.z);
-}
-
 bool withinGround(const Box& box) {
-    return onGround(box.min.x, box.min.z) && onGround(box.min.x, box.max.z) &&
-           onGround(box.max.x, box.min.z) && onGround(box.max.x, box.max.z);
+    return box.min.x >= yardMin.x && box.max.x <= yardMax.x &&
+           box.min.z >= yardMin.z && box.max.z <= yardMax.z;
 }
 
 float landingOn(const Box& body, const Box& support, float height) {
@@ -110,7 +115,9 @@ std::optional<perspective::Pose> ParadeGround::placement(const glm::vec3& eye, c
             visible.far = hit.near;
         }
     };
-    clipObstacle(deck);
+    for (const auto& structure : structures) {
+        clipObstacle(structure);
+    }
     for (std::size_t other = 0; other < props_.size(); ++other) {
         if (other != index) {
             clipObstacle(propBox(other, props_[other].pose));
@@ -132,9 +139,15 @@ void ParadeGround::interact(const glm::vec3& eye, const glm::vec3& direction) {
         return;
     }
 
-    const auto occluded = perspective::rayBoxDistance(eye, direction, (deck.min + deck.max) * 0.5f,
-                                                       (deck.max - deck.min) * 0.5f);
-    float closest = occluded && *occluded > contact ? std::min(*occluded, 10.0f) : 10.0f;
+    float closest = 10.0f;
+    for (const auto& structure : structures) {
+        const auto hit = perspective::rayBoxDistance(eye, direction,
+                                                     (structure.min + structure.max) * 0.5f,
+                                                     (structure.max - structure.min) * 0.5f);
+        if (hit && *hit > contact) {
+            closest = std::min(closest, *hit);
+        }
+    }
     for (std::size_t index = 0; index < props_.size(); ++index) {
         const auto& pose = props_[index].pose;
         const auto hit = perspective::rayBoxDistance(eye, direction, pose.center, sizes[index] * (0.5f * pose.scale));
@@ -148,14 +161,14 @@ void ParadeGround::interact(const glm::vec3& eye, const glm::vec3& direction) {
         const auto& size = sizes[*held_];
         heldRatio_ = perspective::grabRatio(eye, direction, pose.center, pose.scale,
                                            std::max({size.x, size.y, size.z}));
-        reach_ = 10.0f;
+        reach_ = maximumReach;
     }
 }
 
 void ParadeGround::scroll(double yOffset) {
     if (held_) {
         const float steps = static_cast<float>(std::clamp(yOffset, -8.0, 8.0));
-        reach_ = std::clamp(reach_ * std::pow(1.18f, -steps), 0.8f, 10.0f);
+        reach_ = std::clamp(reach_ * std::pow(1.18f, -steps), 0.8f, maximumReach);
     }
 }
 
@@ -173,7 +186,9 @@ void ParadeGround::cancelCarry() {
             blocked = blocked || stored.overlaps(box);
         }
     };
-    check(deck);
+    for (const auto& structure : structures) {
+        check(structure);
+    }
     check(playerBox(lastPlayerEye_));
     for (std::size_t other = 0; other < props_.size(); ++other) {
         if (other != index) {
@@ -206,7 +221,10 @@ void ParadeGround::update(float elapsed, const glm::vec3& playerEye) {
         }
         auto& prop = props_[index];
         const auto& body = previous[index];
-        float support = landingOn(body, deck, 0.0f);
+        float support = 0.0f;
+        for (const auto& structure : structures) {
+            support = landingOn(body, structure, support);
+        }
         for (std::size_t other = 0; other < props_.size(); ++other) {
             if (index != other && held_ != other && previous[other].max.y <= body.min.y + contact) {
                 support = std::max(support, landingOn(body, propBox(other, props_[other].pose), 0.0f));
@@ -221,9 +239,9 @@ void ParadeGround::update(float elapsed, const glm::vec3& playerEye) {
 }
 
 glm::vec3 ParadeGround::resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded) {
-    std::array<Box, 4> solids;
-    std::size_t count = 1;
-    solids[0] = deck;
+    std::array<Box, structures.size() + sizes.size()> solids;
+    std::copy(structures.begin(), structures.end(), solids.begin());
+    std::size_t count = structures.size();
     for (std::size_t index = 0; index < props_.size(); ++index) {
         if (held_ != index) {
             solids[count++] = propBox(index, props_[index].pose);
@@ -232,11 +250,7 @@ glm::vec3 ParadeGround::resolveMovement(const glm::vec3& previous, const glm::ve
     const std::span active{solids.data(), count};
     const auto canMove = [&](const glm::vec3& eye) {
         const auto body = playerBox(eye);
-        // The high deck is solid. Only its doorway allows travel through the far edge.
-        const bool atExitHeight = body.min.y >= deck.max.y - contact && body.overlapsXZ(deck);
-        const bool inDoor = body.min.x >= 9.8f && body.max.x <= 11.2f;
         return withinGround(body) &&
-               (!atExitHeight || body.max.z < exitZ || inDoor || reachedExit_) &&
                std::none_of(active.begin(), active.end(), [&](const Box& box) { return body.overlaps(box); });
     };
 
@@ -251,17 +265,25 @@ glm::vec3 ParadeGround::resolveMovement(const glm::vec3& previous, const glm::ve
 
     const auto body = playerBox({result.x, previous.y, result.z});
     float support = 0.0f;
+    result.y = desired.y;
     if (desired.y <= previous.y) {
         for (const auto& box : active) {
             support = landingOn(body, box, support);
         }
+    } else {
+        for (const auto& box : active) {
+            if (body.overlapsXZ(box) && box.min.y >= body.max.y - contact) {
+                result.y = std::min(result.y, previous.y + box.min.y - body.max.y);
+            }
+        }
     }
-    result.y = std::max(desired.y, support + eyeHeight);
+    result.y = std::max(result.y, support + eyeHeight);
+    const bool landed = result.y <= support + eyeHeight + contact && desired.y <= previous.y;
     if (grounded) {
-        *grounded = result.y <= support + eyeHeight + contact && desired.y <= previous.y;
+        *grounded = landed;
     }
-    if (body.min.x >= 9.8f && body.max.x <= 11.2f && result.z >= exitZ && result.z <= deck.max.z &&
-        std::abs(support - deck.max.y) <= contact && result.y <= support + eyeHeight + contact) {
+    if (landed && body.min.x >= -doorHalfWidth && body.max.x <= doorHalfWidth &&
+        result.z >= exitZ && result.z < alcoveBackZ && std::abs(support - deck.max.y) <= contact) {
         reachedExit_ = true;
     }
     return result;

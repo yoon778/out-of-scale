@@ -24,17 +24,18 @@ private:
         float verticalSpeed = 0.0f;
     };
 
+    static constexpr float maximumReach = 14.0f;
     std::optional<perspective::Pose> placement(const glm::vec3& eye, const glm::vec3& direction) const;
 
     BoxRenderer renderer_;
     std::array<Prop, 3> props_{{
-        {{glm::vec3{7.8f, 0.20f, 18.5f}, 1.0f}},
-        {{glm::vec3{8.9f, 0.275f, 18.5f}, 1.0f}},
-        {{glm::vec3{10.0f, 0.375f, 18.5f}, 1.0f}},
+        {{glm::vec3{-5.0f, 1.0f, -12.5f}, 1.0f}},
+        {{glm::vec3{6.5f, 1.2f, -8.5f}, 1.0f}},
+        {{glm::vec3{0.0f, 0.375f, -10.5f}, 1.0f}},
     }};
     std::optional<std::size_t> held_;
     float heldRatio_ = 0.0f;
-    float reach_ = 10.0f;
+    float reach_ = maximumReach;
     glm::vec3 lastPlayerEye_{};
     bool reachedExit_ = false;
 };

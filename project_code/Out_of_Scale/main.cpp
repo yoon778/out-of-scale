@@ -241,7 +241,16 @@ int main(int argc, char* argv[]) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     const char* initialTitle = useTestRoom ? lockedTitle : windowTitle(MilitaryRoom::ExitState::Locked);
-    GLFWwindow* window = glfwCreateWindow(1024, 640, initialTitle, nullptr, nullptr);
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+    if (mode) {
+        glfwWindowHint(GLFW_RED_BITS, mode->redBits);
+        glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
+        glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
+        glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
+    }
+    GLFWwindow* window = glfwCreateWindow(mode ? mode->width : 1024, mode ? mode->height : 640,
+                                         initialTitle, mode ? monitor : nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return 1;
