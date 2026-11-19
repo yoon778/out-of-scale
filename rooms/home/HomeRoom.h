@@ -28,6 +28,9 @@ private:
     struct Fragment {
         glm::vec3 center;
         glm::vec3 velocity;
+        glm::vec3 rotationAxis;
+        float angle;
+        float angularSpeed;
     };
 
     struct Projectile {
@@ -58,7 +61,7 @@ private:
     bool shelfMoving_ = false;
     float doorRatio_ = 0.0f;
     float doorWheelScale_ = 1.0f;
-    std::array<Fragment, 12> fragments_{};
+    std::array<Fragment, 18> fragments_{};
     float debrisTime_ = 0.0f;
     float shotFlashTime_ = 0.0f;
     std::optional<Projectile> projectile_;

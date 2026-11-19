@@ -2,8 +2,13 @@
 
 #include "../shared/PerspectiveCarry.h"
 
+#include <GL/glm/gtc/matrix_transform.hpp>
+
 #include <algorithm>
 #include <cmath>
+#include <random>
+#include <utility>
+#include <vector>
 
 namespace {
 struct Box {
@@ -36,6 +41,91 @@ constexpr Box door{{0.0f, 1.30f, wallZ}, {1.76f, 2.60f, 0.105f}};
 constexpr Box openDoor{{-0.85f, 1.30f, wallZ + 0.86f}, {0.105f, 2.60f, 1.76f}};
 constexpr glm::vec3 wood{0.53f, 0.32f, 0.20f};
 constexpr glm::vec3 accent{0.78f, 0.60f, 0.30f};
+
+struct WallShard {
+    glm::vec3 center;
+    GLint first;
+    GLsizei count;
+};
+
+struct FractureMesh {
+    std::vector<MeshVertex> vertices;
+    std::array<WallShard, 18> shards;
+};
+
+const FractureMesh& fractureMesh() {
+    static const FractureMesh mesh = [] {
+        FractureMesh result;
+        std::mt19937 random{0xF4u};
+        std::uniform_real_distribution<float> horizontal{-0.84f, 0.84f};
+        std::uniform_real_distribution<float> vertical{-1.24f, 1.24f};
+        std::array<glm::vec2, 18> seeds;
+        for (auto& seed : seeds) {
+            seed = {horizontal(random), vertical(random)};
+        }
+        for (std::size_t index = 0; index < seeds.size(); ++index) {
+            std::vector<glm::vec2> polygon{{-0.90f, -1.30f}, {0.90f, -1.30f},
+                                         {0.90f, 1.30f}, {-0.90f, 1.30f}};
+            // Voronoi cuts share edges and fill the wall with unequal polygons.
+            for (std::size_t other = 0; other < seeds.size(); ++other) {
+                if (other == index) {
+                    continue;
+                }
+                const glm::vec2 normal = seeds[other] - seeds[index];
+                const float offset = (glm::dot(seeds[other], seeds[other]) -
+                                      glm::dot(seeds[index], seeds[index])) * 0.5f;
+                std::vector<glm::vec2> clipped;
+                for (std::size_t edge = 0; edge < polygon.size(); ++edge) {
+                    const auto a = polygon[edge];
+                    const auto b = polygon[(edge + 1) % polygon.size()];
+                    const float da = glm::dot(a, normal) - offset;
+                    const float db = glm::dot(b, normal) - offset;
+                    if (da <= 0.0f) {
+                        clipped.push_back(a);
+                    }
+                    if ((da <= 0.0f) != (db <= 0.0f)) {
+                        clipped.push_back(a + (b - a) * (da / (da - db)));
+                    }
+                }
+                polygon = std::move(clipped);
+            }
+            glm::vec2 center{0.0f};
+            for (const auto& point : polygon) {
+                center += point;
+            }
+            center /= static_cast<float>(polygon.size());
+            const auto first = static_cast<GLint>(result.vertices.size());
+            const auto triangle = [&](const glm::vec3& a, const glm::vec3& b,
+                                      const glm::vec3& c, const glm::vec3& color) {
+                result.vertices.insert(result.vertices.end(), {{a, color}, {b, color}, {c, color}});
+            };
+            const auto vertex = [&](std::size_t corner, float depth) {
+                return glm::vec3{polygon[corner] - center, depth};
+            };
+            constexpr float halfDepth = 0.155f;
+            for (std::size_t corner = 1; corner + 1 < polygon.size(); ++corner) {
+                triangle(vertex(0, halfDepth), vertex(corner, halfDepth), vertex(corner + 1, halfDepth),
+                         plaster * 0.64f);
+                triangle(vertex(0, -halfDepth), vertex(corner + 1, -halfDepth), vertex(corner, -halfDepth),
+                         plaster * 0.50f);
+            }
+            for (std::size_t corner = 0; corner < polygon.size(); ++corner) {
+                const std::size_t next = (corner + 1) % polygon.size();
+                const auto a = vertex(corner, halfDepth);
+                const auto b = vertex(next, halfDepth);
+                const auto c = vertex(next, -halfDepth);
+                const auto d = vertex(corner, -halfDepth);
+                constexpr glm::vec3 innerPlaster{0.64f, 0.62f, 0.56f};
+                triangle(a, d, c, innerPlaster);
+                triangle(a, c, b, innerPlaster);
+            }
+            result.shards[index] = {{center, 0.0f}, first,
+                                   static_cast<GLsizei>(result.vertices.size()) - first};
+        }
+        return result;
+    }();
+    return mesh;
+}
 
 Box shelfAt(float offset) {
     return {shelf.center + glm::vec3{offset, 0.0f, 0.0f}, shelf.size};
@@ -91,7 +181,7 @@ glm::vec3 carrySide(const glm::vec3& direction) {
 }  // namespace
 
 bool HomeRoom::initialize() {
-    return renderer_.initialize();
+    return renderer_.initialize({}, fractureMesh().vertices);
 }
 
 float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const {
@@ -201,12 +291,20 @@ void HomeRoom::impact(const Projectile& projectile) {
         held_ = HeldItem::None;
         exitState_ = ExitState::WallBroken;
         debrisTime_ = debrisDuration;
-        for (unsigned int index = 0; index < fragments_.size(); ++index) {
-            const float column = static_cast<float>(index % 3) - 1.0f;
-            const float row = static_cast<float>(index / 3) - 1.5f;
+        std::mt19937 random{0xB019u};
+        std::uniform_real_distribution<float> jitter{-1.0f, 1.0f};
+        const auto& shapes = fractureMesh().shards;
+        for (std::size_t index = 0; index < fragments_.size(); ++index) {
+            const glm::vec3 center = wallPanel.center + shapes[index].center;
+            const glm::vec3 outward = center - impactCenter_;
+            const glm::vec3 axis = glm::normalize(glm::vec3{jitter(random), jitter(random), jitter(random)});
             fragments_[index] = {
-                wallPanel.center + glm::vec3{0.55f * column, 0.59f * row, 0.20f},
-                {column * 1.25f, 2.6f + row * 0.35f, 2.1f + static_cast<float>(index % 4) * 0.42f},
+                center,
+                {outward.x * 2.0f + jitter(random), 2.0f + outward.y * 0.7f + jitter(random),
+                 2.6f + jitter(random) * 1.5f},
+                axis,
+                jitter(random) * 0.12f,
+                jitter(random) * 7.0f,
             };
         }
     }
@@ -245,14 +343,25 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye) {
     }
     if (debrisTime_ > 0.0f) {
         debrisTime_ = std::max(0.0f, debrisTime_ - elapsed);
-        for (Fragment& piece : fragments_) {
+        const auto& mesh = fractureMesh();
+        for (std::size_t index = 0; index < fragments_.size(); ++index) {
+            auto& piece = fragments_[index];
             piece.velocity.y -= 7.5f * elapsed;
             piece.center += piece.velocity * elapsed;
-            if (piece.center.y < 0.245f) {
-                piece.center.y = 0.245f;
+            piece.angle += piece.angularSpeed * elapsed;
+            const auto rotation = glm::rotate(glm::mat4{1.0f}, piece.angle, piece.rotationAxis);
+            const auto& shape = mesh.shards[index];
+            float floorHeight = 0.0f;
+            for (GLint vertex = shape.first; vertex < shape.first + shape.count; ++vertex) {
+                const auto rotated = rotation * glm::vec4{mesh.vertices[vertex].position, 0.0f};
+                floorHeight = std::max(floorHeight, -rotated.y);
+            }
+            if (piece.center.y < floorHeight) {
+                piece.center.y = floorHeight;
                 piece.velocity.y = std::abs(piece.velocity.y) * 0.18f;
                 piece.velocity.x *= 0.65f;
                 piece.velocity.z *= 0.65f;
+                piece.angularSpeed *= 0.65f;
             }
         }
     }
@@ -366,8 +475,12 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
     }
 
     if (debrisTime_ > 0.0f) {
-        for (const Fragment& piece : fragments_) {
-            renderer_.drawBox(piece.center, {0.47f, 0.49f, 0.21f}, plaster);
+        const auto& shapes = fractureMesh().shards;
+        for (std::size_t index = 0; index < fragments_.size(); ++index) {
+            const auto& piece = fragments_[index];
+            auto model = glm::translate(glm::mat4{1.0f}, piece.center);
+            model = glm::rotate(model, piece.angle, piece.rotationAxis);
+            renderer_.drawMovableMesh(shapes[index].first, shapes[index].count, model, glm::vec3{1.0f});
         }
     }
     if (projectile_) {
