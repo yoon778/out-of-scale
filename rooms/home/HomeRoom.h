@@ -3,6 +3,7 @@
 #include "../shared/BoxRenderer.h"
 
 #include <array>
+#include <optional>
 
 class HomeRoom {
 public:
@@ -29,9 +30,26 @@ private:
         glm::vec3 velocity;
     };
 
+    struct Projectile {
+        glm::vec3 center;
+        glm::vec3 direction;
+        float remaining;
+        bool breaksWall;
+        float traveled = 0.0f;
+    };
+
+    struct Particle {
+        glm::vec3 center;
+        glm::vec3 velocity;
+        float life = 0.0f;
+        float size = 0.0f;
+        bool spark = false;
+    };
+
     float visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const;
     bool canFitDoor(const glm::vec3& eye, const glm::vec3& direction) const;
     void drawDesk() const;
+    void impact(const Projectile& projectile);
 
     BoxRenderer renderer_;
     ExitState exitState_ = ExitState::Explore;
@@ -43,4 +61,8 @@ private:
     std::array<Fragment, 12> fragments_{};
     float debrisTime_ = 0.0f;
     float shotFlashTime_ = 0.0f;
+    std::optional<Projectile> projectile_;
+    std::array<Particle, 36> particles_{};
+    glm::vec3 impactCenter_{0.0f};
+    float impactTime_ = 0.0f;
 };

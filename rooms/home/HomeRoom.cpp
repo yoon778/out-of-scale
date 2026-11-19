@@ -22,13 +22,16 @@ constexpr float reach = 2.8f;
 constexpr float fittingReach = 10.0f;
 constexpr float miniatureScale = 0.16f;
 constexpr float debrisDuration = 1.4f;
+constexpr float projectileSpeed = 12.0f;
+constexpr float impactDuration = 0.20f;
+constexpr glm::vec3 plaster{0.52f, 0.59f, 0.62f};
 
 constexpr Box desk{{2.90f, 0.50f, 0.80f}, {3.30f, 1.00f, 1.40f}};
 constexpr Box shelf{{0.0f, 1.30f, -5.95f}, {2.05f, 2.60f, 0.60f}};
 constexpr Box miniShelf{{2.04f, 1.22f, 0.56f}, {0.42f, 0.44f, 0.24f}};
 constexpr Box miniRpg{{3.16f, 1.21f, 0.59f}, {0.58f, 0.27f, 0.24f}};
 constexpr Box miniDoor{{4.05f, 1.23f, 0.56f}, {0.31f, 0.48f, 0.18f}};
-constexpr Box wallPanel{{0.0f, 1.30f, wallZ}, {1.80f, 2.60f, 0.29f}};
+constexpr Box wallPanel{{0.0f, 1.30f, wallZ}, {1.80f, 2.60f, 0.31f}};
 constexpr Box door{{0.0f, 1.30f, wallZ}, {1.76f, 2.60f, 0.105f}};
 constexpr Box openDoor{{-0.85f, 1.30f, wallZ + 0.86f}, {0.105f, 2.60f, 1.76f}};
 constexpr glm::vec3 wood{0.53f, 0.32f, 0.20f};
@@ -147,24 +150,65 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
 }
 
 void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
-    if (held_ != HeldItem::Rpg || exitState_ != ExitState::WallRevealed) {
+    if (held_ != HeldItem::Rpg || exitState_ != ExitState::WallRevealed || projectile_) {
         return;
     }
     shotFlashTime_ = 0.14f;
-    if (!aimsAt(eye, direction, wallPanel, visibleRange(eye, direction, 20.0f))) {
-        return;
+    float distance = 24.0f;
+    bool breaksWall = false;
+    // Test the complete flight segment so fast shots cannot skip thin furniture.
+    const auto hit = [&](const Box& obstacle, bool breakable = false) {
+        const auto depth = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * 0.5f);
+        if (depth && *depth < distance) {
+            distance = *depth;
+            breaksWall = breakable;
+        }
+    };
+    hit(wallPanel, true);
+    hit(desk);
+    hit(shelfAt(shelfOffset_));
+    hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}});
+    hit({{0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}});
+    hit({{0.0f, 1.60f, 6.51f}, {11.7f, 3.20f, 0.34f}});
+    for (const float side : {-1.0f, 1.0f}) {
+        hit({{side * 5.87f, 1.60f, 0.0f}, {0.34f, 3.20f, 13.1f}});
+        hit({{side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}});
     }
+    hit({{0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}});
+    const float launchDepth = std::min(distance, 0.45f);
+    projectile_ = Projectile{eye + direction * launchDepth, direction, distance - launchDepth, breaksWall};
+}
 
-    held_ = HeldItem::None;
-    exitState_ = ExitState::WallBroken;
-    debrisTime_ = debrisDuration;
-    for (unsigned int index = 0; index < fragments_.size(); ++index) {
-        const float column = static_cast<float>(index % 3) - 1.0f;
-        const float row = static_cast<float>(index / 3) - 1.5f;
-        fragments_[index] = {
-            wallPanel.center + glm::vec3{0.55f * column, 0.59f * row, 0.10f},
-            {column * 1.25f, 2.6f + row * 0.35f, 2.1f + static_cast<float>(index % 4) * 0.42f},
+void HomeRoom::impact(const Projectile& projectile) {
+    impactCenter_ = projectile.center - projectile.direction * 0.08f;
+    impactTime_ = impactDuration;
+    const glm::vec3 side = carrySide(projectile.direction);
+    const glm::vec3 up = glm::normalize(glm::cross(side, projectile.direction));
+    for (unsigned int index = 0; index < particles_.size(); ++index) {
+        const float angle = static_cast<float>(index) * 2.39996f;
+        const bool spark = index % 3 == 0;
+        const float spread = 0.65f + static_cast<float>(index % 5) * 0.28f;
+        const glm::vec3 radial = side * std::cos(angle) + up * std::sin(angle);
+        particles_[index] = {
+            impactCenter_,
+            (radial * spread - projectile.direction * 1.1f) * (spark ? 2.0f : 0.7f),
+            spark ? 0.40f : 0.95f,
+            spark ? 0.045f : 0.18f + static_cast<float>(index % 4) * 0.025f,
+            spark,
         };
+    }
+    if (projectile.breaksWall) {
+        held_ = HeldItem::None;
+        exitState_ = ExitState::WallBroken;
+        debrisTime_ = debrisDuration;
+        for (unsigned int index = 0; index < fragments_.size(); ++index) {
+            const float column = static_cast<float>(index % 3) - 1.0f;
+            const float row = static_cast<float>(index / 3) - 1.5f;
+            fragments_[index] = {
+                wallPanel.center + glm::vec3{0.55f * column, 0.59f * row, 0.20f},
+                {column * 1.25f, 2.6f + row * 0.35f, 2.1f + static_cast<float>(index % 4) * 0.42f},
+            };
+        }
     }
 }
 
@@ -176,6 +220,9 @@ void HomeRoom::scroll(double yOffset) {
 }
 
 void HomeRoom::update(float elapsed, const glm::vec3& eye) {
+    if (elapsed <= 0.0f) {
+        return;
+    }
     if (shelfMoving_) {
         const float nextOffset = std::max(shelfParkedOffset, shelfOffset_ - elapsed * 2.1f);
         if (!overlapsPlayer(eye, shelfAt(nextOffset))) {
@@ -187,11 +234,36 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye) {
         }
     }
     shotFlashTime_ = std::max(0.0f, shotFlashTime_ - elapsed);
+    impactTime_ = std::max(0.0f, impactTime_ - elapsed);
+    for (Particle& particle : particles_) {
+        if (particle.life <= 0.0f) {
+            continue;
+        }
+        particle.life = std::max(0.0f, particle.life - elapsed);
+        particle.velocity.y += (particle.spark ? -7.5f : 0.5f) * elapsed;
+        particle.center += particle.velocity * elapsed;
+    }
     if (debrisTime_ > 0.0f) {
         debrisTime_ = std::max(0.0f, debrisTime_ - elapsed);
         for (Fragment& piece : fragments_) {
             piece.velocity.y -= 7.5f * elapsed;
             piece.center += piece.velocity * elapsed;
+            if (piece.center.y < 0.245f) {
+                piece.center.y = 0.245f;
+                piece.velocity.y = std::abs(piece.velocity.y) * 0.18f;
+                piece.velocity.x *= 0.65f;
+                piece.velocity.z *= 0.65f;
+            }
+        }
+    }
+    if (projectile_) {
+        const float distance = std::min(projectileSpeed * elapsed, projectile_->remaining);
+        projectile_->center += projectile_->direction * distance;
+        projectile_->remaining -= distance;
+        projectile_->traveled += distance;
+        if (projectile_->remaining <= 0.0f) {
+            impact(*projectile_);
+            projectile_.reset();
         }
     }
 }
@@ -255,22 +327,29 @@ void HomeRoom::drawDesk() const {
 
 void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
     renderer_.begin(viewProjection);
-    const glm::vec3 plaster{0.52f, 0.59f, 0.62f};
     const glm::vec3 floor{0.41f, 0.37f, 0.35f};
     renderer_.drawBox({0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}, floor);
     renderer_.drawBox({0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}, {0.70f, 0.71f, 0.68f});
     renderer_.drawBox({0.0f, 1.60f, 6.51f}, {11.7f, 3.20f, 0.34f}, plaster);
+    const bool wallBroken = exitState_ >= ExitState::WallBroken;
+    if (!wallBroken) {
+        renderer_.drawBox({0.0f, 1.60f, wallZ}, {11.7f, 3.20f, 0.31f}, plaster);
+    }
     for (const float side : {-1.0f, 1.0f}) {
         renderer_.drawBox({side * 5.87f, 1.60f, 0.0f}, {0.34f, 3.20f, 13.1f}, plaster);
-        renderer_.drawBox({side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}, plaster);
         renderer_.drawBox({side * 1.02f, 1.33f, -7.55f}, {0.23f, 2.66f, 2.06f}, {0.48f, 0.43f, 0.35f});
-        renderer_.drawBox({side * 0.88f, 1.30f, wallZ + 0.17f}, {0.08f, 2.60f, 0.13f}, wood);
+        if (wallBroken) {
+            renderer_.drawBox({side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}, plaster);
+            renderer_.drawBox({side * 0.88f, 1.30f, wallZ + 0.17f}, {0.08f, 2.60f, 0.13f}, wood);
+        }
         if (exitState_ == ExitState::WallBroken) {
             renderer_.drawBox({side * 0.86f, 1.30f, wallZ + 0.245f}, {0.032f, 2.47f, 0.025f}, {0.41f, 0.64f, 0.56f});
         }
     }
-    renderer_.drawBox({0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}, plaster);
-    renderer_.drawBox({0.0f, 2.61f, wallZ + 0.17f}, {1.83f, 0.10f, 0.13f}, wood);
+    if (wallBroken) {
+        renderer_.drawBox({0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}, plaster);
+        renderer_.drawBox({0.0f, 2.61f, wallZ + 0.17f}, {1.83f, 0.10f, 0.13f}, wood);
+    }
     const bool exitOpen = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
     const glm::vec3 corridorFloor = exitOpen ? accent * 0.75f : floor * 0.62f;
     const glm::vec3 corridorEnd = exitOpen ? glm::vec3{0.95f, 0.80f, 0.48f} : glm::vec3{0.16f, 0.20f, 0.20f};
@@ -280,14 +359,7 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
 
     drawDesk();
     drawShelf(renderer_, shelfAt(shelfOffset_).center, 1.0f);
-    if (exitState_ <= ExitState::WallRevealed) {
-        renderer_.drawBox(wallPanel.center, wallPanel.size, {0.68f, 0.57f, 0.43f});
-        for (int row = 0; row < 5; ++row) {
-            const float x = row % 2 == 0 ? -0.035f : 0.035f;
-            const float y = 0.54f + static_cast<float>(row) * 0.32f;
-            renderer_.drawBox({x, y, wallZ + 0.15f}, {0.10f, 0.34f, 0.021f}, {0.24f, 0.18f, 0.14f});
-        }
-    } else if (exitState_ == ExitState::DoorPlaced) {
+    if (exitState_ == ExitState::DoorPlaced) {
         drawDoor(renderer_, door, wood);
     } else if (exitOpen) {
         drawDoor(renderer_, openDoor, wood, true);
@@ -295,7 +367,36 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
 
     if (debrisTime_ > 0.0f) {
         for (const Fragment& piece : fragments_) {
-            renderer_.drawBox(piece.center, {0.47f, 0.49f, 0.21f}, {0.68f, 0.57f, 0.43f});
+            renderer_.drawBox(piece.center, {0.47f, 0.49f, 0.21f}, plaster);
+        }
+    }
+    if (projectile_) {
+        renderer_.drawBox(projectile_->center, {0.10f, 0.10f, 0.10f}, {1.0f, 0.89f, 0.55f});
+        const glm::vec3 side = carrySide(projectile_->direction);
+        const glm::vec3 up = glm::normalize(glm::cross(side, projectile_->direction));
+        for (int index = 1; index <= 7; ++index) {
+            const float trail = static_cast<float>(index) * 0.13f;
+            if (trail > projectile_->traveled) {
+                break;
+            }
+            const float angle = static_cast<float>(index) * 2.39996f;
+            const float spread = 0.02f + static_cast<float>(index) * 0.025f;
+            const glm::vec3 drift = (side * std::cos(angle) + up * std::sin(angle)) * spread;
+            const float size = 0.04f + static_cast<float>(index) * 0.008f;
+            renderer_.drawBox(projectile_->center - projectile_->direction * trail + drift,
+                             glm::vec3{size}, {1.0f - trail * 0.22f, 0.86f - trail * 0.24f, 0.52f});
+        }
+    }
+    if (impactTime_ > 0.0f) {
+        const float size = 0.35f + (impactDuration - impactTime_) * 2.0f;
+        renderer_.drawBox(impactCenter_, glm::vec3{size}, {1.0f, 0.82f, 0.43f});
+    }
+    for (const Particle& particle : particles_) {
+        if (particle.life > 0.0f) {
+            const float size = particle.size * std::min(1.0f, particle.life / 0.18f);
+            const glm::vec3 tint = particle.spark ? glm::vec3{1.0f, 0.65f, 0.23f}
+                                                 : plaster * (0.65f + particle.life * 0.25f);
+            renderer_.drawBox(particle.center, glm::vec3{size}, tint);
         }
     }
     if (held_ == HeldItem::Rpg) {
