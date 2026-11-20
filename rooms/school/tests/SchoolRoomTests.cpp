@@ -1287,6 +1287,55 @@ int runTests() {
     }
 
     room.reset();
+    // A slow aim sweep across the floor/back-wall/ceiling must not quantize the held scale.
+    camera = Camera();
+    camera.feet = {-4.83f, 0, 3.8f};
+    camera.face(room.notebookCenter());
+    check(room.toggleNotebook(camera), "pick up the notebook for a continuous perspective sweep");
+    camera.feet = {3.8f, 0, 2.4f};
+    camera.yaw = 3.14159265f;
+    float previousScale = 0, largestScaleStep = 0, minimumScale = 100, maximumScale = 0;
+    bool continuousAim = true, clearBody = true;
+    const auto sweepSolids = room.collisionBoxes(true, false);
+    for (int sample = 0; sample <= 1000; ++sample) {
+        camera.pitch = -1.f + sample * .0015f;
+        const auto pose = room.notebookPlacement(camera);
+        if (!pose) {
+            continuousAim = false;
+            continue;
+        }
+        const auto toward = pose->center - camera.eye(), ray = camera.direction();
+        const float depth = glm::dot(toward, ray);
+        continuousAim = continuousAim && depth > 0 && glm::length(toward - ray * depth) < .0001f &&
+                        std::abs(pose->scale / depth - room.notebookRatio_) < .0001f;
+        if (previousScale > 0)
+            largestScaleStep = std::max(largestScaleStep, std::abs(pose->scale - previousScale));
+        previousScale = pose->scale;
+        minimumScale = std::min(minimumScale, pose->scale);
+        maximumScale = std::max(maximumScale, pose->scale);
+        const auto area = room.notebookBounds(*pose);
+        for (const auto& solid : sweepSolids) {
+            const bool overlap = area.min.x < solid.max.x && area.max.x > solid.min.x &&
+                                 area.min.z < solid.max.z && area.max.z > solid.min.z &&
+                                 area.min.y < solid.max.y - .002f && area.max.y > solid.min.y + .002f;
+            const float hit = SchoolRoom::rayBox(camera.eye(), ray, solid);
+            clearBody = clearBody && !overlap && (hit < 0 || hit >= depth - .002f);
+        }
+    }
+    check(continuousAim, "a held notebook keeps its apparent scale and stays on the sight ray during a slow sweep");
+    check(largestScaleStep < .03f && maximumScale - minimumScale > 2.f,
+          "floor/wall contact changes size continuously instead of shrinking in discrete 16 percent steps");
+    check(clearBody, "continuous scaling never places the notebook through a solid or behind an occluder");
+    camera.feet = {3.10f, 0, 1.86f};
+    camera.face({1.15f, .78f, .65f});
+    const auto tablePose = room.notebookPlacement(camera);
+    const float tableDepth = tablePose ? glm::dot(tablePose->center - camera.eye(), camera.direction()) : 0;
+    check(tablePose && tableDepth > 0 &&
+              glm::length(tablePose->center - camera.eye() - camera.direction() * tableDepth) < .0001f &&
+              std::abs(tablePose->scale / tableDepth - room.notebookRatio_) < .0001f &&
+              std::abs(room.notebookBounds(*tablePose).min.y - .78f) < .004f,
+          "table placement keeps the same apparent size without shifting the book sideways or upward");
+    room.reset();
     const auto sealedSolids = room.collisionBoxes(true, false);
     auto nearestSolid = [&](glm::vec3 origin, glm::vec3 ray) {
         float nearest = 1000;

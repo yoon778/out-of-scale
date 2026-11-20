@@ -368,6 +368,11 @@ int runGame(GLFWwindow* window, Map activeMap) {
             result = school::runPreview(window, schoolState, {}, &navigation);
             if (const auto map = mapForKey(navigation.requestedKey)) {
                 activeMap = *map;
+            } else if (result == 0 && schoolState.room.escaped() && !glfwWindowShouldClose(window)) {
+                // Walking out of school enters the existing barracks flow without a hotkey.
+                // Reset only the arrival pose; keep the military puzzle state on revisits.
+                military.player = Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw};
+                activeMap = Map::Military;
             }
             break;
         }

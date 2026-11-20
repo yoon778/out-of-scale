@@ -230,6 +230,7 @@ SchoolRoom::SchoolRoom() {
     makeSlideMask();
 }
 void SchoolRoom::reset() {
+    projectionGeometry_.valid = false;
     corridor_.reset();
     stairsReady_ = escaped_ = false;
     alignmentHeld_ = formation_ = 0;
@@ -560,7 +561,7 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
         });
     };
 
-    // Start with the aimed surface. Search backward along the ray if the growing book clips a solid.
+    // Keep the puzzle's receiving stand, then place the growing body along the sight ray.
     constexpr float maxAimReach = 12.f;
     const float range = std::min(maxAimReach, maxNotebookScale / notebookRatio_);
     float depth = maxAimReach;
@@ -582,40 +583,49 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
         if (fits(pose))
             return pose;
     }
-    if (depth > range) {
-        depth = range;
-        aimedSurface = nullptr;
-    }
-    if (aimedSurface) {
+    if (aimedSurface && direction.y < 0) {
         const auto anchor = eye + direction * depth;
-        if (direction.y < 0 && std::abs(anchor.y - aimedSurface->max.y) < .008f) {
-            // A small adjustment on the same surface keeps the book clear of things like chair backs.
-            for (const auto offset : {glm::vec3(0), glm::vec3(0, 0, -.16f), glm::vec3(0, 0, .16f),
-                                      glm::vec3(-.16f, 0, 0), glm::vec3(.16f, 0, 0)}) {
-                const auto point = anchor + offset;
-                if (point.x < aimedSurface->min.x || point.x > aimedSurface->max.x ||
-                    point.z < aimedSurface->min.z || point.z > aimedSurface->max.z)
-                    continue;
-                const float scale =
-                    perspective::scaleAtSupport(eye, direction, point, notebookRatio_, notebookHalfHeight);
-                const perspective::Pose pose{point + glm::vec3(0, notebookHalfHeight * scale, 0), scale};
-                if (fits(pose))
-                    return pose;
-            }
+        if (std::abs(anchor.y - aimedSurface->max.y) < .008f) {
+            // Preserve the apparent size and center even when setting the book on a desk.
+            const auto top = perspective::onFloor(eye, direction, notebookRatio_, notebookHalfHeight,
+                                                  aimedSurface->max.y);
+            if (top && glm::dot(top->center - eye, direction) <= range && fits(*top))
+                return top;
         }
-        depth -= .023f;
     }
-    if (const auto floor = perspective::onFloor(eye, direction, notebookRatio_, notebookHalfHeight)) {
-        const float floorDepth = glm::dot(floor->center - eye, direction);
-        if (floorDepth <= depth && fits(*floor))
-            return floor;
-        depth = std::min(depth, floorDepth);
+    // Like the military carry solver, stop the growing body at its first contact instead of
+    // shrinking its depth in 16% steps. The horizontal envelope covers every mirror-facing yaw.
+    struct DepthRange {
+        float first, last;
+        bool below(float origin, float slope, float limit) {
+            if (slope > 0)
+                last = std::min(last, (limit - origin) / slope);
+            else if (slope < 0)
+                first = std::max(first, (limit - origin) / slope);
+            else if (origin > limit)
+                return false;
+            return first <= last;
+        }
+    };
+    const float horizontalHalf = glm::length(glm::vec2(notebookSize.x, notebookSize.z)) * .5f;
+    const glm::vec3 half{horizontalHalf, notebookHalfHeight, horizontalHalf};
+    const auto lowerSlope = direction - half * notebookRatio_;
+    const auto upperSlope = direction + half * notebookRatio_;
+    constexpr float clearance = .001f;
+    DepthRange free{0, range};
+    free.below(-eye.y, -lowerSlope.y, -clearance);
+    for (const auto& solid : solids) {
+        DepthRange contact{0, free.last};
+        bool hits = true;
+        for (int axis = 0; axis < 3 && hits; ++axis)
+            hits = contact.below(eye[axis], lowerSlope[axis], solid.max[axis] + clearance) &&
+                   contact.below(-eye[axis], -upperSlope[axis], -solid.min[axis] + clearance);
+        if (hits)
+            free.last = std::min(free.last, contact.first);
     }
-    for (int attempt = 0; attempt < 14 && depth * notebookRatio_ >= minNotebookScale; ++attempt, depth *= .84f) {
-        const perspective::Pose pose{eye + direction * depth, notebookRatio_ * depth};
-        if (fits(pose))
-            return pose;
-    }
+    const perspective::Pose aimed{eye + direction * free.last, notebookRatio_ * free.last};
+    if (free.last >= free.first && fits(aimed))
+        return aimed;
 
     // Even a wall or an upward glance leaves the player a nearby way to put the notebook down.
     const glm::vec3 forward{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
@@ -1189,10 +1199,33 @@ void SchoolRoom::drawProjector(Renderer& r) const {
     r.box({6.44f, 0.30f, 5.4f}, {0.04f, 0.15f, 0.12f}, cream);
     // Clip the light to receiving surfaces; the shader leaves unprinted areas transparent.
     // The same soft slide mask controls the chalk being covered and uncovered.
+    refreshProjectionGeometry();
+    r.beginProjection(projectorOrigin, glm::transpose(projectorRotation()), slideBounds_, projectorPaper.z,
+                      slideMask_, slideResolution, artworkProjection(), artworkFrame, 1);
+    for (const auto& face : projectionGeometry_.light)
+        r.triangle(face[0], face[1], face[2], {.98f, .96f, .79f});
+    r.projectionWash(1 - stairFormation());
+    for (const auto& face : projectionGeometry_.wash)
+        r.triangle(face[0], face[1], face[2], {.75f, .70f, .57f});
+    r.projectionStrokes(1 - stairFormation());
+    for (const auto& stroke : projectionGeometry_.strokes)
+        r.projectedStroke(stroke.a, stroke.b, stroke.normal, stroke.width, {.32f, .29f, .22f});
+    r.endProjection();
+}
+void SchoolRoom::refreshProjectionGeometry() const {
+    auto& cache = projectionGeometry_;
+    if (cache.valid && cache.yaw == projectorYaw_ && cache.pitch == projectorPitch_ && cache.boards == boardOffsets_)
+        return;
+    // Camera movement and the mirror share these receivers. Only the projector or boards change them.
+    cache.valid = true;
+    cache.yaw = projectorYaw_;
+    cache.pitch = projectorPitch_;
+    cache.boards = boardOffsets_;
+    cache.light.clear();
+    cache.wash.clear();
+    cache.strokes.clear();
     const auto inverse = glm::transpose(projectorRotation());
     const float depth = projectorPaper.z - projectorOrigin.z;
-    r.beginProjection(projectorOrigin, inverse, slideBounds_, projectorPaper.z, slideMask_, slideResolution,
-                      artworkProjection(), artworkFrame, 1);
     auto distanceToEdge = [&](glm::vec3 point, int edge) {
         auto q = inverse * (point - projectorOrigin);
         switch (edge) {
@@ -1249,10 +1282,9 @@ void SchoolRoom::drawProjector(Renderer& r) const {
         // Keep the translucent light above the board and just above the paper surface.
         float offset = surfaceIndex < boardX.size() ? 0.050f : 0.003f;
         for (std::size_t i = 1; i + 1 < polygon.size(); ++i)
-            r.triangle(polygon[0] + normal * offset, polygon[i] + normal * offset,
-                       polygon[i + 1] + normal * offset, {0.98f, 0.96f, 0.79f});
+            cache.light.push_back({polygon[0] + normal * offset, polygon[i] + normal * offset,
+                                   polygon[i + 1] + normal * offset});
     }
-    r.projectionWash(1 - stairFormation());
     for (const auto& face : pageFaces_) {
         std::array<ProjectionHit, 4> hits;
         bool visible = true;
@@ -1262,23 +1294,19 @@ void SchoolRoom::drawProjector(Renderer& r) const {
         }
         if (visible) {
             auto offset = hits[0].normal * 0.020f;
-            r.triangle(hits[0].point + offset, hits[1].point + offset, hits[2].point + offset,
-                       {0.75f, 0.70f, 0.57f});
-            r.triangle(hits[0].point + offset, hits[2].point + offset, hits[3].point + offset,
-                       {0.75f, 0.70f, 0.57f});
+            cache.wash.push_back({hits[0].point + offset, hits[1].point + offset, hits[2].point + offset});
+            cache.wash.push_back({hits[0].point + offset, hits[2].point + offset, hits[3].point + offset});
         }
     }
-    r.projectionStrokes(1 - stairFormation());
     // Soft strokes stay on the receiving plane, with the light's grain and faded margins.
     for (const auto& stroke : chalk_) {
         if (!isSlideStroke(stroke))
             continue;
         auto a = projectSlide(stroke.projectedA), b = projectSlide(stroke.projectedB);
         if (a.surface >= 0 && a.surface == b.surface && glm::distance(a.point, b.point) < 0.9f)
-            r.projectedStroke(a.point + a.normal * 0.037f, b.point + b.normal * 0.037f, a.normal,
-                              stroke.detail ? 0.018f : 0.040f, {0.32f, 0.29f, 0.22f});
+            cache.strokes.push_back({a.point + a.normal * 0.037f, b.point + b.normal * 0.037f, a.normal,
+                                     stroke.detail ? 0.018f : 0.040f});
     }
-    r.endProjection();
 }
 void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
                               const std::optional<perspective::Pose>& placement) const {

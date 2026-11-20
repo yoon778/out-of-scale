@@ -149,6 +149,19 @@ class SchoolRoom {
     void makeSlideMask();
     float slideLight(glm::vec2 source) const;
     void drawProjector(Renderer& renderer) const;
+    void refreshProjectionGeometry() const;
+    struct ProjectionStroke {
+        glm::vec3 a, b, normal;
+        float width;
+    };
+    struct ProjectionGeometry {
+        bool valid = false;
+        float yaw = 0, pitch = 0;
+        std::array<float, 4> boards{};
+        std::vector<std::array<glm::vec3, 3>> light, wash;
+        std::vector<ProjectionStroke> strokes;
+    };
+    mutable ProjectionGeometry projectionGeometry_;
     void drawStairs(Renderer& renderer) const;
     glm::vec3 galleryGateCenter() const;
     std::vector<Chalk> chalk_;
