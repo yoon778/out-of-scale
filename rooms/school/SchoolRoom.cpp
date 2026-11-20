@@ -7,7 +7,6 @@
 
 namespace school {
 namespace {
-constexpr float stairAlignmentThreshold = .94f;
 constexpr float galleryRailHeight = 1.05f;
 constexpr float galleryRailPostY = SchoolRoom::landingHeight + galleryRailHeight * .5f;
 constexpr glm::vec3 gallerySideRail{2.10f, SchoolRoom::landingHeight + galleryRailHeight, -4.38f};
@@ -420,7 +419,12 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
     }
     if (mirrorGuide_ && !canReadNotebook(camera))
         mirrorGuide_ = false;
-    projectorAligned_ = boardsReady() && projectorError() < 0.075f && boardVisibility() > 0.98f;
+    const auto projectorTarget = glm::normalize(projectorPaper - projectorOrigin);
+    // Endpoint hits jump between receiver faces at their edges. Judge the continuous aim instead.
+    projectorAligned_ = boardsReady() &&
+                        glm::dot(projectorTarget, projectorRotation() * projectorTarget) >=
+                            std::cos(glm::radians(projectorAimToleranceDegrees)) &&
+                        boardVisibility() > .85f;
     // Recognition needs a brief steady view. Once committed, the transition can finish while moving.
     if (materializing_) {
         formation_ = std::min(1.0f, formation_ + dt / formationDuration);
@@ -970,7 +974,7 @@ std::optional<float> SchoolRoom::stairViewAlignment(const Camera& camera) const 
     if (stairsReady_ || !camera.grounded)
         return std::nullopt;
     const auto eye = camera.eye();
-    if (glm::dot(camera.direction(), glm::normalize(alignmentFocus - eye)) < .965f)
+    if (glm::dot(camera.direction(), glm::normalize(alignmentFocus - eye)) < .94f)
         return std::nullopt;
     float error = 0;
     int count = 0;
@@ -1823,7 +1827,17 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
         if (feedback->holdProgress > 0)
             r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
-    if (time_ < 5.0f) {
+    if (boardsReady() && !stairsReady_ && camera.feet.z >= -4.9f) {
+        const wchar_t* status = materializing_ ? L"계단이 만들어지고 있어요"
+                                : !projectorAligned_ ? L"칠판 완료 · 프로젝터 방향을 맞춰 주세요"
+                                : adjustingProjector_ ? L"투사 완료 · E로 조정을 마쳐 주세요"
+                                : L"투사 완료 · 오른쪽 통로에서 계단 그림을 바라보세요";
+        const float textWidth = r.textWidth(status, 23 * scale);
+        const float x = (width - textWidth) * .5f;
+        r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale,
+                {.12f, .22f, .18f});
+        r.text(status, x, height - 54 * scale, 23 * scale);
+    } else if (time_ < 5.0f) {
         r.panel(24 * scale, height - 60 * scale, 255 * scale, 36 * scale, {.12f, .22f, .18f});
         r.text(L"WASD 이동 · 마우스 시점", 36 * scale, height - 54 * scale, 23 * scale);
     }

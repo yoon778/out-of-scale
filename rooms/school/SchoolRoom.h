@@ -96,11 +96,13 @@ class SchoolRoom {
     static constexpr glm::vec3 projectorPaper{3.30f, 0.10f, -3.757f};
     static constexpr glm::vec3 projectorStartAim{-0.85f, 2.30f, -4.50f};
     static constexpr glm::vec4 artworkFrame{-4.05f, .73f, 2.30f, 3.75f};
-    static constexpr float recognitionDuration = 0.4f;
+    static constexpr float recognitionDuration = 0.25f;
     static constexpr float formationDuration = 0.65f;
 
   private:
     friend int runTests();
+    static constexpr float stairAlignmentThreshold = .85f;
+    static constexpr float projectorAimToleranceDegrees = 4.f;
     struct Chalk {
         glm::vec3 projectedA, projectedB, originalA, originalB;
         int panel = -1;

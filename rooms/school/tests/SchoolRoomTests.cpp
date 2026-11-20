@@ -420,10 +420,10 @@ int runTests() {
     }
     check(room.projectorError() < 0.075f,
           "projected slide endpoints meet their actual missing stair fragments");
-    room.rotateProjector(0.03f, 0);
+    room.rotateProjector(0.12f, 0);
     room.update(camera, {}, 1.0f / 120);
     check(!room.projectorAligned(), "rotating away breaks projection alignment before materialization");
-    room.rotateProjector(-0.03f, 0);
+    room.rotateProjector(-0.12f, 0);
     room.update(camera, {}, 1.0f / 120);
     check(room.projectorAligned(), "correct angle can be restored");
     room.rotateProjector(-10, 10);
@@ -451,6 +451,43 @@ int runTests() {
     tick(room, camera, {}, 150);
     check(!room.boardsReady() && !room.projectorAligned() && !room.stairsReady(),
           "disturbing a solved board blocks even a correctly aimed projector and alignment view");
+    for (const auto offset : {glm::vec2(-3.5f, 0), glm::vec2(3.5f, 0), glm::vec2(0, 3.5f),
+                              glm::vec2(0, -1.f), glm::vec2(2.f, 2.f)}) {
+        room.reset();
+        positionProjector(room, camera);
+        camera.face(SchoolRoom::projectorOrigin);
+        check(room.toggleProjector(camera), "reopen projector for an approximate player adjustment");
+        room.rotateProjector(glm::radians(offset.x), glm::radians(offset.y));
+        room.toggleProjector(camera);
+        room.update(camera, {}, 1.f / 120);
+        check(room.projectorAligned(), "small horizontal and vertical aim errors remain accepted");
+        viewStudy(camera);
+        camera.feet = {4.7f, 0, 4.f};
+        camera.face(SchoolRoom::alignmentFocus);
+        camera.yaw += glm::radians(18.f);
+        tick(room, camera, {}, 120);
+        check(room.stairsReady(), "approximate projection and a nearby off-center view create walkable stairs");
+    }
+    for (const auto offset : {glm::vec2(6.f, 0), glm::vec2(0, 8.f), glm::vec2(3.5f, 3.5f)}) {
+        room.reset();
+        positionProjector(room, camera);
+        room.projectorYaw_ += glm::radians(offset.x);
+        room.projectorPitch_ += glm::radians(offset.y);
+        viewStudy(camera);
+        tick(room, camera, {}, 150);
+        check(!room.projectorAligned() && !room.materializing() && !room.stairsReady(),
+              "large or combined aim errors still block stairs from the correct viewpoint");
+    }
+    for (const auto position : {glm::vec3(4.05f, 0, 1.9f), glm::vec3(4.05f, 0, 3.4f),
+                                glm::vec3(5.f, 0, 6.f)}) {
+        room.reset();
+        positionProjector(room, camera);
+        viewStudy(camera);
+        camera.feet = position;
+        camera.face(SchoolRoom::alignmentFocus);
+        tick(room, camera, {}, 120);
+        check(room.stairsReady(), "nearby views in front of and behind the reference point are accepted");
+    }
     room.reset();
     positionProjector(room, camera);
     viewStudy(camera);
@@ -473,7 +510,7 @@ int runTests() {
     tick(room, camera, {}, 150);
     check(!room.stairsReady(), "looking away does not materialize");
     for (glm::vec3 position : {glm::vec3(4.8f, 0, 7.6f), glm::vec3(-4, 0, -1.3f), glm::vec3(0, 0, -1.3f),
-                               glm::vec3(5, 0, 6), glm::vec3(2.7f, 0, -1.5f)}) {
+                               glm::vec3(-4, 0, 6), glm::vec3(2.7f, 0, -1.5f)}) {
         room.reset();
         positionProjector(room, camera);
         camera.feet = position;
@@ -493,8 +530,8 @@ int runTests() {
     check(room.alignmentHeld_ == 0 && !room.materializing(), "looking away clears recognition progress");
     check(!room.alignmentFeedback(camera), "the alignment HUD hides when the player looks away");
     viewStudy(camera);
-    tick(room, camera, {}, 45);
-    check(!room.materializing(), "recognition requires a continuous 0.4 second view");
+    tick(room, camera, {}, 27);
+    check(!room.materializing(), "recognition still requires a brief continuous view before 0.25 seconds");
     auto beforeFormation = room.collisionBoxes().size();
     tick(room, camera, {}, 6);
     check(room.materializing() && !room.stairsReady(),
@@ -1065,7 +1102,7 @@ int runTests() {
     check(!room.adjustingProjector() && camera.focusTime == 0,
           "jump cancels both equipment control and camera focus");
 
-    for (float threshold : {.94f, .80f, .75f}) {
+    for (float threshold : {SchoolRoom::stairAlignmentThreshold, .80f, .75f}) {
         float held = 0;
         for (int i = 0; i < 120; ++i)
             held = advanceAlignmentHold(held, threshold - .01f, threshold, 1.f / 120);
@@ -1081,11 +1118,11 @@ int runTests() {
     tick(room, camera, {}, 24);
     auto correctView = camera;
     bool nearThreshold = false;
-    for (int i = 1; i < 400; ++i) {
+    for (int i = 1; i < 1000; ++i) {
         camera = correctView;
         camera.feet.x += i * .001f;
         const float score = room.alignment(camera);
-        if (score >= .91f && score < .94f) {
+        if (score >= SchoolRoom::stairAlignmentThreshold - .03f && score < SchoolRoom::stairAlignmentThreshold) {
             nearThreshold = true;
             break;
         }
@@ -1100,7 +1137,7 @@ int runTests() {
     check(room.alignmentHeld_ == 0 && !room.materializing(),
           "remaining outside the real threshold drains progress and never solves the puzzle");
     viewStudy(camera);
-    tick(room, camera, {}, 24);
+    tick(room, camera, {}, 15);
     const auto heldFeedback = room.alignmentFeedback(camera);
     check(heldFeedback && heldFeedback->aligned && heldFeedback->holdProgress > .49f &&
               heldFeedback->holdProgress < .51f,

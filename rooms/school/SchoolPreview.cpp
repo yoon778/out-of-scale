@@ -279,6 +279,23 @@ void stageCapture(Application& state, const std::string& stage) {
         aimProjector(state, stage == "turning" ? 0.5f : 1.0f);
         state.camera.feet = school::Camera().feet;
         state.camera.face({-0.6f, 1.7f, -3.0f});
+    } else if (stage == "approximate-view" || stage == "approximate-complete") {
+        aimProjector(state);
+        state.camera.face(school::SchoolRoom::projectorOrigin);
+        if (!state.room.toggleProjector(state.camera))
+            throw std::runtime_error("Capture could not adjust the approximate projection");
+        state.room.rotateProjector(glm::radians(2.f), glm::radians(1.f));
+        state.room.toggleProjector(state.camera);
+        state.camera.feet = {4.7f, 0, 4.f};
+        state.camera.face(school::SchoolRoom::alignmentFocus);
+        state.room.update(state.camera, {}, 1.f / 120);
+        if (!state.room.projectorAligned())
+            throw std::runtime_error("Capture did not accept the approximate projection");
+        if (stage == "approximate-complete") {
+            settle(state);
+            if (!state.room.stairsReady())
+                throw std::runtime_error("Capture did not create stairs from the approximate view");
+        }
     } else if (stage == "aligned" || stage == "complete" || stage == "overview" || stage == "recognizing" ||
                stage.rfind("forming-", 0) == 0) {
         aimProjector(state);
@@ -286,9 +303,13 @@ void stageCapture(Application& state, const std::string& stage) {
         state.camera.face(school::SchoolRoom::alignmentFocus);
         // Aligned captures the instant before an active update recognizes the complete drawing.
         if (stage == "recognizing" || stage.rfind("forming-", 0) == 0) {
-            int frames = stage == "recognizing"
-                             ? 24
-                             : (stage == "forming-start" ? 56 : (stage == "forming-middle" ? 86 : 120));
+            const float seconds = stage == "recognizing"
+                                      ? school::SchoolRoom::recognitionDuration * .5f
+                                      : school::SchoolRoom::recognitionDuration +
+                                            (stage == "forming-start" ? .06f
+                                             : stage == "forming-middle" ? school::SchoolRoom::formationDuration * .5f
+                                                                         : school::SchoolRoom::formationDuration + .02f);
+            const int frames = static_cast<int>(std::ceil(seconds * 120));
             for (int i = 0; i < frames; ++i)
                 state.room.update(state.camera, {}, 1.0f / 120);
         } else if (stage != "aligned")
@@ -412,6 +433,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "projector",
                                         "turning",
                                         "positioned",
+                                        "approximate-view",
+                                        "approximate-complete",
                                         "aligned",
                                         "recognizing",
                                         "forming-start",
