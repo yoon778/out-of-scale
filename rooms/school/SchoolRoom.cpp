@@ -291,7 +291,6 @@ std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures, bool includeNo
                               bounds({3.05f, 0.9f, -6.0f}, {1.35f, 1.8f, 2.1f})};
     for (const auto& fixture : fixtures)
         boxes.push_back(bounds(fixture.center, fixture.size));
-    boxes.push_back(bounds({3.48f, 2.55f, -6.45f}, {0.42f, 1.45f, 0.95f}));
     boxes.push_back(bounds(notebookStand.center, notebookStand.size));
     if (includeFixtures) {
         // Fixed clearance around moving fixtures prevents rotation/sliding from trapping a player.
@@ -1536,10 +1535,6 @@ void SchoolRoom::scene(Renderer& r, const Camera& camera, bool reflection,
     r.box({3.05f, 1.77f, -6.05f}, {1.35f, 0.06f, 2.1f}, timber);
     for (float x : {2.27f, 3.83f})
         r.box({x, 3.1f, -6.05f}, {0.2f, 2.6f, 2.1f}, cream);
-    for (int canvas = 0; canvas < 3; ++canvas) {
-        r.box({3.58f - canvas * 0.10f, 2.55f, -6.45f}, {0.08f, 1.45f, 0.85f}, timber, 0.12f);
-        r.box({3.53f - canvas * 0.10f, 2.55f, -6.45f}, {0.018f, 1.32f, 0.72f}, cream, 0.12f);
-    }
     r.box({3.05f, 4.20f, -6.1f}, {0.80f, 0.06f, 0.30f}, {1.0f, 0.96f, 0.77f});
     r.box({3.05f, 4.4f, -6.05f}, {1.76f, 0.15f, 2.2f}, cream);
     corridor_.draw(r);
