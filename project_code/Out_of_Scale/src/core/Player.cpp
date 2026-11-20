@@ -33,6 +33,7 @@ void Player::look(double x, double y) {
 
 void Player::resetMouseSample() {
     hasMouseSample = false;
+    horizontalVelocity = {};
 }
 
 void Player::jump() {
@@ -43,18 +44,28 @@ void Player::jump() {
 }
 
 void Player::update(GLFWwindow* window, float elapsed, float floorHalfSize, bool roomControlsHeight) {
+    if (elapsed <= 0.0f)
+        return;
     if (glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE) {
         move(window, elapsed, floorHalfSize);
+    } else {
+        horizontalVelocity = {};
     }
     updateJump(elapsed, roomControlsHeight);
 }
 
 void Player::setHorizontalPosition(const glm::vec3& position) {
+    // Remove only the velocity rejected by the room, preserving wall sliding.
+    for (int axis : {0, 2}) {
+        if (std::abs(position[axis] - eye[axis]) > 0.00001f)
+            horizontalVelocity[axis] = 0.0f;
+    }
     eye.x = position.x;
     eye.z = position.z;
 }
 
 void Player::setRoomPosition(const glm::vec3& position, bool roomGrounded) {
+    setHorizontalPosition(position);
     if (roomGrounded || (verticalSpeed > 0.0f && position.y < eye.y)) {
         verticalSpeed = 0.0f;
     }
@@ -85,11 +96,17 @@ void Player::move(GLFWwindow* window, float elapsed, float floorHalfSize) {
     const glm::vec3 sideways = glm::cross(facing, worldUp);
     glm::vec3 movement = facing * static_cast<float>(forward) + sideways * static_cast<float>(right);
     movement /= std::max(1.0f, glm::length(movement));
-    eye += movement * (walkSpeed * elapsed);
+    const glm::vec3 target = movement * walkSpeed;
+    const float response = glm::length(movement) > 0.001f ? 26.0f : 42.0f;
+    const float blend = -std::expm1(-response * elapsed);
+    // Integrate the exponential velocity, so distance as well as speed is FPS-independent.
+    eye += target * elapsed + (horizontalVelocity - target) * (blend / response);
+    horizontalVelocity += (target - horizontalVelocity) * blend;
+    if (glm::length(target) == 0.0f && glm::length(horizontalVelocity) < 0.001f)
+        horizontalVelocity = {};
 
     const float edge = floorHalfSize - 0.25f;
-    eye.x = std::clamp(eye.x, -edge, edge);
-    eye.z = std::clamp(eye.z, -edge, edge);
+    setHorizontalPosition({std::clamp(eye.x, -edge, edge), eye.y, std::clamp(eye.z, -edge, edge)});
 }
 
 void Player::updateJump(float elapsed, bool roomControlsHeight) {
