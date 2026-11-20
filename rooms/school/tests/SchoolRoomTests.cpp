@@ -170,12 +170,12 @@ int runTests() {
     bool matchesGoal = false;
     do {
         const auto [first, second, third, fourth] = permutation;
-        if (second == third + fourth && std::abs(second - third) == 3 * std::abs(first - fourth)) {
+        if (second == 4 && third == 1 && fourth > first) {
             ++matching;
             matchesGoal |= std::array{first - 1, second - 1, third - 1, fourth - 1} == SchoolRoom::boardGoal;
         }
     } while (std::next_permutation(permutation.begin(), permutation.end()));
-    check(matching == 1 && matchesGoal, "the two notebook clues imply exactly one board order");
+    check(matching == 1 && matchesGoal, "the simple number clues imply exactly the existing board goal");
     float initialVisible = room.boardVisibility();
     std::vector<glm::vec3> coveredInitially;
     for (const auto& stroke : room.chalk_)

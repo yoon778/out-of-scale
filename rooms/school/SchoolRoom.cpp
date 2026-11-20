@@ -82,10 +82,17 @@ constexpr float maxNotebookScale = 5.5f;
 constexpr float minNotebookScale = .30f;
 constexpr float notebookHalfHeight = notebookSize.y * .5f;
 constexpr const wchar_t* notebookClues[]{
-    L"높이 1~4를 한 번씩 쓴다",
-    L"둘째 = 셋째 + 넷째",
-    L"가운데 두 판의 높이 차 =",
-    L"바깥 두 판의 높이 차 × 3",
+    L"숫자 1~4를 하나씩",
+    L"둘째는 4, 셋째는 1",
+    L"넷째는 첫째보다 크게",
+    L"위쪽 숫자를 보고 맞춰요",
+};
+constexpr const wchar_t* notebookPanelLabels[]{L"?", L"4", L"1", L"?"};
+constexpr const wchar_t* notebookControls[]{
+    L"누른 판의 숫자 +1",
+    L"오른쪽 판의 숫자 +2",
+    L"끝판 다음은 첫째 판",
+    L"4 다음은 다시 1",
 };
 constexpr float mirrorStartYaw = .10f;
 constexpr float mirrorMaxYaw = 1.32f;
@@ -1266,9 +1273,9 @@ void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
     for (float side : {-1.f, 1.f}) {
         layer(at(side * .103f, 0, .026f), {.191f, .295f, .024f}, cream * .86f);
         layer(at(side * .103f, .002f, .038f), {.186f, .284f, .008f}, side > 0 ? cream : cream * .96f);
-        const int lineCount = readable ? 4 : 6;
+        const int lineCount = readable ? 0 : 6;
         for (int line = 0; line < lineCount; ++line) {
-            const float lineY = readable ? .057f - line * .05f : .081f - line * .035f;
+            const float lineY = .081f - line * .035f;
             r.line(at(side * .103f - .077f, lineY, .044f), at(side * .103f + .077f, lineY, .044f),
                    .0013f * scale, mint * 1.10f);
         }
@@ -1284,15 +1291,28 @@ void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
         r.line(at(-.154f, -.055f, .046f), at(-.047f, -.055f, .046f), .003f * scale, pencil);
         return;
     }
-    r.label(L"입체 드로잉", at(.103f, .129f, .048f), right * (-.082f * scale), up * (.014f * scale), mint * .48f);
-    const wchar_t* leftPage[] = {notebookClues[0], notebookClues[1], L"누른 판 +1", L"오른쪽 판 +2"};
-    const wchar_t* rightPage[] = {notebookClues[2], notebookClues[3], L"끝판 다음은 첫 판", L"4 다음은 1"};
+    const auto ink = mint * .35f;
+    r.label(L"숫자 맞추기", at(.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
+    r.label(L"E로 밀기", at(-.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
+    // Logical left-to-right is reversed on the paper, then restored by the mirror.
     for (int i = 0; i < 4; ++i) {
-        const float y = .078f - i * .050f;
+        const float x = .164f - i * .04f;
+        r.quad(at(x, .064f, .050f), right * (.016f * scale), up * (.026f * scale), mint * .65f);
+        r.label(notebookPanelLabels[i], at(x, .064f, .052f),
+                right * (-.012f * scale), up * (.017f * scale), chalkWhite);
+    }
+    for (int i = 0; i < 2; ++i) {
+        const float x = -.061f - i * .086f;
+        r.quad(at(x, .064f, .050f), right * (.034f * scale), up * (.030f * scale), mint * .65f);
+        r.label(i == 0 ? L"+1" : L"+2", at(x, .064f, .052f),
+                right * (-.025f * scale), up * (.018f * scale), chalkWhite);
+    }
+    for (int i = 0; i < 4; ++i) {
+        const float y = .004f - i * .038f;
         const auto textRight = right * (-.088f * scale);
         const auto textUp = up * (.013f * scale);
-        r.label(leftPage[i], at(.104f, y, .049f), textRight, textUp, mint * .35f);
-        r.label(rightPage[i], at(-.104f, y, .049f), textRight, textUp, mint * .35f);
+        r.label(notebookClues[i], at(.104f, y, .052f), textRight, textUp, ink);
+        r.label(notebookControls[i], at(-.104f, y, .052f), textRight, textUp, ink);
     }
 }
 
@@ -1714,31 +1734,58 @@ const wchar_t* SchoolRoom::interactionLabel(const Camera& camera) const {
     return nullptr;
 }
 void SchoolRoom::drawNotebookPages(Renderer& r, int width, int height, float scale) const {
-    const float x = width / 2.f - 344 * scale, y = height / 2.f - 161 * scale;
+    const float x = width / 2.f - 470 * scale, y = height / 2.f - 240 * scale;
     const glm::vec3 ink{.15f, .24f, .22f}, rule{.75f, .79f, .75f};
-    r.panel(x - 10 * scale, y + 8 * scale, 708 * scale, 331 * scale, {.14f, .19f, .16f});
-    r.panel(x - 7 * scale, y - 4 * scale, 702 * scale, 334 * scale, {.27f, .37f, .28f});
-    r.panel(x, y + 6 * scale, 688 * scale, 319 * scale, {.78f, .75f, .61f});
-    r.panel(x, y, 344 * scale, 318 * scale, {.96f, .94f, .85f});
-    r.panel(x + 344 * scale, y, 344 * scale, 318 * scale, {.94f, .92f, .83f});
-    r.panel(x + 340 * scale, y, 4 * scale, 318 * scale, {.84f, .80f, .68f});
-    r.panel(x + 344 * scale, y, 2 * scale, 318 * scale, {.78f, .75f, .64f});
+    r.panel(x - 10 * scale, y + 8 * scale, 960 * scale, 486 * scale, {.14f, .19f, .16f});
+    r.panel(x - 7 * scale, y - 4 * scale, 954 * scale, 488 * scale, {.27f, .37f, .28f});
+    r.panel(x, y + 6 * scale, 940 * scale, 480 * scale, {.78f, .75f, .61f});
+    r.panel(x, y, 470 * scale, 480 * scale, {.96f, .94f, .85f});
+    r.panel(x + 470 * scale, y, 470 * scale, 480 * scale, {.94f, .92f, .83f});
+    r.panel(x + 466 * scale, y, 4 * scale, 480 * scale, {.84f, .80f, .68f});
+    r.panel(x + 470 * scale, y, 2 * scale, 480 * scale, {.78f, .75f, .64f});
 
-    const float left = x + 38 * scale, right = x + 383 * scale;
+    const float left = x + 38 * scale, right = x + 506 * scale;
     for (float page : {left, right}) {
-        r.panel(page - 10 * scale, y + 25 * scale, scale, 239 * scale, {.85f, .70f, .69f});
-        for (int line = 0; line < 6; ++line)
-            r.panel(page - 17 * scale, y + (91 + line * 32) * scale, 303 * scale, scale, rule);
+        r.panel(page - 12 * scale, y + 24 * scale, scale, 403 * scale, {.85f, .70f, .69f});
+        for (int line = 0; line < 4; ++line)
+            r.panel(page - 6 * scale, y + (315 + line * 38) * scale, 398 * scale, scale, rule);
     }
-    r.text(L"입체 드로잉", left, y + 27 * scale, 36 * scale, ink);
-    r.text(L"칠판 움직이기", right, y + 27 * scale, 36 * scale, ink);
-    const wchar_t* boardNotes[]{L"누른 판 +1", L"오른쪽 판 +2", L"끝판 다음은 첫 판", L"4 다음은 1"};
+    r.text(L"칠판 숫자 맞추기", left, y + 24 * scale, 34 * scale, ink);
+    r.text(L"E로 칠판 밀기", right, y + 24 * scale, 34 * scale, ink);
+    r.text(L"칠판을 바라보고, 왼쪽부터", left, y + 70 * scale, 22 * scale, ink);
+    r.text(L"한 번 누르면 두 판이 움직여요", right, y + 70 * scale, 22 * scale, ink);
+    const wchar_t* order[]{L"첫째", L"둘째", L"셋째", L"넷째"};
     for (int i = 0; i < 4; ++i) {
-        const float lineY = y + (94 + i * 32) * scale;
-        r.text(notebookClues[i], left, lineY, 27 * scale, ink);
-        r.text(boardNotes[i], right, lineY, 27 * scale, ink);
+        const float panelX = left + (8 + i * 96) * scale;
+        r.panel(panelX, y + 142 * scale, 74 * scale, 74 * scale, timber);
+        r.panel(panelX + 4 * scale, y + 146 * scale, 66 * scale, 66 * scale, mint * .65f);
+        r.panel(panelX + 16 * scale, y + 103 * scale, 42 * scale, 32 * scale, rule);
+        const float numberWidth = r.textWidth(notebookPanelLabels[i], 27 * scale);
+        r.text(notebookPanelLabels[i], panelX + (74 * scale - numberWidth) * .5f,
+               y + 103 * scale, 27 * scale, ink);
+        const float labelWidth = r.textWidth(order[i], 20 * scale);
+        r.text(order[i], panelX + (74 * scale - labelWidth) * .5f, y + 237 * scale, 20 * scale, ink);
     }
-    const float closeX = x + 583 * scale, closeY = y + 274 * scale;
+    for (int i = 0; i < 2; ++i) {
+        const float panelX = right + (8 + i * 190) * scale;
+        const auto label = i == 0 ? L"선택한 판" : L"오른쪽 판";
+        const float labelWidth = r.textWidth(label, 22 * scale);
+        r.text(label, panelX + (156 * scale - labelWidth) * .5f, y + 103 * scale, 22 * scale, ink);
+        r.panel(panelX, y + 132 * scale, 156 * scale, 84 * scale, timber);
+        r.panel(panelX + 4 * scale, y + 136 * scale, 148 * scale, 76 * scale, mint * .65f);
+        const auto amount = i == 0 ? L"+1" : L"+2";
+        const float amountWidth = r.textWidth(amount, 44 * scale);
+        r.text(amount, panelX + (156 * scale - amountWidth) * .5f, y + 149 * scale, 44 * scale);
+    }
+    r.text(L"→", right + 166 * scale, y + 155 * scale, 28 * scale, ink);
+    r.panel(right + 68 * scale, y + 228 * scale, 36 * scale, 29 * scale, ink);
+    r.text(L"E", right + 79 * scale, y + 229 * scale, 23 * scale);
+    for (int i = 0; i < 4; ++i) {
+        const float lineY = y + (282 + i * 38) * scale;
+        r.text(notebookClues[i], left, lineY, 30 * scale, ink);
+        r.text(notebookControls[i], right, lineY, 28 * scale, ink);
+    }
+    const float closeX = x + 826 * scale, closeY = y + 441 * scale;
     r.panel(closeX, closeY, 25 * scale, 25 * scale, {.25f, .35f, .29f});
     r.text(L"E", closeX + 5 * scale, closeY + scale, 23 * scale);
     r.text(L"닫기", closeX + 32 * scale, closeY + scale, 23 * scale, ink);
