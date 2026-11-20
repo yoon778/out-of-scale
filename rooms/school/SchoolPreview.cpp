@@ -587,12 +587,17 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
         float dt = float(std::min(now - previous, 0.05));
         previous = now;
         if (!state.paused && glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+            const bool hadEscaped = state.room.escaped();
             school::Input input;
             input.forward = float(glfwGetKey(window, GLFW_KEY_W) - glfwGetKey(window, GLFW_KEY_S));
             input.right = float(glfwGetKey(window, GLFW_KEY_D) - glfwGetKey(window, GLFW_KEY_A));
             input.jump = state.jump;
             state.jump = false;
             state.room.update(state.camera, input, dt);
+            // Hand the new completion back to the team loop. A completed room revisited
+            // with F1 remains inspectable, and the standalone preview stays in school.
+            if (navigation && !hadEscaped && state.room.escaped())
+                break;
         }
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
