@@ -1611,9 +1611,7 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
             latchModel = glm::rotate(latchModel, glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
         }
         latchModel = glm::translate(latchModel, latchCenter - door.center);
-        drawHomeMesh(renderer_, HomeMesh::LatchMounts, latchModel,
-                     latchReleased_ && latchTravel_ >= latchOpenTravel
-                         ? glm::vec3{0.45f, 1.30f, 0.70f} : glm::vec3{1.0f});
+        drawHomeMesh(renderer_, HomeMesh::LatchMounts, latchModel);
         latchModel = glm::translate(latchModel, {-latchTravel_, 0.0f, 0.0f});
         drawHomeMesh(renderer_, HomeMesh::LatchBolt, latchModel);
     }
@@ -1677,13 +1675,9 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
             renderer_.drawBox(center + direction * 0.30f, {0.13f, 0.13f, 0.13f}, {1.0f, 0.79f, 0.30f});
         }
     } else if (held_ == HeldItem::Door) {
-        if (canFitDoor(eye, direction)) {
-            drawDoor(renderer_, {door.center - direction * 0.04f, door.size}, {0.68f, 1.0f, 0.75f});
-        } else {
-            const glm::vec3 center = eye + direction * 1.15f + carrySide(direction) * 0.32f - glm::vec3{0.0f, 0.23f, 0.0f};
-            const float scale = std::clamp(doorRatio_ * doorWheelScale_ * 1.15f, 0.08f, 0.32f);
-            drawDoor(renderer_, {center, door.size * scale}, glm::vec3{1.0f});
-        }
+        const glm::vec3 center = eye + direction * 1.15f + carrySide(direction) * 0.32f - glm::vec3{0.0f, 0.23f, 0.0f};
+        const float scale = std::clamp(doorRatio_ * doorWheelScale_ * 1.15f, 0.08f, 0.32f);
+        drawDoor(renderer_, {center, door.size * scale}, glm::vec3{1.0f});
     }
     if (computerCube_) {
         auto model = glm::translate(glm::mat4{1.0f}, computerCube_->center);
@@ -1703,10 +1697,4 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
         if (cabinetOpen_) computer_.drawCompleteKey(viewProjection,homeModel()*portableModel(completeKeyObject));
     }
     computer_.draw(viewProjection);
-    if (heldPortable_ >= 0) {
-        const auto hint = heldPortable_ == socketObject ? ComputerScreen::CarryHint::Socket
-                        : heldPortable_ == completeKeyObject ? ComputerScreen::CarryHint::CompleteKey
-                                                            : ComputerScreen::CarryHint::Miniature;
-        computer_.drawCarryGuide(hint);
-    } else if (held_ == HeldItem::Cube) computer_.drawCarryGuide(ComputerScreen::CarryHint::Common);
 }

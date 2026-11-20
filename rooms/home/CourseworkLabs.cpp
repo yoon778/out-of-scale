@@ -479,7 +479,6 @@ void CourseworkLabs::drawAssembly() const {
         const auto& part=keyParts_[i];
         const auto transform=model({part.center,0},{0,0,glm::degrees(part.angle)},glm::vec3{part.scale,part.scale,1});
         rect({0,0},part.size,i==0?glm::vec3{.34f,.74f,.85f}:glm::vec3{.88f,.66f,.29f},transform);
-        if (i==partSelection_) rect({0,0},part.size+glm::vec2{.018f},{.95f,.97f,1},transform,true);
     }
 }
 void CourseworkLabs::draw() const {

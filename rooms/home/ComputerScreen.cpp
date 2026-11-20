@@ -189,7 +189,7 @@ GLuint workspaceTexture(int selected) {
     const auto text=[&](const wchar_t* value,RECT rect,COLORREF color) { SetTextColor(dc,color); DrawTextW(dc,value,-1,&rect,DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX); };
     text(L"컴퓨터그래픽스 실습",{26,22,310,70},RGB(229,239,244));
     constexpr const wchar_t* names[6]{L"1_7.cpp · 도형",L"1_12.cpp · 쌓기",L"1_14.cpp · 3D 변환",L"1_18.cpp · 행성",L"1_26.cpp · 조명",L"열쇠 제작"};
-    constexpr const wchar_t* captions[6]{L"실습 1_7  ·  점 / 선 / 삼각형 / 사각형",L"실습 1_12  ·  움직이는 사각형 맞추기",L"실습 1_14  ·  이동 / 회전 / 깊이",L"실습 1_18  ·  부모와 자식의 변환",L"실습 1_26  ·  Phong 조명과 광원 공전",L"열쇠 제작  ·  네 도형을 이어 하나의 열쇠로"};
+    constexpr const wchar_t* captions[6]{L"실습 1_7  ·  점 / 선 / 삼각형 / 사각형",L"실습 1_12  ·  움직이는 사각형 맞추기",L"실습 1_14  ·  이동 / 회전 / 깊이",L"실습 1_18  ·  부모와 자식의 변환",L"실습 1_26  ·  Phong 조명과 광원 공전",L"열쇠 제작"};
     for(int i=0;i<6;++i) {
         fill({20,100+i*76,300,164+i*76},i==selected?RGB(48,94,111):RGB(32,46,57));
         text(names[i],{36,100+i*76,294,164+i*76},RGB(236,242,245));
@@ -247,10 +247,6 @@ ComputerScreen::~ComputerScreen() {
     if (depth_) glDeleteRenderbuffers(1, &depth_);
     if (program_) glDeleteProgram(program_);
     if (vertexArray_) glDeleteVertexArrays(1, &vertexArray_);
-    for (const GLuint texture : {holdingGuide_, completeKeyGuide_, socketGuide_, miniatureGuide_,
-                                 keyReadyLabel_, keyTakenLabel_, keyRejectedLabel_}) {
-        if (texture) glDeleteTextures(1, &texture);
-    }
     glDeleteTextures(static_cast<GLsizei>(workspaceLabels_.size()),workspaceLabels_.data());
     glDeleteTextures(static_cast<GLsizei>(helpLabels_.size()),helpLabels_.data());
 }
@@ -308,34 +304,26 @@ void main() { pixel = texture(image, vec2(uv.x, flip ? 1.0-uv.y : uv.y)); }
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, textureWidth, textureHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_);
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-    holdingGuide_ = guideTexture(L"E 놓기");
-    completeKeyGuide_ = guideTexture(L"완성된 열쇠 | E 놓기 · 열쇠 구멍을 보고 E 끼우기");
-    socketGuide_ = guideTexture(L"열쇠 구멍 | 장롱을 보고 E 붙이기 · 다른 곳에서 E 놓기");
-    miniatureGuide_ = guideTexture(L"미니어처 | E 놓기 · 휠 회전 · 안의 물건은 내려놓은 뒤 조작");
     constexpr const wchar_t* help[6]{
         L"P 점 · E 선 · T 삼각형 · R 사각형 | 클릭 선택 · WASD/IJKL 이동 · 1~4 전체 · C 비우기",
         L"두 사각형이 점선 안에 들어오면 Enter · R 다시 시작",
         L"C 육면체 / P 사각뿔 · X/Y 회전(Shift 반대) · 방향키 이동 · W/Shift+W · H 깊이 · S 초기화",
         L"WASD 이동 · +/- 깊이 · P/Shift+P 투영 · M/Shift+M 와이어 · 1/2/3 애니메이션",
         L"N 도형 · M 조명 · Y 회전 · R/Shift+R 광원 공전 · Z/Shift+Z 광원 거리",
-        L"도형 클릭·드래그 · Q/R 회전 · 휠 크기 | 머리·몸통·이빨 둘을 이어 열쇠 만들기 · E 확인"};
+        L"도형 클릭·드래그 · Q/R 회전 · 휠 크기 · E 확인"};
     for (int i=0;i<6;++i) {
         workspaceLabels_[i]=workspaceTexture(i);
         helpLabels_[i]=guideTexture(help[i]);
         if (!workspaceLabels_[i] || !helpLabels_[i]) return false;
     }
-    keyReadyLabel_=guideTexture(L"열쇠 모양 완성 | E 완성품 꺼내기 · Tab 방으로 돌아가기");
-    keyTakenLabel_=guideTexture(L"완성된 열쇠를 방으로 꺼냄 | 다른 실습 선택 · Tab 방으로 돌아가기");
-    keyRejectedLabel_=guideTexture(L"머리에 몸통을 잇고, 몸통 아래에 이빨 둘 붙이기 | 회전·크기도 확인 · E 다시 확인");
-    return complete && holdingGuide_ && completeKeyGuide_ && socketGuide_ && miniatureGuide_ &&
-           keyReadyLabel_ && keyTakenLabel_ && keyRejectedLabel_;
+    return complete;
 }
 
 void ComputerScreen::keyInput(int key,int action,int mods) {
-    labs_.key(key,action,mods); rejected_=false; dirty_=true;
+    labs_.key(key,action,mods); dirty_=true;
 }
 void ComputerScreen::selectLesson(int lesson) {
-    labs_.select(lesson); rejected_=false; dirty_=true;
+    labs_.select(lesson); dirty_=true;
 }
 int ComputerScreen::selectedLesson() const { return labs_.selected(); }
 void ComputerScreen::clearInput() { labs_.clearInput(); dirty_=true; }
@@ -356,16 +344,16 @@ void ComputerScreen::mouseButton(int button,int action,int) {
             selectLesson(i); return;
         }
     }
-    labs_.mouse(button,action); rejected_=false; dirty_=true;
+    labs_.mouse(button,action); dirty_=true;
 }
-void ComputerScreen::scroll(double amount) { labs_.scroll(amount); rejected_=false; dirty_=true; }
+void ComputerScreen::scroll(double amount) { labs_.scroll(amount); dirty_=true; }
 void ComputerScreen::update(float elapsed) { if (labs_.update(elapsed)) dirty_=true; }
 ComputerScreen::Action ComputerScreen::confirm() {
     if (labs_.selected()!=5 || labs_.keyTaken()) return Action::None;
-    if (!labs_.keyReady()) { rejected_=true; dirty_=true; return Action::None; }
+    if (!labs_.keyReady()) return Action::None;
     return Action::TakeCompleteKey;
 }
-void ComputerScreen::consumeKey() { labs_.consumeKey(); rejected_=false; dirty_=true; }
+void ComputerScreen::consumeKey() { labs_.consumeKey(); dirty_=true; }
 bool ComputerScreen::keyTaken() const { return labs_.keyTaken(); }
 
 void ComputerScreen::drawCube(const glm::mat4& viewProjection, const glm::mat4& model) const {
@@ -373,10 +361,6 @@ void ComputerScreen::drawCube(const glm::mat4& viewProjection, const glm::mat4& 
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     renderer_.begin(viewProjection);
     renderer_.drawMovableMesh(0, 36, model, glm::vec3{1.0f});
-    glDepthFunc(GL_LEQUAL);
-    glDepthMask(GL_FALSE);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    renderer_.drawMovableMesh(0, 36, model, {.12f,.24f,.29f});
 }
 
 void ComputerScreen::drawKeyPiece(const glm::mat4& viewProjection, const glm::mat4& model) const {
@@ -422,12 +406,7 @@ void ComputerScreen::renderTexture() const {
     labs_.draw();
     glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST);
     glViewport(0,0,textureWidth,textureHeight); glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
-    GLuint help=helpLabels_[labs_.selected()];
-    if(labs_.selected()==5) {
-        if(labs_.keyTaken()) help=keyTakenLabel_;
-        else if(rejected_) help=keyRejectedLabel_;
-        else if(labs_.keyReady()) help=keyReadyLabel_;
-    }
+    const GLuint help=helpLabels_[labs_.selected()];
     // Footer uses the same top-left layout as pointer hit-testing.
     auto footer=glm::translate(glm::mat4{1},{2*795.0f/textureWidth-1,1-2*674.0f/textureHeight,0});
     footer=glm::scale(footer,{930.0f*2/textureWidth,60.0f*2/textureHeight,1});
@@ -468,34 +447,4 @@ void ComputerScreen::draw(const glm::mat4& viewProjection) const {
     model[2] = {-1.0f,0.0f,0.0f,0.0f};
     model[3] = {center,1.0f};
     drawTexture(color_, viewProjection * model, false);
-}
-
-void ComputerScreen::drawGuide(bool active,bool holding,bool holdingKey) const {
-    if (active) drawWorkspace();
-    else if (holding || holdingKey) drawLabel(holdingGuide_);
-}
-
-void ComputerScreen::drawCarryGuide(CarryHint hint) const {
-    switch (hint) {
-    case CarryHint::Common: drawLabel(holdingGuide_); break;
-    case CarryHint::CompleteKey: drawLabel(completeKeyGuide_); break;
-    case CarryHint::Socket: drawLabel(socketGuide_); break;
-    case CarryHint::Miniature: drawLabel(miniatureGuide_); break;
-    case CarryHint::None: break;
-    }
-}
-
-void ComputerScreen::drawLabel(GLuint texture) const {
-    const GlState state;
-    GLint viewport[4]{};
-    glGetIntegerv(GL_VIEWPORT, viewport);
-    if (viewport[2] <= 0 || viewport[3] <= 0) return;
-    const float width = std::min(static_cast<float>(guideWidth), viewport[2] * .94f);
-    const float height = width * guideHeight / guideWidth;
-    auto model = glm::translate(glm::mat4{1.0f}, {0.0f,-1.0f+(height+24.0f)/viewport[3],0.0f});
-    model = glm::scale(model, {width*2.0f/viewport[2],height*2.0f/viewport[3],1.0f});
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_SCISSOR_TEST);
-    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    drawTexture(texture, model, true);
 }
