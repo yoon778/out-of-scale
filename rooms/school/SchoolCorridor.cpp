@@ -8,6 +8,11 @@
 namespace school {
 namespace {
 constexpr float halfPi = 1.570796327f;
+constexpr float doorAlignmentThreshold = .80f, bridgeAlignmentThreshold = .75f;
+constexpr float cupboardAngleTolerance = .025f;
+constexpr float falseHallWallX = 9.65f;
+constexpr glm::vec3 classroomDoorSize{1.25f, 2.286f, .072f};
+constexpr glm::vec3 brass{.67f, .53f, .30f};
 constexpr float gapNear = -12.0f, gapFar = -15.65f, stairShift = -3.65f;
 constexpr float bridgeWidth = 1.00f;
 constexpr float stairStart = -12.72f + stairShift, stairRun = .6f, stairRise = .2f;
@@ -39,6 +44,13 @@ void beveledBoard(Renderer& r, glm::vec3 c, glm::vec3 size, glm::vec3 color, flo
     }
 }
 } // namespace
+float advanceAlignmentHold(float held, float score, float threshold, float dt) {
+    if (score >= threshold)
+        return held + dt;
+    if (score >= threshold - .035f)
+        return std::max(0.f, held - 2.f * dt);
+    return 0;
+}
 SchoolCorridor::SchoolCorridor() {
     build();
     buildDrawing();
@@ -48,8 +60,10 @@ void SchoolCorridor::reset() {
     angle_ = 0;
     angularSpeed_ = 0;
     targetOpen_ = false;
+    classroomKeyTaken_ = classroomDoorUnlocked_ = false;
+    classroomDoorOpening_ = 0;
     recognition_ = formation_ = opening_ = 0;
-    forming_ = passageOpening_ = bridgeForming_ = false;
+    forming_ = bridgeForming_ = false;
     bridgeHeld_ = bridgeFormation_ = 0;
 }
 void SchoolCorridor::build() {
@@ -153,8 +167,8 @@ void SchoolCorridor::build() {
                    wood);
     }
     // 2-1's rear doorway leads around the painted cross-wall; glass remains closed.
-    solid({8.10f, 3.45f, -9.90f}, {.20f, 3.30f, 3.20f}, plaster);
-    for (float x : {8.10f, 20.60f})
+    solid({falseHallWallX, 3.45f, -9.90f}, {.20f, 3.30f, 3.20f}, plaster);
+    for (float x : {falseHallWallX, 20.60f})
         detail({x, 3.625f, -8.25f}, {.2f, 1.65f, .25f}, plaster);
     for (const auto range : {glm::vec2(5.2f, 12.3f), glm::vec2(12.7f, 20.5f)}) {
         floor(range.x, range.y, -16.6f, -11.7f);
@@ -191,7 +205,7 @@ void SchoolCorridor::build() {
             for (float dz : {-.18f, .18f})
                 detail({x + dx, floorHeight + 1.81f, z + dz}, {.035f, .46f, .035f}, metal);
     };
-    deskStack(9.70f, -10.94f);
+    deskStack(10.40f, -10.94f);
     deskStack(12.3f, -8.88f);
     deskStack(15.0f, -8.88f);
     // The cupboard leaf carries the near half of an anamorphic school doorway.
@@ -214,6 +228,8 @@ void SchoolCorridor::build() {
     side(21.89f, -17 + stairShift, -11.6f);
     side(25.2f, -17 + stairShift, -17);
     floor(21.99f, 25.1f, gapFar, gapNear, 0);
+    // Close the void under the near landing when viewed back up the stairs.
+    solid({23.545f, .78f, gapNear + .10f}, {3.11f, 1.56f, .2f}, plaster);
     // Meet the landing underside so the two front faces do not overlap at the lip.
     solid({23.545f, .78f, gapFar - .10f}, {3.11f, 1.56f, .2f}, plaster);
     floor(21.99f, 25.1f, gapFar - .72f, gapFar);
@@ -340,27 +356,27 @@ glm::vec3 SchoolCorridor::paintedPoint(const InkPatch& patch, int corner) const 
     return hinge + glm::vec3(along * std::cos(angle_) - out * std::sin(angle_), p.y - hinge.y,
                              along * std::sin(angle_) + out * std::cos(angle_));
 }
-float SchoolCorridor::alignment(const Camera& camera) const {
+std::optional<float> SchoolCorridor::doorViewAlignment(const Camera& camera) const {
+    const auto eye = camera.eye();
     if (!camera.grounded || std::abs(camera.feet.y - floorHeight) > .08f ||
-        camera.eye().x >= hinge.x - .25f || camera.eye().x < 12.5f)
-        return 0;
-    const auto toward = illusionFocus - camera.eye();
-    if (glm::dot(camera.direction(), glm::normalize(toward)) < .96f)
-        return 0;
+        eye.x >= hinge.x - .25f || eye.x < 12.5f)
+        return std::nullopt;
+    if (glm::dot(camera.direction(), glm::normalize(illusionFocus - eye)) < .96f)
+        return std::nullopt;
     float error = 0;
     for (const auto& patch : drawing_) {
         if (!patch.frame)
             continue;
         for (int i = 0; i < 4; ++i) {
-            const auto ink = paintedPoint(patch, i) - camera.eye();
-            const auto ideal = patch.target[i] - camera.eye();
-            error = std::max(error, glm::length(glm::normalize(ink) - glm::normalize(ideal)));
+            const auto ink = paintedPoint(patch, i) - eye;
+            const auto direction = glm::normalize(ink);
+            const float distance = glm::length(ink) - .045f;
+            error = std::max(error, glm::length(direction - glm::normalize(patch.target[i] - eye)));
             // Test real visibility, so looking through opaque walls cannot recognize the drawing.
             for (const auto& s : solids_) {
-                const float hit =
-                    SchoolRoom::rayBox(camera.eye(), glm::normalize(ink), box(s.center, s.size));
-                if (hit >= 0 && hit < glm::length(ink) - .045f)
-                    return 0;
+                const float hit = SchoolRoom::rayBox(eye, direction, box(s.center, s.size));
+                if (hit >= 0 && hit < distance)
+                    return std::nullopt;
             }
         }
     }
@@ -368,11 +384,9 @@ float SchoolCorridor::alignment(const Camera& camera) const {
 }
 void SchoolCorridor::updateIllusion(const Camera& camera, float dt) {
     if (!forming_) {
-        if (alignment(camera) >= .80f && std::abs(angle_ - halfPi) < .025f)
-            recognition_ += dt;
-        else
-            recognition_ = 0;
-        if (recognition_ >= recognitionDuration) {
+        const float score = std::abs(angle_ - halfPi) < cupboardAngleTolerance ? alignment(camera) : 0;
+        recognition_ = advanceAlignmentHold(recognition_, score, doorAlignmentThreshold, dt);
+        if (score >= doorAlignmentThreshold && recognition_ >= recognitionDuration) {
             forming_ = true;
             targetOpen_ = false;
         }
@@ -380,78 +394,154 @@ void SchoolCorridor::updateIllusion(const Camera& camera, float dt) {
     }
     if (formation_ < 1)
         formation_ = std::min(1.0f, formation_ + dt / formationDuration);
-    else if (passageOpening_)
+    else
         opening_ = std::min(1.0f, opening_ + dt / openingDuration);
-}
-bool SchoolCorridor::canOpenPassage(const Camera& camera) const {
-    if (formation_ < 1 || passageOpening_ || camera.eye().x >= 20.45f)
-        return false;
-    const float hit = SchoolRoom::rayBox(camera.eye(), camera.direction(), passageBlocker());
-    if (hit < 0 || hit > 2.0f)
-        return false;
-    for (const auto& solid : solids_) {
-        const float blocker =
-            SchoolRoom::rayBox(camera.eye(), camera.direction(), box(solid.center, solid.size));
-        if (blocker >= 0 && blocker < hit - .015f)
-            return false;
-    }
-    for (const auto& leaf : doorBoxes(angle_)) {
-        const float blocker = SchoolRoom::rayBox(camera.eye(), camera.direction(), leaf);
-        if (blocker >= 0 && blocker < hit - .015f)
-            return false;
-    }
-    return true;
-}
-bool SchoolCorridor::openPassage(const Camera& camera) {
-    if (!canOpenPassage(camera))
-        return false;
-    passageOpening_ = true;
-    return true;
 }
 void SchoolCorridor::drawFalseHall(Renderer& r) const {
     // Paint the view into an imaginary hall onto the solid cross-wall.
     constexpr glm::vec3 eye{4.8f, 3.45f, -9.90f};
-    auto project = [&](glm::vec3 p, float inset = 0.f) {
-        return eye + (p - eye) * ((8.0f - .012f - inset - eye.x) / (p.x - eye.x));
+    constexpr float a = falseHallWallX - .10f, b = 24.75f;
+    constexpr float left = -11.5f, right = -8.3f, low = floorHeight + .004f, high = 5.10f;
+    if (!r.visible({a, 3.45f, -9.90f}, {.04f, 1.65f, 1.60f}))
+        return;
+    auto project = [&](glm::vec3 p, float offset) {
+        return eye + (p - eye) * ((a - .002f - offset - eye.x) / (p.x - eye.x));
     };
-    auto patch = [&](glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 d, glm::vec3 color, float inset = 0.f) {
-        a = project(a, inset);
-        b = project(b, inset);
-        c = project(c, inset);
-        d = project(d, inset);
-        if (glm::cross(b - a, c - a).x > 0)
-            std::swap(b, d);
-        r.triangle(a, b, c, color);
-        r.triangle(a, c, d, color);
+    auto patch = [&](glm::vec3 p0, glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec3 color, float offset = 0.f) {
+        p0 = project(p0, offset);
+        p1 = project(p1, offset);
+        p2 = project(p2, offset);
+        p3 = project(p3, offset);
+        if (glm::cross(p1 - p0, p2 - p0).x > 0)
+            std::swap(p1, p3);
+        r.triangle(p0, p1, p2, color);
+        r.triangle(p0, p2, p3, color);
     };
-    constexpr float a = 8.0f, b = 14.25f, left = -11.10f, right = -8.70f, low = 1.81f, high = 4.50f;
-    const glm::vec3 floorTint{.84f, .86f, .79f};
-    patch({a, low, left}, {a, low, right}, {b, low, right}, {b, low, left}, floorTint);
-    patch({a, high, left}, {b, high, left}, {b, high, right}, {a, high, right}, plaster * .91f);
+    auto sidePatch = [&](float x0, float x1, float y0, float y1, float z, glm::vec3 color, float offset = 0.f) {
+        patch({x0, y0, z}, {x1, y0, z}, {x1, y1, z}, {x0, y1, z}, color, offset);
+    };
+    auto horizontalPatch = [&](float x0, float x1, float z0, float z1, float y, glm::vec3 color,
+                               float offset = 0.f) {
+        patch({x0, y, z0}, {x1, y, z0}, {x1, y, z1}, {x0, y, z1}, color, offset);
+    };
+    auto endPatch = [&](float z0, float z1, float y0, float y1, glm::vec3 color, float offset = 0.f) {
+        patch({b, y0, z0}, {b, y0, z1}, {b, y1, z1}, {b, y1, z0}, color, offset);
+    };
+
+    // Match the nearby wall shading and tile grid as they cross onto the painting.
+    const glm::vec3 floorTint{.75f, .76f, .70f};
+    const glm::vec3 grout{.68f, .69f, .63f};
+    horizontalPatch(a, b, left, right, low, floorTint);
+    for (float x = 9.57f; x < b; x += .8f)
+        horizontalPatch(x, x + .009f, left, right, low, grout, .001f);
+    for (float z = left + .8f; z < right - .01f; z += .8f)
+        horizontalPatch(a, b, z, z + .009f, low, grout, .002f);
+    horizontalPatch(a, b, left, right, high, plaster * .80f);
     for (float z : {left, right}) {
-        patch({a, low, z}, {b, low, z}, {b, 2.86f, z}, {a, 2.86f, z}, paint);
-        patch({a, 2.86f, z}, {b, 2.86f, z}, {b, high, z}, {a, high, z}, plaster * .96f);
-        patch({a, low, z}, {b, low, z}, {b, 1.92f, z}, {a, 1.92f, z}, paint * .76f, .006f);
+        const float shade = z == left ? .88f : .80f;
+        const float dado = z == left ? 2.84f : 2.80f;
+        sidePatch(a, b, low, dado, z, paint * shade);
+        sidePatch(a, b, dado, high, z, plaster * shade);
+        sidePatch(a, b, low, 1.99f, z, paint * (.77f * shade), .001f);
+        sidePatch(a, b, dado, dado + .04f, z, paint * (.90f * shade), .002f);
     }
-    patch({b, low, left}, {b, low, right}, {b, high, right}, {b, high, left}, plaster * .85f);
-    patch({b, low, -10.55f}, {b, low, -9.25f}, {b, 3.96f, -9.25f}, {b, 3.96f, -10.55f}, wood, .010f);
-    patch({b, 2.90f, -10.35f}, {b, 2.90f, -9.45f}, {b, 3.76f, -9.45f}, {b, 3.76f, -10.35f}, paint, .018f);
-    patch({b, 2.38f, -9.48f}, {b, 2.38f, -9.38f}, {b, 2.64f, -9.38f}, {b, 2.64f, -9.48f}, metal, .020f);
-    for (float y : {3.10f, 3.32f, 3.54f})
-        patch({b, y, -10.34f}, {b, y, -9.46f}, {b, y + .018f, -9.46f}, {b, y + .018f, -10.34f}, paint * .87f,
-              .022f);
-    for (float x : {9.1f, 10.8f, 12.5f}) {
-        patch({x, high, -10.10f}, {x + .78f, high, -10.10f}, {x + .78f, high, -9.70f}, {x, high, -9.70f},
-              {.99f, .95f, .81f}, .014f);
-        patch({x, low, left}, {x, low, right}, {x + .016f, low, right}, {x + .016f, low, left},
-              floorTint * .78f, .009f);
+
+    for (float x : {12.8f, 17.0f, 21.2f}) {
+        sidePatch(x, x + 1.40f, low, 4.10f, left, wood * .71f, .003f);
+        sidePatch(x + .07f, x + 1.33f, low, 4.02f, left, wood * .92f, .004f);
+        sidePatch(x + .23f, x + 1.17f, 2.94f, 3.82f, left, paint * .86f, .006f);
     }
-    for (float z : {-10.30f, -9.50f})
-        patch({a, low, z}, {a, low, z + .012f}, {b, low, z + .012f}, {b, low, z}, floorTint * .78f, .013f);
-    for (float z : {left - .045f, right + .045f})
-        r.box({7.978f, 3.157f, z}, {.045f, 2.694f, .09f}, wood);
-    r.box({7.978f, 4.54f, -9.9f}, {.045f, .085f, 2.58f}, wood);
-    r.label(L"2-1 뒤편  ·  복도 연결", {5.20f, 3.55f, -11.477f}, {.36f, 0, 0}, {0, .09f, 0}, metal);
+    for (float x : {10.04f, 13.59f, 17.14f, 20.69f}) {
+        sidePatch(x, x + 3.43f, 2.80f, 4.45f, right, wood * .82f, .003f);
+        sidePatch(x + .055f, x + 3.375f, 2.88f, 4.38f, right, {.65f, .78f, .81f}, .004f);
+        sidePatch(x + .055f, x + 3.375f, 2.88f, 3.24f, right, {.48f, .59f, .48f}, .006f);
+        sidePatch(x + 1.69f, x + 1.74f, 2.88f, 4.38f, right, wood * .88f, .007f);
+        sidePatch(x, x + 3.43f, 3.62f, 3.68f, right, wood * .88f, .008f);
+    }
+    for (float x : {12.0f, 16.0f, 20.0f, 23.5f}) {
+        horizontalPatch(x - .525f, x + .525f, -10.06f, -9.74f, 4.98f, metal * .93f, .003f);
+        horizontalPatch(x - .48f, x + .48f, -10.02f, -9.78f, 4.96f, {.98f, .96f, .85f}, .004f);
+    }
+    endPatch(left, right, low, high, plaster * .85f);
+    endPatch(left, right, low, 2.82f, paint * .85f, .001f);
+    endPatch(-10.59f, -9.21f, low, 4.12f, wood * .72f, .003f);
+    endPatch(-10.52f, -9.28f, low, 4.04f, wood * .89f, .004f);
+    endPatch(-10.35f, -9.45f, 2.90f, 3.82f, paint * .87f, .006f);
+    const auto latch = eye + (classroomKeySpot - eye) * ((b - eye.x) / (classroomKeySpot.x - eye.x));
+    endPatch(latch.z - .065f, latch.z + .065f, latch.y - .14f, latch.y + .14f, brass * .83f, .007f);
+}
+Box SchoolCorridor::classroomDoorBox(float opening) const {
+    const float slide = 1.32f * glm::smoothstep(0.0f, 1.0f, opening);
+    return box(classroomRearDoor - glm::vec3(slide, 0, 0), classroomDoorSize);
+}
+void SchoolCorridor::drawClassroomLock(Renderer& r) const {
+    const auto door = classroomDoorBox(classroomDoorOpening_);
+    const auto center = (door.min + door.max) * .5f;
+    r.box(center, classroomDoorSize, wood);
+    r.box(center + glm::vec3(0, .49f, -.038f), {.93f, .85f, .012f}, wood * .76f);
+    r.box(center + glm::vec3(0, .49f, -.047f), {.84f, .76f, .010f}, paint * .88f);
+    for (float y : {.30f, .49f, .68f})
+        r.box(center + glm::vec3(0, y, -.054f), {.84f, .022f, .012f}, wood * .72f);
+    for (float z : {-.049f, .049f})
+        r.box(center + glm::vec3(.45f, -.01f, z), {.075f, .22f, .024f}, metal);
+    r.box(center + glm::vec3(.45f, -.15f, -.064f), {.042f, .050f, .025f}, brass * .84f);
+    const auto notice = center + glm::vec3(-.06f, -.13f, -.041f);
+    r.box(notice, {.46f, .25f, .010f}, {.84f, .82f, .71f});
+    r.label(L"뒷문 열쇠", notice + glm::vec3(0, .052f, -.006f), {-.16f, 0, 0}, {0, .038f, 0}, metal);
+    r.label(L"복도 끝에 반납", notice + glm::vec3(0, -.048f, -.006f), {-.19f, 0, 0}, {0, .035f, 0}, metal);
+
+    const auto key = classroomKeySpot;
+    const float hookLength = falseHallWallX - .10f - key.x;
+    r.box(key + glm::vec3(hookLength * .5f, .041f, 0), {hookLength, .009f, .010f}, metal);
+    if (classroomKeyTaken_ || !r.visible(key, {.05f, .06f, .015f}))
+        return;
+    // The key reads edge-on from the corridor entrance and face-on from the side.
+    constexpr float fullCircle = 6.283185307f;
+    for (int i = 0; i < 10; ++i) {
+        const float a = i * fullCircle / 10, b = (i + 1) * fullCircle / 10;
+        const auto ring = key + glm::vec3(0, .026f, 0);
+        r.line(ring + glm::vec3(std::cos(a), std::sin(a), 0) * .018f,
+               ring + glm::vec3(std::cos(b), std::sin(b), 0) * .018f, .006f, brass);
+    }
+    r.box(key + glm::vec3(0, -.015f, 0), {.011f, .052f, .009f}, brass);
+    r.box(key + glm::vec3(.009f, -.030f, 0), {.023f, .009f, .009f}, brass);
+    r.box(key + glm::vec3(.007f, -.041f, 0), {.019f, .007f, .009f}, brass);
+}
+SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& camera) const {
+    const auto eye = camera.eye(), direction = camera.direction();
+    auto reaches = [&](const Box& target, float range) {
+        const float distance = SchoolRoom::rayBox(eye, direction, target);
+        if (distance < 0 || distance > range)
+            return false;
+        return std::none_of(solids_.begin(), solids_.end(), [&](const Solid& solid) {
+            const float hit = SchoolRoom::rayBox(eye, direction, box(solid.center, solid.size));
+            return hit >= 0 && hit < distance;
+        });
+    };
+    if (!classroomKeyTaken_ && reaches(box(classroomKeySpot, {.075f, .11f, .055f}), 1.28f))
+        return ClassroomAction::takeKey;
+    if (classroomKeyTaken_ && !classroomDoorUnlocked_ && reaches(classroomDoorBox(0), 1.65f))
+        return ClassroomAction::unlockDoor;
+    return ClassroomAction::none;
+}
+const wchar_t* SchoolCorridor::classroomInteractionLabel(const Camera& camera) const {
+    switch (classroomAction(camera)) {
+    case ClassroomAction::takeKey: return L"열쇠 줍기";
+    case ClassroomAction::unlockDoor: return L"잠금 풀기";
+    default: return nullptr;
+    }
+}
+bool SchoolCorridor::interactClassroom(const Camera& camera) {
+    switch (classroomAction(camera)) {
+    case ClassroomAction::takeKey:
+        classroomKeyTaken_ = true;
+        return true;
+    case ClassroomAction::unlockDoor:
+        classroomDoorUnlocked_ = true;
+        return true;
+    default:
+        return false;
+    }
 }
 void SchoolCorridor::buildBridgeDrawing() {
     // A single grating silhouette is reprojected onto the lower floor and the far riser.
@@ -490,36 +580,52 @@ void SchoolCorridor::buildBridgeDrawing() {
         strip(left + .09f, right - .09f, z - .145f, z, i % 4 == 0 ? steel : tread, false);
     }
 }
-float SchoolCorridor::bridgeAlignment(const Camera& camera) const {
+std::optional<float> SchoolCorridor::bridgeViewAlignment(const Camera& camera) const {
     if (!doorwayReady() || !camera.grounded || std::abs(camera.feet.y - floorHeight) > .08f ||
         camera.feet.z < gapNear || camera.feet.x < 22.5f || camera.feet.x > 24.7f)
-        return 0;
-    if (glm::dot(camera.direction(), glm::normalize(bridgeFocus - camera.eye())) < .965f)
-        return 0;
+        return std::nullopt;
+    const auto eye = camera.eye();
+    if (glm::dot(camera.direction(), glm::normalize(bridgeFocus - eye)) < .965f)
+        return std::nullopt;
     float error = 0;
     for (const auto& p : bridgeDrawing_) {
         if (!p.frame)
             continue;
         for (size_t i = 0; i < p.target.size(); ++i) {
-            const auto ray = p.receiver[i] - camera.eye();
+            const auto ray = p.receiver[i] - eye;
             const auto direction = glm::normalize(ray);
-            error = std::max(error, glm::length(direction - glm::normalize(p.target[i] - camera.eye())));
+            const float distance = glm::length(ray) - .025f;
+            error = std::max(error, glm::length(direction - glm::normalize(p.target[i] - eye)));
             for (const auto& s : solids_) {
-                const float hit = SchoolRoom::rayBox(camera.eye(), direction, box(s.center, s.size));
-                if (hit >= 0 && hit < glm::length(ray) - .025f)
-                    return 0;
+                const float hit = SchoolRoom::rayBox(eye, direction, box(s.center, s.size));
+                if (hit >= 0 && hit < distance)
+                    return std::nullopt;
             }
         }
     }
     return std::clamp(1 - error / .20f, 0.0f, 1.0f);
 }
+std::optional<AlignmentFeedback> SchoolCorridor::alignmentFeedback(const Camera& camera) const {
+    if (!forming_ && std::abs(angle_ - halfPi) < cupboardAngleTolerance) {
+        if (const auto score = doorViewAlignment(camera))
+            return AlignmentFeedback{*score, doorAlignmentThreshold, *score >= doorAlignmentThreshold,
+                                     std::clamp(recognition_ / recognitionDuration, 0.f, 1.f)};
+    }
+    if (!bridgeForming_) {
+        if (const auto score = bridgeViewAlignment(camera))
+            return AlignmentFeedback{*score, bridgeAlignmentThreshold, *score >= bridgeAlignmentThreshold,
+                                     std::clamp(bridgeHeld_ / .5f, 0.f, 1.f)};
+    }
+    return std::nullopt;
+}
 void SchoolCorridor::updateBridge(const Camera& camera, float dt) {
     if (!bridgeForming_) {
-        bridgeHeld_ = bridgeAlignment(camera) >= .75f ? bridgeHeld_ + dt : 0;
-        bridgeForming_ = bridgeHeld_ >= .5f;
+        const float score = bridgeAlignment(camera);
+        bridgeHeld_ = advanceAlignmentHold(bridgeHeld_, score, bridgeAlignmentThreshold, dt);
+        bridgeForming_ = score >= bridgeAlignmentThreshold && bridgeHeld_ >= .5f;
         return;
     }
-    bridgeFormation_ = std::min(1.0f, bridgeFormation_ + dt / .72f);
+    bridgeFormation_ = std::min(1.0f, bridgeFormation_ + dt / formationDuration);
 }
 void SchoolCorridor::drawBridge(Renderer& r) const {
     const float progress = glm::smoothstep(0.f, 1.f, bridgeFormation_);
@@ -581,7 +687,7 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
         r.triangle(p[0], p[1], p[2], patch.color);
         r.triangle(p[0], p[2], p[3], patch.color);
     }
-    r.label(L"계단실", {20.485f, 4.55f, -9.9f}, {0, 0, .43f}, {0, .16f, 0}, metal);
+    r.sign(L"계단실", {20.485f, 4.55f, -9.9f}, {0, 0, .55f}, {0, .18f, 0});
 }
 std::vector<Box> SchoolCorridor::doorBoxes(float angle) const {
     std::vector<Box> result;
@@ -598,6 +704,7 @@ std::vector<Box> SchoolCorridor::collisionBoxes() const {
     result.reserve(solids_.size() + 16);
     for (const auto& solid : solids_)
         result.push_back(box(solid.center, solid.size));
+    result.push_back(classroomDoorBox(classroomDoorOpening_));
     if (bridgeReady()) {
         result.push_back(
             box({bridgeEye.x, 1.78f, (gapNear + gapFar) * .5f}, {bridgeWidth, .04f, gapNear - gapFar}));
@@ -642,6 +749,11 @@ bool SchoolCorridor::interact(const Camera& camera) {
     return true;
 }
 void SchoolCorridor::update(const Camera& camera, float dt) {
+    if (classroomDoorUnlocked_ && classroomDoorOpening_ < 1) {
+        const float next = std::min(1.f, classroomDoorOpening_ + dt / .74f);
+        if (!touches(camera, classroomDoorBox(next)))
+            classroomDoorOpening_ = next;
+    }
     const float target = targetOpen_ ? halfPi : 0;
     const float distance = target - angle_;
     constexpr float acceleration = 12.0f;
@@ -680,12 +792,17 @@ void SchoolCorridor::draw(Renderer& r) const {
         if (s.visible)
             r.box(s.center, s.size, s.color);
     for (const auto& s : details_) {
-        if (s.bevel > 0)
-            beveledBoard(r, s.center, s.size, s.color, s.bevel);
-        else
+        if (s.bevel > 0) {
+            if (r.visible(s.center, s.size * .5f))
+                beveledBoard(r, s.center, s.size, s.color, s.bevel);
+        } else {
             r.box(s.center, s.size, s.color);
+        }
     }
     for (const auto& tree : foliage_) {
+        const float radius = std::max(tree.w, .09f);
+        if (!r.visible({tree.x, tree.y * .5f, tree.z}, {radius, tree.y * .5f, radius}))
+            continue;
         r.box({tree.x, tree.y * .29f, tree.z}, {.12f, tree.y * .58f, .12f}, {.39f, .34f, .25f}, .3f);
         constexpr float fullCircle = 6.283185307f;
         for (int segment = 0; segment < 9; ++segment) {
@@ -707,7 +824,9 @@ void SchoolCorridor::draw(Renderer& r) const {
         }
     }
     r.opacity(.012f);
-    for (const auto& base : furnitureBases_)
+    for (const auto& base : furnitureBases_) {
+        if (!r.visible(base + glm::vec3(0, .008f, 0), {.67f, .002f, .58f}))
+            continue;
         for (int layer = 0; layer < 20; layer++) {
             const auto center = base + glm::vec3(0, .007f + layer * .00008f, 0);
             const float rx = .67f - layer * .021f, rz = .58f - layer * .018f;
@@ -717,28 +836,27 @@ void SchoolCorridor::draw(Renderer& r) const {
                            center + glm::vec3(std::cos(a) * rx, 0, std::sin(a) * rz), {.18f, .24f, .20f});
             }
         }
+    }
     r.opacity(1);
     for (float x : {4.5f, 8.0f, 12.0f, 16.0f, 20.0f, 23.5f}) {
         r.box({x, 5.03f, -9.9f}, {1.05f, .10f, .32f}, metal);
         r.box({x, 4.97f, -9.9f}, {.96f, .02f, .24f}, {.98f, .96f, .85f});
     }
     // Ordinary school signs and notices identify spaces without spelling out a solution.
-    r.label(L"2 - 1", {6.25f, 4.4f, -11.48f}, {.32f, 0, 0}, {0, .14f, 0}, metal);
-    r.label(L"2 - 2", {13.45f, 4.4f, -11.48f}, {.32f, 0, 0}, {0, .14f, 0}, metal);
-    r.label(L"2-1  뒷문", {11.675f, 4.37f, -11.48f}, {.41f, 0, 0}, {0, .12f, 0}, metal);
+    r.sign(L"2-1", {6.25f, 4.43f, -11.48f}, {.47f, 0, 0}, {0, .18f, 0});
+    r.sign(L"2-2", {13.45f, 4.43f, -11.48f}, {.47f, 0, 0}, {0, .18f, 0});
+    r.sign(L"2-1  뒷문", {11.675f, 4.43f, -11.48f}, {.55f, 0, 0}, {0, .17f, 0});
+    r.sign(L"복도", {11.675f, 4.43f, -11.72f}, {-.47f, 0, 0}, {0, .16f, 0});
     for (float x : {11.045f, 12.305f})
         r.box({x, 2.95f, -11.60f}, {.075f, 2.30f, .21f}, wood);
     r.box({11.675f, 4.104f, -11.6f}, {1.33f, .085f, .22f}, wood);
-    r.box({23.545f, 4.56f, -11.478f}, {1.06f, .32f, .033f}, paint);
-    r.label(L"계단실", {23.545f, 4.56f, -11.457f}, {.38f, 0, 0}, {0, .10f, 0}, plaster);
-    r.box({24.95f, 3.6f, -9.9f}, {.1f, .46f, 1.15f}, paint);
-    r.label(L"계단 · 현관", {24.88f, 3.6f, -9.9f}, {0, 0, .52f}, {0, .17f, 0}, plaster);
-    r.box({3.0f, 4.45f, -11.46f}, {.9f, .36f, .05f}, paint);
-    r.label(L"복도", {3.0f, 4.45f, -11.425f}, {.31f, 0, 0}, {0, .12f, 0}, plaster);
+    r.sign(L"계단실", {23.545f, 4.56f, -11.457f}, {.55f, 0, 0}, {0, .18f, 0});
+    r.sign(L"계단 · 현관", {24.88f, 3.6f, -9.9f}, {0, 0, .56f}, {0, .20f, 0});
+    r.sign(L"2층 복도", {3.0f, 4.45f, -11.425f}, {.59f, 0, 0}, {0, .18f, 0});
     for (float x : {22.72f, 24.38f})
         r.box({x, 1.77f, -16.97f + stairShift}, {.09f, 2.34f, .12f}, wood);
     r.box({23.55f, 2.94f, -16.97f + stairShift}, {1.75f, .09f, .12f}, wood);
-    r.label(L"현관", {23.55f, 3.25f, -16.98f + stairShift}, {.33f, 0, 0}, {0, .15f, 0}, metal);
+    r.sign(L"1층 현관", {23.55f, 3.25f, -16.98f + stairShift}, {.58f, 0, 0}, {0, .18f, 0});
     r.box({3.95f, 3.45f, -11.47f}, {1.7f, 1.35f, .07f}, wood);
     r.box({3.95f, 3.45f, -11.42f}, {1.58f, 1.23f, .015f}, {.73f, .68f, .54f});
     r.label(L"학급 소식", {3.95f, 3.92f, -11.4f}, {.55f, 0, 0}, {0, .12f, 0}, metal);
@@ -768,6 +886,7 @@ void SchoolCorridor::draw(Renderer& r) const {
     }
     drawIllusion(r);
     drawFalseHall(r);
+    drawClassroomLock(r);
     drawBridge(r);
     r.label(L"점검 통로", {25.031f, 3.59f, -11.43f}, {0, 0, .37f}, {0, .13f, 0}, plaster);
     // Closed glass remains visible while preserving the useful side view into each gap.
