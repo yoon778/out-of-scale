@@ -180,7 +180,7 @@ void stageCapture(Application& state, const std::string& stage) {
                 }
             }
         } else if (stage == "corridor-door-open" || stage.rfind("corridor-illusion-", 0) == 0 ||
-                   stage.rfind("corridor-bridge-", 0) == 0 || stage == "corridor-stairwell") {
+                   stage.rfind("corridor-bridge-", 0) == 0 || stage.rfind("corridor-stairwell", 0) == 0) {
             state.camera.feet = {17.0f, 1.8f, -10.9f};
             state.camera.face(school::SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
             if (!state.room.toggleCupboard(state.camera))
@@ -211,7 +211,7 @@ void stageCapture(Application& state, const std::string& stage) {
                     if (stage == "corridor-illusion-through") {
                         state.camera.feet = {21.8f, 1.8f, -9.8f};
                         state.camera.face({18.8f, 3.1f, -10.4f});
-                    } else if (stage.rfind("corridor-bridge-", 0) == 0 || stage == "corridor-stairwell") {
+                    } else if (stage.rfind("corridor-bridge-", 0) == 0 || stage.rfind("corridor-stairwell", 0) == 0) {
                         state.camera.feet = school::SchoolCorridor::bridgeEye - glm::vec3(0, 1.65f, 0);
                         state.camera.resetMotion();
                         if (stage == "corridor-bridge-wrong")
@@ -223,7 +223,7 @@ void stageCapture(Application& state, const std::string& stage) {
                             state.camera.feet.x -= .5f;
                             state.camera.face(school::SchoolCorridor::bridgeFocus);
                         }
-                        if (stage == "corridor-bridge-complete" || stage == "corridor-stairwell") {
+                        if (stage == "corridor-bridge-complete" || stage.rfind("corridor-stairwell", 0) == 0) {
                             settle(state);
                             if (!state.room.corridorBridgeReady())
                                 throw std::runtime_error("Capture could not form the landing grating");
@@ -231,6 +231,12 @@ void stageCapture(Application& state, const std::string& stage) {
                         if (stage == "corridor-stairwell") {
                             state.camera.feet = {23.55f, 1.8f, -16.05f};
                             state.camera.face({23.55f, 1.65f, -20.1f});
+                        } else if (stage.rfind("corridor-stairwell-return", 0) == 0) {
+                            state.camera.feet = {23.55f, .6f, school::SchoolCorridor::exitZ};
+                            state.room.update(state.camera, {}, 1.f / 120);
+                            state.camera.feet = {stage.ends_with("left") ? 22.22f : 24.87f, 1.f, -18.5f};
+                            state.camera.resetMotion();
+                            state.camera.face({23.6f, 2.4f, -12.f});
                         }
                     } else if (stage == "corridor-illusion-complete") {
                         state.camera.feet = {17.2f, 1.8f, -9.9f};
@@ -258,6 +264,19 @@ void stageCapture(Application& state, const std::string& stage) {
         state.camera.yaw = glm::radians(stage == "notebook-blocked-wall" ? -90.f : -180.f);
         state.camera.pitch = 0;
         state.room.update(state.camera, {}, 1.f / 120);
+    } else if (stage == "notebook-ceiling-aim" || stage == "notebook-ceiling-drop") {
+        state.camera.feet = {-4.83f, 0, 3.8f};
+        state.camera.face(state.room.notebookCenter());
+        if (!state.room.toggleNotebook(state.camera))
+            throw std::runtime_error("Capture could not pick up the notebook for an upward release");
+        state.camera.feet = {4.8f, 0, 2.4f};
+        state.camera.yaw = 0;
+        state.camera.pitch = .65f;
+        if (stage == "notebook-ceiling-drop") {
+            state.room.toggleNotebook(state.camera);
+            settle(state);
+            state.camera.face(state.room.notebookCenter());
+        }
     } else if (stage == "notebook-start") {
         state.camera.feet = {-4.83f, 0, 3.80f};
         state.camera.face(state.room.notebookCenter());
@@ -441,6 +460,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "rear-cabinet-recovered",
                                         "notebook-blocked-wall",
                                         "notebook-blocked-rear",
+                                        "notebook-ceiling-aim",
+                                        "notebook-ceiling-drop",
                                         "notebook-on-desk",
                                         "pause-controls",
                                         "notebook-at-stand",
@@ -486,7 +507,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-bridge-wrong",
                                         "corridor-bridge-aligned",
                                         "corridor-bridge-forming",
-                                        "corridor-bridge-complete"}) {
+                                        "corridor-bridge-complete",
+                                        "corridor-stairwell-return-left",
+                                        "corridor-stairwell-return-right"}) {
             state.room.reset();
             state.camera = school::Camera();
             if (stage != "entrance")

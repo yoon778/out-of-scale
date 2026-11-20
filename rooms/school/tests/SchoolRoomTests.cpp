@@ -1282,6 +1282,60 @@ int runTests() {
               "repeated notebook pickups retain the book after recovery from a blocked drop");
     }
 
+    room.reset();
+    const auto sealedSolids = room.collisionBoxes(true, false);
+    auto nearestSolid = [&](glm::vec3 origin, glm::vec3 ray) {
+        float nearest = 1000;
+        for (const auto& solid : sealedSolids) {
+            const float hit = SchoolRoom::rayBox(origin, ray, solid);
+            if (hit >= 0)
+                nearest = std::min(nearest, hit);
+        }
+        return nearest;
+    };
+    for (const auto eye : {glm::vec3(22.22f, 2.65f, -18.5f), glm::vec3(24.87f, 2.65f, -18.5f)}) {
+        for (float x : {22.9f, 23.55f, 24.8f}) {
+            const auto ray = glm::normalize(glm::vec3(x, .8f, -12.f) - eye);
+            const float hitDepth = nearestSolid(eye, ray);
+            check(hitDepth < 8.f && (eye + ray * hitDepth).z <= -11.99f,
+                  "looking up the stairs cannot see the world void below the near landing");
+        }
+    }
+    check(std::abs(nearestSolid({3.8f, 1.65f, 2.4f}, {0, 1, 0}) - 2.85f) < .003f,
+          "the visible classroom ceiling also stops placement rays");
+    // Inspect the real body and support after repeated high-angle releases, including while airborne.
+    for (const auto feet : {glm::vec3(3.8f, 0, 2.4f), glm::vec3(3.8f, 1.1f, 2.4f),
+                            glm::vec3(3.05f, 1.8f, -6.f), glm::vec3(23.55f, .6f, SchoolCorridor::exitZ)}) {
+        for (float ratio : {.3f, 1.f, 2.3f}) {
+            for (float pitch : {.6f, 1.45f}) {
+                room.reset();
+                room.notebookRatio_ = ratio;
+                camera = Camera();
+                camera.feet = feet;
+                camera.pitch = pitch;
+                camera.grounded = feet.y != 1.1f;
+                const auto pose = room.notebookPlacement(camera);
+                const auto shown = pose.value_or(room.heldNotebookPose(camera));
+                const auto area = room.notebookBounds(shown);
+                const float localCeiling = feet.z < -20.6f ? 3.1f : (feet.z < -5.f ? 4.325f : 4.5f);
+                const auto toward = shown.center - camera.eye();
+                const float reach = glm::length(toward);
+                check(area.max.y <= localCeiling + .002f &&
+                          nearestSolid(camera.eye(), toward / reach) >= reach - .002f,
+                      "upward notebook placement and held previews remain below the actual ceiling and in sight");
+                room.toggleNotebook(camera);
+                if (pose) {
+                    tick(room, camera, {}, 180);
+                    const auto settled = room.notebookBounds(room.notebook_);
+                    check(room.notebookRatio_ == 0 && !room.notebookFalling_ && settled.min.y >= -.003f &&
+                              settled.max.y <= localCeiling + .002f,
+                          "an upward release settles inside the room instead of escaping above its roof");
+                } else
+                    check(room.notebookRatio_ == ratio, "a blocked upward release keeps the notebook in hand");
+            }
+        }
+    }
+
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

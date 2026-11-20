@@ -279,6 +279,7 @@ std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures, bool includeNo
     std::vector<Box> boxes = {bounds({-6.6f, 2.3f, 2}, {0.2f, 4.6f, 14.2f}),
                               bounds({6.6f, 2.3f, 2}, {0.2f, 4.6f, 14.2f}),
                               bounds({0, 2.3f, 9.1f}, {13.2f, 4.6f, 0.2f}),
+                              bounds({0, 4.6f, 2}, {13.2f, .2f, 14.2f}),
                               bounds({-2.05f, 2.3f, -5.05f}, {8.9f, 4.6f, 0.2f}),
                               bounds({5.1f, 2.3f, -5.05f}, {2.8f, 4.6f, 0.2f}),
                               bounds({3.05f, 4.3f, -5.05f}, {1.3f, 0.6f, 0.2f}),
@@ -548,9 +549,15 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
         const float support = notebookSupport(area, solids);
         if (!std::isfinite(support) || support > camera.feet.y + 1.30f || area.min.y < support - .003f)
             return false;
+        const auto toward = pose.center - eye;
+        const float reach = glm::length(toward);
+        if (reach < .001f)
+            return false;
         return std::none_of(solids.begin(), solids.end(), [&](const Box& solid) {
-            return overlapsXZ(solid, area) && area.min.y < solid.max.y - .002f &&
-                   area.max.y > solid.min.y + .002f;
+            const float hit = rayBox(eye, toward / reach, solid);
+            return (hit >= 0 && hit < reach - .002f) ||
+                   (overlapsXZ(solid, area) && area.min.y < solid.max.y - .002f &&
+                    area.max.y > solid.min.y + .002f);
         });
     };
 
