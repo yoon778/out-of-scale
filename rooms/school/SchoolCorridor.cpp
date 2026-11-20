@@ -228,6 +228,8 @@ void SchoolCorridor::build() {
     side(21.89f, -17 + stairShift, -11.6f);
     side(25.2f, -17 + stairShift, -17);
     floor(21.99f, 25.1f, gapFar, gapNear, 0);
+    // Close the void under the near landing when viewed back up the stairs.
+    solid({23.545f, .78f, gapNear + .10f}, {3.11f, 1.56f, .2f}, plaster);
     // Meet the landing underside so the two front faces do not overlap at the lip.
     solid({23.545f, .78f, gapFar - .10f}, {3.11f, 1.56f, .2f}, plaster);
     floor(21.99f, 25.1f, gapFar - .72f, gapFar);
