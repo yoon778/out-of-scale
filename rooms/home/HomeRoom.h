@@ -19,8 +19,11 @@ public:
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded = nullptr);
     bool computerActive() const;
     void closeComputer();
-    void computerInput(float horizontal, float vertical, float turn, float elapsed);
     void computerSelect(int number);
+    void computerKey(int key, int action, int mods);
+    void computerPointer(float u, float v);
+    void computerMouseButton(int button, int action, int mods);
+    void computerClearInput();
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
@@ -96,7 +99,8 @@ private:
     bool keyFits(const KeyPiece& key, const glm::vec3& eye) const;
     std::optional<KeyPiece> carriedKey(const glm::vec3& eye, const glm::vec3& direction) const;
     void updateKey(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
-    bool canFuseKey(const glm::vec3& eye, const glm::vec3& direction) const;
+    glm::mat4 pictureModel() const;
+    bool aimsAtPicture(const glm::vec3& eye, const glm::vec3& direction) const;
     bool portableFits(int index, const PortableObject& object, const glm::vec3& eye) const;
     std::optional<PortableObject> carriedPortable(int index, const glm::vec3& eye, const glm::vec3& direction) const;
     void updatePortables(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
@@ -111,18 +115,20 @@ private:
 
     BoxRenderer renderer_;
     ComputerScreen computer_;
-    std::optional<ComputerCube> computerCube_;
+    // A real room prop; coursework scenes never spawn this crate.
+    std::optional<ComputerCube> computerCube_{ComputerCube{{2.6f,.5f,-2.0f},1.0f,0.0f}};
     std::optional<KeyPiece> keyPiece_;
     std::array<PortableObject, 6> portable_{{
-        {{1.65f,1.085f,1.15f},0.0f},
+        {{-4.48f,1.93f,-6.30f},3.14159265f},
         {{0.0f,0.0f,0.0f},0.0f,0.0f,false},
-        {{2.85f,1.52f,5.65f},0.0f},
-        {{2.85f,.62f,5.65f},0.0f},
-        {{4.65f,.62f,5.65f},0.0f},
-        {{4.65f,1.52f,5.65f},1.5707963f},
+        {{2.70f,1.52f,9.80f},0.0f},
+        {{2.70f,.62f,9.80f},0.0f},
+        {{4.60f,.62f,9.80f},0.0f},
+        {{4.60f,1.52f,9.80f},1.5707963f},
     }};
     int heldPortable_ = -1;
-    bool socketFlat_ = true;
+    bool socketFlat_ = false;
+    bool pictureOpen_ = false;
     bool socketInstalled_ = false;
     bool completeKeyInserted_ = false;
     glm::vec3 lastEye_{0.0f,1.65f,5.0f};

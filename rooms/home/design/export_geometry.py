@@ -1,4 +1,4 @@
-"""Export the twenty bedroom mesh ranges with baked vertex colors for OpenGL.
+"""Export the twenty-two bedroom mesh ranges with baked vertex colors for OpenGL.
 
 blender --background "내 방.blend" --python export_geometry.py
 """
@@ -19,6 +19,7 @@ GROUP_NAMES = (
     "CabinetLeftDoor", "CabinetRightDoor", "CabinetMiniatures",
     "LockSocket", "SchoolDiorama", "MilitaryDiorama", "OfficeDiorama",
     "HomeDioramaBase",
+    "PictureDoor", "Crate",
 )
 LIGHT_DIRECTION = Vector((-0.65, 0.65, -0.25)).normalized()
 
@@ -90,7 +91,7 @@ def lit_color(surface, position, normal, tree, group):
     shade = 0.67 + directional * 0.28
     if group not in ("Shelf", "Door", "Rpg", "Rack", "MiniWalls", "LatchMounts", "LatchBolt",
                      "CabinetLeftDoor", "CabinetRightDoor", "LockSocket", "SchoolDiorama",
-                     "MilitaryDiorama", "OfficeDiorama", "HomeDioramaBase"):
+                     "MilitaryDiorama", "OfficeDiorama", "HomeDioramaBase", "PictureDoor", "Crate"):
         shade *= ambient_occlusion(tree, position, normal)
         # Soft daylight falloff and warm worklamp pools baked into the actual surfaces.
         daylight = math.exp(-((position.x + 5.1) / 3.6) ** 2

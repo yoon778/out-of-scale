@@ -1,6 +1,7 @@
 #include "ComputerScreen.h"
 
 #include <windows.h>
+#include <GL/glfw3.h>
 #include <GL/glm/gtc/matrix_transform.hpp>
 #include <GL/glm/gtc/type_ptr.hpp>
 
@@ -9,10 +10,19 @@
 #include <cmath>
 
 namespace {
-constexpr int textureWidth = 640;
-constexpr int textureHeight = 360;
+constexpr int textureWidth = 1280;
+constexpr int textureHeight = 720;
 constexpr int guideWidth = 860;
 constexpr int guideHeight = 60;
+constexpr int canvasX = 435, canvasY = 90, canvasWidth = 720, canvasHeight = 540;
+
+struct WorkspaceViewport { int x, y, width, height; };
+WorkspaceViewport workspaceViewport(int width, int height) {
+    const float scale = std::min(width / 1280.0f, height / 720.0f);
+    const int w = std::max(1, static_cast<int>(1280 * scale));
+    const int h = std::max(1, static_cast<int>(720 * scale));
+    return {(width-w)/2,(height-h)/2,w,h};
+}
 
 class GlState {
 public:
@@ -20,6 +30,8 @@ public:
         glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &drawFramebuffer_);
         glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer_);
         glGetIntegerv(GL_VIEWPORT, viewport_);
+        glGetIntegerv(GL_SCISSOR_BOX, scissorBox_);
+        glGetFloatv(GL_LINE_WIDTH, &lineWidth_);
         glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor_);
         glGetDoublev(GL_DEPTH_CLEAR_VALUE, &clearDepth_);
         glGetIntegerv(GL_DEPTH_FUNC, &depthFunction_);
@@ -35,6 +47,8 @@ public:
         glActiveTexture(activeTexture_);
         depth_ = glIsEnabled(GL_DEPTH_TEST);
         scissor_ = glIsEnabled(GL_SCISSOR_TEST);
+        blend_ = glIsEnabled(GL_BLEND);
+        cull_ = glIsEnabled(GL_CULL_FACE);
     }
 
     ~GlState() {
@@ -47,6 +61,10 @@ public:
         glDepthMask(depthMask_);
         restore(GL_DEPTH_TEST, depth_);
         restore(GL_SCISSOR_TEST, scissor_);
+        restore(GL_BLEND, blend_);
+        restore(GL_CULL_FACE, cull_);
+        glScissor(scissorBox_[0],scissorBox_[1],scissorBox_[2],scissorBox_[3]);
+        glLineWidth(lineWidth_);
         // OpenGL's core context shares the polygon mode between both faces.
         glPolygonMode(GL_FRONT_AND_BACK, polygonMode_[0]);
         glUseProgram(program_);
@@ -67,6 +85,8 @@ private:
     GLint drawFramebuffer_ = 0;
     GLint readFramebuffer_ = 0;
     GLint viewport_[4]{};
+    GLint scissorBox_[4]{};
+    GLfloat lineWidth_ = 1;
     GLfloat clearColor_[4]{};
     GLdouble clearDepth_ = 1.0;
     GLint depthFunction_ = GL_LESS;
@@ -80,6 +100,8 @@ private:
     GLint texture0_ = 0;
     GLboolean depth_ = GL_FALSE;
     GLboolean scissor_ = GL_FALSE;
+    GLboolean blend_ = GL_FALSE;
+    GLboolean cull_ = GL_FALSE;
 };
 
 GLuint shader(GLenum type, const char* source) {
@@ -119,6 +141,16 @@ GLuint guideTexture(const wchar_t* text) {
                              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
                              DEFAULT_PITCH, L"Malgun Gothic");
     HGDIOBJ oldFont = SelectObject(dc, font);
+    SIZE measured{};
+    GetTextExtentPoint32W(dc,text,lstrlenW(text),&measured);
+    if (measured.cx > guideWidth-16) {
+        SelectObject(dc,oldFont);
+        DeleteObject(font);
+        const int height=std::max(15,20*(guideWidth-16)/static_cast<int>(measured.cx));
+        font=CreateFontW(-height,0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,HANGEUL_CHARSET,
+                         OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Malgun Gothic");
+        SelectObject(dc,font);
+    }
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, RGB(240, 245, 244));
     DrawTextW(dc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
@@ -135,6 +167,43 @@ GLuint guideTexture(const wchar_t* text) {
     DeleteObject(bitmap);
     DeleteDC(dc);
     return result;
+}
+
+GLuint workspaceTexture(int selected) {
+    HDC dc=CreateCompatibleDC(nullptr);
+    if (!dc) return 0;
+    BITMAPINFO info{};
+    info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth=textureWidth; info.bmiHeader.biHeight=-textureHeight;
+    info.bmiHeader.biPlanes=1; info.bmiHeader.biBitCount=32;
+    void* pixels=nullptr;
+    HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
+    if (!bitmap) { DeleteDC(dc); return 0; }
+    const auto oldBitmap=SelectObject(dc,bitmap);
+    const auto fill=[&](RECT area,COLORREF color) { HBRUSH brush=CreateSolidBrush(color); FillRect(dc,&area,brush); DeleteObject(brush); };
+    fill({0,0,1280,720},RGB(16,24,31));
+    fill({0,0,320,720},RGB(24,35,45));
+    HFONT font=CreateFontW(-23,0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,HANGEUL_CHARSET,
+                           OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Malgun Gothic");
+    const auto oldFont=SelectObject(dc,font); SetBkMode(dc,TRANSPARENT);
+    const auto text=[&](const wchar_t* value,RECT rect,COLORREF color) { SetTextColor(dc,color); DrawTextW(dc,value,-1,&rect,DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX); };
+    text(L"컴퓨터그래픽스 실습",{26,22,310,70},RGB(229,239,244));
+    constexpr const wchar_t* names[6]{L"1_7.cpp · 도형",L"1_12.cpp · 쌓기",L"1_14.cpp · 3D 변환",L"1_18.cpp · 행성",L"1_26.cpp · 조명",L"열쇠 제작"};
+    constexpr const wchar_t* captions[6]{L"실습 1_7  ·  점 / 선 / 삼각형 / 사각형",L"실습 1_12  ·  움직이는 사각형 맞추기",L"실습 1_14  ·  이동 / 회전 / 깊이",L"실습 1_18  ·  부모와 자식의 변환",L"실습 1_26  ·  Phong 조명과 광원 공전",L"열쇠 제작  ·  네 도형을 이어 하나의 열쇠로"};
+    for(int i=0;i<6;++i) {
+        fill({20,100+i*76,300,164+i*76},i==selected?RGB(48,94,111):RGB(32,46,57));
+        text(names[i],{36,100+i*76,294,164+i*76},RGB(236,242,245));
+    }
+    text(captions[selected],{355,24,1260,76},RGB(223,235,241));
+    text(L"목록을 마우스로 선택",{30,598,310,642},RGB(155,180,194));
+    text(L"Tab  방으로 돌아가기",{30,644,310,690},RGB(195,216,226));
+    GdiFlush();
+    GLuint texture=0; glGenTextures(1,&texture); glBindTexture(GL_TEXTURE_2D,texture);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,textureWidth,textureHeight,0,GL_BGRA,GL_UNSIGNED_BYTE,pixels);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    SelectObject(dc,oldFont);DeleteObject(font);SelectObject(dc,oldBitmap);DeleteObject(bitmap);DeleteDC(dc);
+    return texture;
 }
 
 const std::array<MeshVertex, 36>& cubeMesh() {
@@ -178,18 +247,18 @@ ComputerScreen::~ComputerScreen() {
     if (depth_) glDeleteRenderbuffers(1, &depth_);
     if (program_) glDeleteProgram(program_);
     if (vertexArray_) glDeleteVertexArrays(1, &vertexArray_);
-    if (guide_) glDeleteTextures(1, &guide_);
-    if (holdingGuide_) glDeleteTextures(1, &holdingGuide_);
-    for (const GLuint texture : {cubeGuide_, keyGuide_, rejectedGuide_, outsideGuide_,
-                                 completeKeyGuide_, socketGuide_, miniatureGuide_}) {
+    for (const GLuint texture : {holdingGuide_, completeKeyGuide_, socketGuide_, miniatureGuide_,
+                                 keyReadyLabel_, keyTakenLabel_, keyRejectedLabel_}) {
         if (texture) glDeleteTextures(1, &texture);
     }
+    glDeleteTextures(static_cast<GLsizei>(workspaceLabels_.size()),workspaceLabels_.data());
+    glDeleteTextures(static_cast<GLsizei>(helpLabels_.size()),helpLabels_.data());
 }
 
 bool ComputerScreen::initialize() {
     const GlState state;
     glActiveTexture(GL_TEXTURE0);
-    if (!renderer_.initialize({}, computerMeshes())) return false;
+    if (!renderer_.initialize({}, computerMeshes()) || !labs_.initialize()) return false;
     constexpr char vertex[] = R"(#version 330 core
 uniform mat4 transform;
 out vec2 uv;
@@ -239,112 +308,65 @@ void main() { pixel = texture(image, vec2(uv.x, flip ? 1.0-uv.y : uv.y)); }
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, textureWidth, textureHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_);
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-    guide_ = guideTexture(L"1 큐브 / 2 열쇠조각    방향키 이동 · Q/R 회전 · 휠 크기    E 꺼내기    Tab 복귀");
-    holdingGuide_ = guideTexture(L"E 놓기     모니터를 보고 E 화면에 넣기");
-    cubeGuide_ = guideTexture(L"문제 1 | 방향키 이동 · 휠 크기로 흰 틀 맞추기    E 확인    Tab 복귀");
-    keyGuide_ = guideTexture(L"문제 2 | Q/R 회전으로 흰 열쇠조각과 겹치기    E 확인    Tab 복귀");
-    rejectedGuide_ = guideTexture(L"아직 흰 틀과 다름 | 위치·크기 또는 회전을 조정하고 E");
-    outsideGuide_ = guideTexture(L"선택한 물건은 방에 있음 | 다른 번호 선택 · 들고 와 모니터에 E 반환");
+    holdingGuide_ = guideTexture(L"E 놓기");
     completeKeyGuide_ = guideTexture(L"완성된 열쇠 | E 놓기 · 열쇠 구멍을 보고 E 끼우기");
     socketGuide_ = guideTexture(L"열쇠 구멍 | 장롱을 보고 E 붙이기 · 다른 곳에서 E 놓기");
     miniatureGuide_ = guideTexture(L"미니어처 | E 놓기 · 휠 회전 · 안의 물건은 내려놓은 뒤 조작");
-    return complete && guide_ && holdingGuide_ && cubeGuide_ && keyGuide_ && rejectedGuide_ &&
-           outsideGuide_ && completeKeyGuide_ && socketGuide_ && miniatureGuide_;
-}
-
-void ComputerScreen::input(float horizontal, float vertical, float turn, float elapsed) {
-    if (horizontal == 0.0f && vertical == 0.0f && turn == 0.0f) return;
-    if (selected_ == Item::Cube) {
-        if (!visible_) return;
-        position_ += glm::vec2{horizontal, vertical} * elapsed * .70f;
-        if (cubeSolved_) yaw_ = std::remainder(yaw_ + turn * elapsed * 1.6f, 6.2831853f);
-        clampPosition();
-    } else {
-        if (!keyVisible_) return;
-        keyYaw_ = std::remainder(keyYaw_ + turn * elapsed * 1.6f, 6.2831853f);
+    constexpr const wchar_t* help[6]{
+        L"P 점 · E 선 · T 삼각형 · R 사각형 | 클릭 선택 · WASD/IJKL 이동 · 1~4 전체 · C 비우기",
+        L"두 사각형이 점선 안에 들어오면 Enter · R 다시 시작",
+        L"C 육면체 / P 사각뿔 · X/Y 회전(Shift 반대) · 방향키 이동 · W/Shift+W · H 깊이 · S 초기화",
+        L"WASD 이동 · +/- 깊이 · P/Shift+P 투영 · M/Shift+M 와이어 · 1/2/3 애니메이션",
+        L"N 도형 · M 조명 · Y 회전 · R/Shift+R 광원 공전 · Z/Shift+Z 광원 거리",
+        L"도형 클릭·드래그 · Q/R 회전 · 휠 크기 | 머리·몸통·이빨 둘을 이어 열쇠 만들기 · E 확인"};
+    for (int i=0;i<6;++i) {
+        workspaceLabels_[i]=workspaceTexture(i);
+        helpLabels_[i]=guideTexture(help[i]);
+        if (!workspaceLabels_[i] || !helpLabels_[i]) return false;
     }
-    rejected_ = false;
-    dirty_ = true;
+    keyReadyLabel_=guideTexture(L"열쇠 모양 완성 | E 완성품 꺼내기 · Tab 방으로 돌아가기");
+    keyTakenLabel_=guideTexture(L"완성된 열쇠를 방으로 꺼냄 | 다른 실습 선택 · Tab 방으로 돌아가기");
+    keyRejectedLabel_=guideTexture(L"머리에 몸통을 잇고, 몸통 아래에 이빨 둘 붙이기 | 회전·크기도 확인 · E 다시 확인");
+    return complete && holdingGuide_ && completeKeyGuide_ && socketGuide_ && miniatureGuide_ &&
+           keyReadyLabel_ && keyTakenLabel_ && keyRejectedLabel_;
 }
 
-void ComputerScreen::scroll(double amount) {
-    if (selected_ != Item::Cube || !visible_) return;
-    edge_ = std::clamp(edge_ * std::exp(-static_cast<float>(amount) * .12f), .40f, 1.0f);
-    clampPosition();
-    rejected_ = false;
-    dirty_ = true;
+void ComputerScreen::keyInput(int key,int action,int mods) {
+    labs_.key(key,action,mods); rejected_=false; dirty_=true;
 }
-
-void ComputerScreen::setCubeVisible(bool visible) {
-    visible_ = visible;
-    if (!visible && !keySolved_) selected_ = Item::Key;
-    dirty_ = true;
+void ComputerScreen::selectLesson(int lesson) {
+    labs_.select(lesson); rejected_=false; dirty_=true;
 }
-void ComputerScreen::setCube(float edge, float yaw) {
-    edge_ = edge;
-    yaw_ = yaw;
-    clampPosition();
-    visible_ = true;
-    selected_ = Item::Cube;
-    rejected_ = false;
-    dirty_ = true;
+int ComputerScreen::selectedLesson() const { return labs_.selected(); }
+void ComputerScreen::clearInput() { labs_.clearInput(); dirty_=true; }
+void ComputerScreen::pointer(float u,float v) {
+    int width=0,height=0;
+    if (auto* window=glfwGetCurrentContext()) glfwGetFramebufferSize(window,&width,&height);
+    if (width<=0 || height<=0) return;
+    const auto area=workspaceViewport(width,height);
+    pointer_={(u*width-area.x)*textureWidth/area.width,(v*height-area.y)*textureHeight/area.height};
+    canvasPointer_=pointer_.x>=canvasX && pointer_.x<=canvasX+canvasWidth &&
+                   pointer_.y>=canvasY && pointer_.y<=canvasY+canvasHeight;
+    labs_.pointer({(pointer_.x-canvasX)*2/canvasWidth-1,1-(pointer_.y-canvasY)*2/canvasHeight},canvasPointer_);
+    dirty_=true;
 }
-float ComputerScreen::edge() const { return edge_; }
-float ComputerScreen::yaw() const { return yaw_; }
-
-void ComputerScreen::selectItem(int number) {
-    if (number == 1) selected_ = Item::Cube;
-    else if (number == 2 && cubeSolved_) selected_ = Item::Key;
-    rejected_ = false;
-    dirty_ = true;
-}
-
-ComputerScreen::Item ComputerScreen::selection() const { return selected_; }
-bool ComputerScreen::cubeSolved() const { return cubeSolved_; }
-bool ComputerScreen::keySolved() const { return keySolved_; }
-float ComputerScreen::keyYaw() const { return keyYaw_; }
-void ComputerScreen::setKeyVisible(bool visible) { keyVisible_ = visible; dirty_ = true; }
-void ComputerScreen::setKey(float yaw) {
-    keyYaw_ = yaw;
-    keyVisible_ = true;
-    selected_ = Item::Key;
-    rejected_ = false;
-    dirty_ = true;
-}
-
-ComputerScreen::Action ComputerScreen::confirm() {
-    if (selected_ == Item::Cube) {
-        if (!visible_) return Action::None;
-        if (!cubeSolved_ && (glm::length(position_ - glm::vec2{.55f, .10f}) > .10f ||
-                            std::abs(edge_ - .60f) > .035f)) {
-            rejected_ = true;
-            return Action::None;
+void ComputerScreen::mouseButton(int button,int action,int) {
+    if (button==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS && pointer_.x>=20 && pointer_.x<=300) {
+        for(int i=0;i<6;++i) if(pointer_.y>=100+i*76 && pointer_.y<=164+i*76) {
+            selectLesson(i); return;
         }
-        cubeSolved_ = true;
-        dirty_ = true;
-        return Action::TakeCube;
     }
-    if (!cubeSolved_ || !keyVisible_) return Action::None;
-    if (!keySolved_ && std::abs(std::remainder(keyYaw_, 6.2831853f)) > .12f) {
-        rejected_ = true;
-        return Action::None;
-    }
-    keySolved_ = true;
-    dirty_ = true;
-    return Action::TakeKey;
+    labs_.mouse(button,action); rejected_=false; dirty_=true;
 }
-
-void ComputerScreen::clampPosition() {
-    const float rotatedExtent = std::abs(std::cos(yaw_)) + std::abs(std::sin(yaw_));
-    const float halfWidth = edge_ * .5f * rotatedExtent;
-    const float viewCosine = 4.0f / std::sqrt(17.0f);
-    const float viewSine = 1.0f / std::sqrt(17.0f);
-    const float halfHeight = edge_ * .5f * (viewCosine + viewSine * rotatedExtent);
-    const float horizontalLimit = std::max(0.0f, std::min(.90f, 1.60f - halfWidth - .01f));
-    const float verticalLimit = std::max(0.0f, std::min(.35f, (.90f - halfHeight - .01f) / viewCosine));
-    position_.x = std::clamp(position_.x, -horizontalLimit, horizontalLimit);
-    position_.y = std::clamp(position_.y, -verticalLimit, verticalLimit);
+void ComputerScreen::scroll(double amount) { labs_.scroll(amount); rejected_=false; dirty_=true; }
+void ComputerScreen::update(float elapsed) { if (labs_.update(elapsed)) dirty_=true; }
+ComputerScreen::Action ComputerScreen::confirm() {
+    if (labs_.selected()!=5 || labs_.keyTaken()) return Action::None;
+    if (!labs_.keyReady()) { rejected_=true; dirty_=true; return Action::None; }
+    return Action::TakeCompleteKey;
 }
+void ComputerScreen::consumeKey() { labs_.consumeKey(); rejected_=false; dirty_=true; }
+bool ComputerScreen::keyTaken() const { return labs_.keyTaken(); }
 
 void ComputerScreen::drawCube(const glm::mat4& viewProjection, const glm::mat4& model) const {
     const GlState state;
@@ -387,44 +409,43 @@ void ComputerScreen::drawCompleteKey(const glm::mat4& viewProjection, const glm:
 void ComputerScreen::renderTexture() const {
     if (!dirty_) return;
     const GlState state;
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer_);
-    glViewport(0, 0, textureWidth, textureHeight);
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glDepthMask(GL_TRUE);
-    glDisable(GL_SCISSOR_TEST);
-    glClearColor(.055f,.085f,.11f,1.0f);
-    glClearDepth(1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    const auto view = glm::lookAt(glm::vec3{0.0f,1.0f,4.0f}, glm::vec3{0.0f}, glm::vec3{0.0f,1.0f,0.0f});
-    const auto projection = glm::ortho(-1.6f,1.6f,-.9f,.9f,.1f,10.0f) * view;
-    if (selected_ == Item::Cube && !cubeSolved_) {
-        auto goal = glm::translate(glm::mat4{1.0f}, {.55f, .10f, 0});
-        goal = glm::scale(glm::rotate(goal, .35f, {0,1,0}), glm::vec3{.60f});
-        renderer_.begin(projection);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        renderer_.drawMovableMesh(0, 36, goal, {2.7f, 2.0f, 1.4f});
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glBindFramebuffer(GL_FRAMEBUFFER,framebuffer_);
+    glViewport(0,0,textureWidth,textureHeight);
+    glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL); glLineWidth(1);
+    glDepthMask(GL_TRUE); glDepthFunc(GL_LESS); glClearDepth(1);
+    glClearColor(.03f,.04f,.05f,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    drawTexture(workspaceLabels_[labs_.selected()],glm::scale(glm::mat4{1},{2,2,1}),true);
+    glViewport(canvasX,textureHeight-canvasY-canvasHeight,canvasWidth,canvasHeight);
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(canvasX,textureHeight-canvasY-canvasHeight,canvasWidth,canvasHeight);
+    labs_.draw();
+    glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST);
+    glViewport(0,0,textureWidth,textureHeight); glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+    GLuint help=helpLabels_[labs_.selected()];
+    if(labs_.selected()==5) {
+        if(labs_.keyTaken()) help=keyTakenLabel_;
+        else if(rejected_) help=keyRejectedLabel_;
+        else if(labs_.keyReady()) help=keyReadyLabel_;
     }
-    if (selected_ == Item::Key && !keySolved_) {
-        renderer_.begin(projection);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        for (int index = 0; index < 3; ++index) {
-            const glm::vec3 partCenter = index == 0 ? glm::vec3{0,.1f,0} : glm::vec3{index == 1 ? .25f : .55f,-.1f,0};
-            const glm::vec3 size = index == 0 ? glm::vec3{1.3f,.2f,.12f} : glm::vec3{.13f,.2f,.12f};
-            renderer_.drawMovableMesh(36,36,glm::scale(glm::translate(glm::mat4{1},partCenter),size),{4.0f,4.0f,5.0f});
-        }
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-    if (selected_ == Item::Cube && visible_) {
-        auto model = glm::translate(glm::mat4{1.0f}, {position_.x, position_.y, 0.0f});
-        model = glm::rotate(model, yaw_, {0.0f,1.0f,0.0f});
-        model = glm::scale(model, glm::vec3{edge_});
-        drawCube(projection, model);
-    } else if (selected_ == Item::Key && keyVisible_) {
-        drawKeyPiece(projection, glm::rotate(glm::mat4{1.0f}, keyYaw_, {0,1,0}));
-    }
-    dirty_ = false;
+    // Footer uses the same top-left layout as pointer hit-testing.
+    auto footer=glm::translate(glm::mat4{1},{2*795.0f/textureWidth-1,1-2*674.0f/textureHeight,0});
+    footer=glm::scale(footer,{930.0f*2/textureWidth,60.0f*2/textureHeight,1});
+    drawTexture(help,footer,true);
+    dirty_=false;
+}
+
+void ComputerScreen::drawWorkspace() const {
+    const GlState state;
+    renderTexture();
+    GLint viewport[4]{}; glGetIntegerv(GL_VIEWPORT,viewport);
+    const auto area=workspaceViewport(viewport[2],viewport[3]);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_SCISSOR_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
+    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+    // Clear the full destination so non-16:9 windows have quiet letterbox bars.
+    glClearColor(.01f,.015f,.02f,1); glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(viewport[0]+area.x,viewport[1]+area.y,area.width,area.height);
+    drawTexture(color_,glm::scale(glm::mat4{1},{2,2,1}),false);
 }
 
 void ComputerScreen::drawTexture(GLuint texture, const glm::mat4& transform, bool flip) const {
@@ -449,18 +470,9 @@ void ComputerScreen::draw(const glm::mat4& viewProjection) const {
     drawTexture(color_, viewProjection * model, false);
 }
 
-void ComputerScreen::drawGuide(bool active, bool holding, bool holdingKey) const {
-    if (!active && !holding && !holdingKey) return;
-    GLuint label = holdingGuide_;
-    if (active) {
-        const bool available = selected_ == Item::Cube ? visible_ : keyVisible_;
-        if (!available) label = outsideGuide_;
-        else if (rejected_) label = rejectedGuide_;
-        else if (selected_ == Item::Cube && !cubeSolved_) label = cubeGuide_;
-        else if (selected_ == Item::Key && !keySolved_) label = keyGuide_;
-        else label = guide_;
-    }
-    drawLabel(label);
+void ComputerScreen::drawGuide(bool active,bool holding,bool holdingKey) const {
+    if (active) drawWorkspace();
+    else if (holding || holdingKey) drawLabel(holdingGuide_);
 }
 
 void ComputerScreen::drawCarryGuide(CarryHint hint) const {

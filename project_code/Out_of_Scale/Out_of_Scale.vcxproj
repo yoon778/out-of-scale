@@ -105,6 +105,9 @@
     <ClCompile Include="..\..\rooms\home\ComputerScreen.cpp">
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
+    <ClCompile Include="..\..\rooms\home\CourseworkLabs.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="..\..\rooms\military\MilitaryRoom.cpp" />
     <ClCompile Include="..\..\rooms\military\ParadeGround.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
@@ -129,6 +132,7 @@
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\home\HomeRoom.h" />
     <ClInclude Include="..\..\rooms\home\ComputerScreen.h" />
+    <ClInclude Include="..\..\rooms\home\CourseworkLabs.h" />
     <ClInclude Include="..\..\rooms\home\HomeGeometry.inc" />
     <ClInclude Include="..\..\rooms\military\MilitaryRoom.h" />
     <ClInclude Include="..\..\rooms\military\MilitaryGeometry.inc" />
@@ -148,5 +152,9 @@
   <Target Name="CopySchoolArtwork" AfterTargets="Build">
     <Copy SourceFiles="$(ProjectDir)..\..\rooms\school\assets\art-class-still-life-v2.png" DestinationFolder="$(TargetDir)assets\" SkipUnchangedFiles="true" />
     <Copy Condition="'$(OpenGLRoot)'!=''" SourceFiles="$(OpenGLRoot)\bin\x64\glew32.dll" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyHomeCourseworkModel" AfterTargets="Build">
+    <MakeDir Directories="$(TargetDir)rooms\home\coursework\" />
+    <Copy SourceFiles="$(ProjectDir)..\..\rooms\home\coursework\sphere.obj" DestinationFolder="$(TargetDir)rooms\home\coursework\" SkipUnchangedFiles="true" />
   </Target>
 </Project>

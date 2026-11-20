@@ -95,9 +95,13 @@ Scene<Room>& sceneFor(GLFWwindow* window) {
 
 template<class Room>
 void updatePauseCursor(GLFWwindow* window, Scene<Room>& scene, bool wasPaused) {
-    if (scene.pause->isPaused() != wasPaused) {
+    bool pointer = scene.pause->isPaused();
+    if constexpr (std::is_same_v<Room, HomeRoom>) pointer = pointer || scene.room.computerActive();
+    const int cursor = pointer ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED;
+    if (scene.pause->isPaused() != wasPaused || glfwGetInputMode(window,GLFW_CURSOR) != cursor) {
         scene.player.resetMouseSample();
-        glfwSetInputMode(window, GLFW_CURSOR, scene.pause->isPaused() ? GLFW_CURSOR_NORMAL : GLFW_CURSOR_DISABLED);
+        if constexpr (std::is_same_v<Room, HomeRoom>) scene.room.computerClearInput();
+        glfwSetInputMode(window, GLFW_CURSOR, cursor);
     }
 }
 
@@ -142,6 +146,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
     scene.destination.reset();
     scene.pause = &pause;
     scene.player.resetMouseSample();
+    updatePauseCursor(window,scene,pause.isPaused());
     const auto titleForRoom = [&scene] {
         if constexpr (std::is_same_v<Room, MapPreview>) {
             return scene.room.title();
@@ -158,6 +163,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         if (!scene.pause->isPaused()) {
             if constexpr (std::is_same_v<Room, HomeRoom>) {
                 if (scene.room.computerActive()) {
+                    int width = 0, height = 0;
+                    glfwGetWindowSize(target,&width,&height);
+                    if (width > 0 && height > 0) scene.room.computerPointer(static_cast<float>(x/width),static_cast<float>(y/height));
                     return;
                 }
             }
@@ -166,12 +174,19 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
     });
     glfwSetWindowFocusCallback(window, [](GLFWwindow* target, int) {
         sceneFor<Room>(target).player.resetMouseSample();
+        if constexpr (std::is_same_v<Room, HomeRoom>) sceneFor<Room>(target).room.computerClearInput();
     });
-    glfwSetKeyCallback(window, [](GLFWwindow* target, int key, int, int action, int) {
-        if (action != GLFW_PRESS || glfwGetWindowAttrib(target, GLFW_FOCUSED) != GLFW_TRUE) {
+    glfwSetKeyCallback(window, [](GLFWwindow* target, int key, int, int action, int mods) {
+        if (glfwGetWindowAttrib(target, GLFW_FOCUSED) != GLFW_TRUE) {
             return;
         }
         auto& scene = sceneFor<Room>(target);
+        if (action != GLFW_PRESS) {
+            if constexpr (std::is_same_v<Room, HomeRoom>) {
+                if (!scene.pause->isPaused() && scene.room.computerActive()) scene.room.computerKey(key,action,mods);
+            }
+            return;
+        }
         const bool wasPaused = scene.pause->isPaused();
         if (scene.pause->keyPressed(target, key)) {
             updatePauseCursor(target, scene, wasPaused);
@@ -188,12 +203,12 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             if (scene.room.computerActive()) {
                 if (key == GLFW_KEY_TAB) {
                     scene.room.closeComputer();
-                } else if (key == GLFW_KEY_E) {
-                    scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
-                } else if (key == GLFW_KEY_1 || key == GLFW_KEY_2) {
-                    scene.room.computerSelect(key == GLFW_KEY_1 ? 1 : 2);
+                } else {
+                    scene.room.computerKey(key,action,mods);
+                    if (key == GLFW_KEY_E) scene.room.interact(scene.player.eyePosition(),scene.player.viewDirection());
                 }
                 scene.player.resetMouseSample();
+                updatePauseCursor(target,scene,wasPaused);
                 return;
             }
         }
@@ -204,22 +219,29 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
                 scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
                 if constexpr (std::is_same_v<Room, HomeRoom>) {
                     scene.player.resetMouseSample();
+                    updatePauseCursor(target,scene,wasPaused);
                 }
             }
         }
     });
-    glfwSetMouseButtonCallback(window, [](GLFWwindow* target, int button, int action, int) {
-        if (button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS ||
-            glfwGetWindowAttrib(target, GLFW_FOCUSED) != GLFW_TRUE) {
+    glfwSetMouseButtonCallback(window, [](GLFWwindow* target, int button, int action, int mods) {
+        if (glfwGetWindowAttrib(target, GLFW_FOCUSED) != GLFW_TRUE) {
             return;
         }
         auto& scene = sceneFor<Room>(target);
         const bool wasPaused = scene.pause->isPaused();
         if (wasPaused) {
-            scene.pause->click(target);
+            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) scene.pause->click(target);
             updatePauseCursor(target, scene, wasPaused);
         } else if constexpr (std::is_same_v<Room, HomeRoom>) {
-            if (!scene.room.computerActive()) {
+            if (scene.room.computerActive()) {
+                double x = 0, y = 0;
+                int width = 0, height = 0;
+                glfwGetCursorPos(target,&x,&y);
+                glfwGetWindowSize(target,&width,&height);
+                if (width > 0 && height > 0) scene.room.computerPointer(static_cast<float>(x/width),static_cast<float>(y/height));
+                scene.room.computerMouseButton(button,action,mods);
+            } else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
                 scene.room.shoot(scene.player.eyePosition(), scene.player.viewDirection());
             }
         }
@@ -247,6 +269,8 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             if constexpr (std::is_same_v<Room, HomeRoom>) {
                 scene.room.closeComputer();
             }
+            scene.player.resetMouseSample();
+            glfwSetInputMode(window,GLFW_CURSOR,GLFW_CURSOR_DISABLED);
             activeMap = *scene.destination;
             break;
         }
@@ -260,15 +284,6 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             bool computerActive = false;
             if constexpr (std::is_same_v<Room, HomeRoom>) {
                 computerActive = scene.room.computerActive();
-                if (computerActive && glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE) {
-                    const float horizontal = static_cast<float>(
-                        glfwGetKey(window, GLFW_KEY_RIGHT) - glfwGetKey(window, GLFW_KEY_LEFT));
-                    const float vertical = static_cast<float>(
-                        glfwGetKey(window, GLFW_KEY_UP) - glfwGetKey(window, GLFW_KEY_DOWN));
-                    const float turn = static_cast<float>(
-                        glfwGetKey(window, GLFW_KEY_R) - glfwGetKey(window, GLFW_KEY_Q));
-                    scene.room.computerInput(horizontal, vertical, turn, elapsed);
-                }
             }
             if (!computerActive) {
                 scene.player.update(window, elapsed, Room::halfSize,
