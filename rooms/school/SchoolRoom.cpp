@@ -7,7 +7,38 @@
 
 namespace school {
 namespace {
-constexpr std::array<float, 3> boardX{-2.80f, -0.85f, 1.10f};
+constexpr float galleryRailHeight = 1.05f;
+constexpr float galleryRailPostY = SchoolRoom::landingHeight + galleryRailHeight * .5f;
+constexpr glm::vec3 gallerySideRail{2.10f, SchoolRoom::landingHeight + galleryRailHeight, -4.38f};
+constexpr glm::vec3 gallerySideRailSize{.075f, .075f, 1.24f};
+constexpr glm::vec3 galleryGateSize{1.86f, .075f, .075f};
+glm::mat4 fitReflection(const glm::mat4& viewProjection, glm::vec3 glass, glm::vec3 right, glm::vec3 up) {
+    glm::vec2 low{1.f}, high{-1.f};
+    for (float x : {-1.f, 1.f})
+        for (float y : {-1.f, 1.f}) {
+            const auto clip = viewProjection * glm::vec4(glass + right * x + up * y, 1);
+            if (clip.w <= .05f)
+                return viewProjection; // Glass crosses the near plane. Keep the full view.
+            const auto point = glm::vec2(clip) / clip.w;
+            low = glm::min(low, point);
+            high = glm::max(high, point);
+        }
+    low = glm::max(low - glm::vec2(.012f), glm::vec2(-1.015f));
+    high = glm::min(high + glm::vec2(.012f), glm::vec2(1.015f));
+    const auto extent = high - low;
+    if (extent.x < .001f || extent.y < .001f)
+        return viewProjection;
+    // Give the mirror's visible area the whole reflection texture rather than a small crop of it.
+    glm::mat4 crop(1);
+    crop[0][0] = 2 / extent.x;
+    crop[1][1] = 2 / extent.y;
+    crop[3][0] = -(high.x + low.x) / extent.x;
+    crop[3][1] = -(high.y + low.y) / extent.y;
+    return crop * viewProjection;
+}
+constexpr float boardHalf = .695f;
+constexpr float boardTravel = .13f;
+constexpr float boardMoveSeconds = .24f;
 constexpr std::array<float, 3> deskColumns{-3.05f, -0.95f, 1.15f};
 constexpr std::array<float, 4> deskRows{0.65f, 2.55f, 4.45f, 6.35f};
 struct ChairPose {
@@ -23,12 +54,14 @@ ChairPose chairPose(int seat, float x, float z) {
 struct Fixture {
     glm::vec3 center, size;
 };
+constexpr Fixture artSuppliesCabinet{{SchoolRoom::notebookRest.x, .44f, SchoolRoom::notebookRest.z},
+                                     {.65f, .88f, 2.00f}};
 // Floor furnishings share their placement with collision; small tabletop details stay within them.
 constexpr std::array<Fixture, 9> fixtures{{
     {{-3.45f, 0.70f, 8.58f}, {4.70f, 1.40f, 0.72f}},
     {{5.98f, 1.08f, 6.15f}, {0.70f, 2.16f, 2.25f}},
     {{0.65f, 0.27f, 8.35f}, {2.00f, 0.54f, 0.62f}},
-    {{6.02f, 0.44f, 2.60f}, {0.65f, 0.88f, 2.00f}},
+    artSuppliesCabinet,
     {{-5.95f, 0.38f, 7.80f}, {0.45f, 0.76f, 0.45f}},
     {{5.90f, 0.30f, 8.25f}, {0.46f, 0.60f, 0.46f}},
     {{-5.98f, 1.00f, -3.20f}, {0.72f, 2.00f, 0.95f}},
@@ -40,21 +73,78 @@ constexpr glm::vec3 timber{0.52f, 0.32f, 0.16f};
 constexpr glm::vec3 mint{0.32f, 0.46f, 0.38f};
 constexpr glm::vec3 cream{0.88f, 0.84f, 0.71f};
 constexpr glm::vec3 brass{0.75f, 0.55f, 0.25f};
-constexpr float mirrorAngle = 0.802851456f;
+constexpr glm::vec3 notebookSize{.42f, .32f, .064f};
+constexpr glm::vec3 notebookCover{.52f, .20f, .18f};
+constexpr Fixture notebookStand{{-6.20f, 1.148f, SchoolRoom::notebookStart.z}, {.49f, .036f, .74f}};
+constexpr float readableNotebookScale = 2.65f;
+constexpr float maxNotebookScale = 5.5f;
+constexpr float minNotebookScale = .30f;
+constexpr float notebookHalfHeight = notebookSize.y * .5f;
+constexpr const wchar_t* notebookClues[]{
+    L"숫자 1~4를 하나씩",
+    L"둘째는 4, 셋째는 1",
+    L"넷째는 첫째보다 크게",
+    L"위쪽 숫자를 보고 맞춰요",
+};
+constexpr const wchar_t* notebookPanelLabels[]{L"?", L"4", L"1", L"?"};
+constexpr const wchar_t* notebookControls[]{
+    L"누른 판의 숫자 +1",
+    L"오른쪽 판의 숫자 +2",
+    L"끝판 다음은 첫째 판",
+    L"4 다음은 다시 1",
+};
+constexpr float mirrorStartYaw = .10f;
+constexpr float mirrorMaxYaw = 1.32f;
+constexpr float mirrorHalfWidth = .683f, mirrorHalfHeight = .965f;
+constexpr float maxStandNotebookScale = 3.60f;
+bool onReflectionStand(const perspective::Pose& pose) {
+    const auto rest = SchoolRoom::notebookRest;
+    return std::abs(pose.center.x - rest.x) < .002f && std::abs(pose.center.z - rest.z) < .002f &&
+           std::abs(pose.center.y - pose.scale * notebookHalfHeight - rest.y) < .004f;
+}
+glm::vec3 notebookNormal(glm::vec3 center) {
+    auto toward = SchoolRoom::mirrorCenter - center;
+    toward.y = 0;
+    return glm::dot(toward, toward) > .01f ? glm::normalize(toward) : glm::vec3(0, 0, -1);
+}
+struct NotebookAxes {
+    glm::vec3 right, up, normal;
+};
+NotebookAxes notebookAxes(glm::vec3 center, bool onStand) {
+    const auto facing = onStand ? glm::normalize(glm::vec3(1, 0, .23f)) : notebookNormal(center);
+    const glm::vec3 right{facing.z, 0, -facing.x};
+    // Lean back into the wooden display stand. Floor placement keeps the readable page vertical.
+    constexpr glm::vec3 worldUp{0, 1, 0};
+    return onStand ? NotebookAxes{right, worldUp * .94f - facing * .342f, facing * .94f + worldUp * .342f}
+                   : NotebookAxes{right, worldUp, facing};
+}
 Box bounds(glm::vec3 c, glm::vec3 s) {
     return {c - s / 2.0f, c + s / 2.0f};
+}
+float ceilingAt(float z) {
+    return z < -8.3f ? 5.1f : (z < -5.f ? 4.325f : 4.5f);
+}
+bool overlapsXZ(const Box& a, const Box& b) {
+    return a.min.x < b.max.x && a.max.x > b.min.x && a.min.z < b.max.z && a.max.z > b.min.z;
 }
 bool footprint(glm::vec3 p, const Box& b, float radius) {
     const float dx = p.x - std::clamp(p.x, b.min.x, b.max.x);
     const float dz = p.z - std::clamp(p.z, b.min.z, b.max.z);
     return dx * dx + dz * dz < radius * radius;
 }
+float horizontalClearance(glm::vec3 p, const Box& b) {
+    const glm::vec2 outside{p.x - std::clamp(p.x, b.min.x, b.max.x),
+                            p.z - std::clamp(p.z, b.min.z, b.max.z)};
+    if (glm::dot(outside, outside) > 0)
+        return glm::length(outside);
+    return -std::min({p.x - b.min.x, b.max.x - p.x, p.z - b.min.z, b.max.z - p.z});
+}
 bool overlap(glm::vec3 p, const Box& b) {
     return footprint(p, b, SchoolRoom::radius) && p.y + SchoolRoom::bodyHeight > b.min.y + 0.002f &&
            p.y < b.max.y - 0.002f;
 }
 float boardZ(int index) {
-    return -4.68f + index * 0.105f;
+    return -4.68f + index * 0.07f;
 }
 glm::mat3 projectorBasis(float yaw, float pitch) {
     glm::vec3 forward{std::sin(yaw) * std::cos(pitch), std::sin(pitch), -std::cos(yaw) * std::cos(pitch)};
@@ -70,9 +160,10 @@ const std::vector<ProjectionSurface>& projectionSurfaces() {
     // The same receiving planes serve the light, slide strokes and puzzle checks.
     static const std::vector<ProjectionSurface> surfaces = [] {
         std::vector<ProjectionSurface> result;
-        for (int i = 0; i < 3; ++i)
-            result.push_back(
-                {2, boardZ(i) + 0.055f, {boardX[i] - 0.9f, 1.26f, 0}, {boardX[i] + 0.9f, 3.18f, 0}});
+        for (int i = 0; i < static_cast<int>(SchoolRoom::boardX.size()); ++i) {
+            const float x = SchoolRoom::boardX[i];
+            result.push_back({2, boardZ(i) + .055f, {x - boardHalf, 1.26f, 0}, {x + boardHalf, 3.18f, 0}});
+        }
         result.push_back({1, 0.012f, {-6.5f, 0, -5}, {6.5f, 0, 9}});
         result.push_back({2, -3.777f, {2.1f, 0, 0}, {6.5f, 1.8f, 0}});
         result.push_back({2, -4.94f, {-6.5f, 0, 0}, {2.4f, 4.5f, 0}});
@@ -113,9 +204,24 @@ glm::vec3 Camera::direction() const {
     return {std::sin(yaw) * std::cos(pitch), std::sin(pitch), -std::cos(yaw) * std::cos(pitch)};
 }
 void Camera::face(glm::vec3 target) {
+    focusTime = 0;
     glm::vec3 d = glm::normalize(target - eye());
     yaw = std::atan2(d.x, -d.z);
     pitch = std::asin(d.y);
+}
+void Camera::focusOn(glm::vec3 target) {
+    const auto d = glm::normalize(target - eye());
+    focusStart = {yaw, pitch};
+    focusDelta = {std::remainder(std::atan2(d.x, -d.z) - yaw, 6.283185307f), std::asin(d.y) - pitch};
+    focusTime = .20f;
+}
+void Camera::updateFocus(float dt) {
+    if (focusTime <= 0 || dt <= 0)
+        return;
+    focusTime = std::max(0.f, focusTime - dt);
+    const auto angles = focusStart + focusDelta * glm::smoothstep(0.f, 1.f, 1.f - focusTime / .20f);
+    yaw = angles.x;
+    pitch = angles.y;
 }
 SchoolRoom::SchoolRoom() {
     reset();
@@ -133,9 +239,19 @@ void SchoolRoom::reset() {
     projectorYaw_ = std::atan2(direction.x, -direction.z);
     projectorPitch_ = std::asin(direction.y);
     adjustingProjector_ = projectorAligned_ = false;
+    boardPositions_ = boardStart;
+    for (int i = 0; i < static_cast<int>(boardX.size()); ++i)
+        boardOffsets_[i] = (boardPositions_[i] - boardGoal[i]) * boardTravel;
+    boardFrom_ = boardOffsets_;
+    boardMotion_ = 0;
+    mirrorGuide_ = adjustingMirror_ = false;
+    mirrorYaw_ = mirrorStartYaw;
+    notebook_ = {notebookStart, 1.f};
+    notebookRatio_ = notebookFallSpeed_ = 0;
+    notebookFalling_ = false;
 }
 glm::vec3 SchoolRoom::mirrorNormal() const {
-    return {std::sin(mirrorAngle), 0, std::cos(mirrorAngle)};
+    return {std::sin(mirrorYaw_), 0, std::cos(mirrorYaw_)};
 }
 float SchoolRoom::rayBox(glm::vec3 o, glm::vec3 d, const Box& b) {
     float near = 0, far = 10000;
@@ -155,10 +271,15 @@ float SchoolRoom::rayBox(glm::vec3 o, glm::vec3 d, const Box& b) {
     }
     return far >= 0 ? near : -1;
 }
-std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures) const {
+glm::vec3 SchoolRoom::galleryGateCenter() const {
+    const float slide = 1.87f * glm::smoothstep(.64f, 1.f, formation_);
+    return {3.025f + slide, gallerySideRail.y, -3.80f};
+}
+std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures, bool includeNotebook) const {
     std::vector<Box> boxes = {bounds({-6.6f, 2.3f, 2}, {0.2f, 4.6f, 14.2f}),
                               bounds({6.6f, 2.3f, 2}, {0.2f, 4.6f, 14.2f}),
                               bounds({0, 2.3f, 9.1f}, {13.2f, 4.6f, 0.2f}),
+                              bounds({0, 4.6f, 2}, {13.2f, .2f, 14.2f}),
                               bounds({-2.05f, 2.3f, -5.05f}, {8.9f, 4.6f, 0.2f}),
                               bounds({5.1f, 2.3f, -5.05f}, {2.8f, 4.6f, 0.2f}),
                               bounds({3.05f, 4.3f, -5.05f}, {1.3f, 0.6f, 0.2f}),
@@ -170,10 +291,12 @@ std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures) const {
                               bounds({3.05f, 0.9f, -6.0f}, {1.35f, 1.8f, 2.1f})};
     for (const auto& fixture : fixtures)
         boxes.push_back(bounds(fixture.center, fixture.size));
-    boxes.push_back(bounds({3.48f, 2.55f, -6.45f}, {0.42f, 1.45f, 0.95f}));
+    boxes.push_back(bounds(notebookStand.center, notebookStand.size));
     if (includeFixtures) {
         // Fixed clearance around moving fixtures prevents rotation/sliding from trapping a player.
         boxes.push_back(bounds(mirrorCenter, {1.6f, 2.1f, 1.6f}));
+        if (includeNotebook && notebookRatio_ == 0)
+            boxes.push_back(notebookBounds(notebook_));
         boxes.push_back(bounds({-0.85f, 2.23f, -4.49f}, {5.96f, 2.22f, 0.82f}));
     }
     int seat = 0;
@@ -184,7 +307,9 @@ std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures) const {
             const float c = std::abs(std::cos(chair.yaw)), s = std::abs(std::sin(chair.yaw));
             boxes.push_back(bounds(chair.center, {0.48f * c + 0.52f * s, 0.94f, 0.52f * c + 0.48f * s}));
         }
-    boxes.push_back(bounds({5.2f, 2.3f, -3.78f}, {2.5f, 1.0f, 0.08f}));
+    boxes.push_back(bounds({5.2f, galleryRailPostY, -3.78f}, {2.5f, galleryRailHeight, 0.08f}));
+    boxes.push_back(bounds(gallerySideRail, gallerySideRailSize));
+    boxes.push_back(bounds(galleryGateCenter(), galleryGateSize));
     if (stairsReady_)
         for (int i = 0; i < 6; ++i) {
             float height = (i + 1) * 0.3f;
@@ -196,13 +321,17 @@ std::vector<Box> SchoolRoom::collisionBoxes(bool includeFixtures) const {
     return boxes;
 }
 void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
-    const auto boxes = collisionBoxes();
+    const auto boxes = collisionBoxes(true, false);
+    // The upright paper notebook obstructs movement but cannot support the player as a step.
+    const auto book = notebookRatio_ == 0 ? std::optional{notebookBounds(notebook_)} : std::nullopt;
     glm::vec3 f{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
     glm::vec3 velocity = f * input.forward + glm::vec3(-f.z, 0, f.x) * input.right;
     velocity /= std::max(1.0f, glm::length(velocity));
     velocity *= 3.0f;
     const float response = glm::length(velocity) > .01f ? 26.0f : 38.0f;
-    camera.movement = glm::mix(camera.movement, velocity, 1 - std::exp(-response * dt));
+    const float blend = -std::expm1(-response * dt);
+    const glm::vec3 displacement = velocity * dt + (camera.movement - velocity) * (blend / response);
+    camera.movement += (velocity - camera.movement) * blend;
     if (glm::length(velocity) < .01f && glm::length(camera.movement) < .015f)
         camera.movement = {};
     camera.stepOffset *= std::exp(-14.0f * dt);
@@ -210,18 +339,18 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
         camera.stepOffset = 0;
     for (int axis : {0, 2}) {
         glm::vec3 next = camera.feet;
-        next[axis] += camera.movement[axis] * dt;
+        next[axis] += displacement[axis];
         float step = next.y;
         for (const Box& b : boxes)
             if (overlap(next, b) && camera.grounded && b.max.y - camera.feet.y <= 0.31f)
                 step = std::max(step, b.max.y);
         next.y = step;
-        bool blocked = false;
-        for (const Box& b : boxes)
-            if (overlap(next, b)) {
-                blocked = true;
-                break;
-            }
+        // An existing shallow overlap must allow movement back into free space.
+        const auto blocks = [&](const Box& b) {
+            return overlap(next, b) &&
+                   (!overlap(camera.feet, b) || horizontalClearance(next, b) <= horizontalClearance(camera.feet, b));
+        };
+        const bool blocked = (book && blocks(*book)) || std::any_of(boxes.begin(), boxes.end(), blocks);
         if (!blocked) {
             camera.stepOffset = std::clamp(camera.stepOffset + camera.feet.y - next.y, -.35f, .30f);
             camera.feet = next;
@@ -233,7 +362,8 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
     float newY = oldY + camera.verticalSpeed * dt;
     float support = 0;
     for (const Box& b : boxes)
-        if (footprint(camera.feet, b, radius - 0.02f)) {
+        // Landing and side collision use the same body radius, including furniture corners.
+        if (footprint(camera.feet, b, radius)) {
             if (b.max.y <= oldY + 0.02f)
                 support = std::max(support, b.max.y);
             if (camera.verticalSpeed > 0 && oldY + bodyHeight <= b.min.y && newY + bodyHeight >= b.min.y) {
@@ -241,7 +371,12 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
                 camera.verticalSpeed = 0;
             }
         }
-    const float ceiling = camera.feet.z < -8.3f ? 5.1f : (camera.feet.z < -5.0f ? 4.325f : 4.5f);
+    if (book && footprint(camera.feet, *book, radius) && camera.verticalSpeed > 0 &&
+        oldY + bodyHeight <= book->min.y && newY + bodyHeight >= book->min.y) {
+        newY = book->min.y - bodyHeight;
+        camera.verticalSpeed = 0;
+    }
+    const float ceiling = ceilingAt(camera.feet.z);
     if (newY + bodyHeight > ceiling) {
         newY = ceiling - bodyHeight;
         camera.verticalSpeed = 0;
@@ -275,12 +410,33 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
     for (int i = 0; i < count; ++i) {
         corridor_.update(camera, dt / count);
         move(camera, input, dt / count);
+        if (notebookFalling_)
+            updateNotebookFall(camera, dt / count);
     }
     camera.motionFeet = camera.feet;
     camera.motionTracked = true;
     if (glm::distance(camera.eye(), projectorOrigin) > 2.4f || input.jump)
         adjustingProjector_ = false;
-    projectorAligned_ = projectorError() < 0.075f && boardVisibility() > 0.98f;
+    if (input.jump || glm::distance(camera.eye(), mirrorCenter) > 3.1f)
+        adjustingMirror_ = false;
+    if (adjustingProjector_ || adjustingMirror_)
+        camera.updateFocus(dt);
+    else
+        camera.focusTime = 0;
+    boardMotion_ = std::max(0.f, boardMotion_ - dt);
+    for (int i = 0; i < static_cast<int>(boardX.size()); ++i) {
+        const float target = (boardPositions_[i] - boardGoal[i]) * boardTravel;
+        boardOffsets_[i] = glm::mix(boardFrom_[i], target,
+                                   glm::smoothstep(0.f, 1.f, 1.f - boardMotion_ / boardMoveSeconds));
+    }
+    if (mirrorGuide_ && !canReadNotebook(camera))
+        mirrorGuide_ = false;
+    const auto projectorTarget = glm::normalize(projectorPaper - projectorOrigin);
+    // Endpoint hits jump between receiver faces at their edges. Judge the continuous aim instead.
+    projectorAligned_ = boardsReady() &&
+                        glm::dot(projectorTarget, projectorRotation() * projectorTarget) >=
+                            std::cos(glm::radians(projectorAimToleranceDegrees)) &&
+                        boardVisibility() > .85f;
     // Recognition needs a brief steady view. Once committed, the transition can finish while moving.
     if (materializing_) {
         formation_ = std::min(1.0f, formation_ + dt / formationDuration);
@@ -289,11 +445,9 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
             materializing_ = false;
         }
     } else if (!stairsReady_) {
-        if (projectorAligned_ && alignment(camera) > 0.94f)
-            alignmentHeld_ += dt;
-        else
-            alignmentHeld_ = 0;
-        if (alignmentHeld_ >= recognitionDuration) {
+        const float score = projectorAligned_ ? alignment(camera) : 0;
+        alignmentHeld_ = advanceAlignmentHold(alignmentHeld_, score, stairAlignmentThreshold, dt);
+        if (score >= stairAlignmentThreshold && alignmentHeld_ >= recognitionDuration) {
             materializing_ = true;
             adjustingProjector_ = false;
         }
@@ -301,8 +455,360 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
     if (corridor_.finished(camera))
         escaped_ = true;
 }
+bool SchoolRoom::boardsReady() const {
+    return boardPositions_ == boardGoal && boardMotion_ == 0;
+}
+float SchoolRoom::boardShift(int index) const {
+    return boardOffsets_[index];
+}
+glm::vec3 SchoolRoom::boardHandle(int index) const {
+    return {boardX[index], 1.39f + boardShift(index), boardZ(index) + .115f};
+}
+void SchoolRoom::advanceBoards(std::array<int, 4>& positions, int index) {
+    positions[index] = (positions[index] + 1) % 4;
+    const int neighbor = (index + 1) % static_cast<int>(positions.size());
+    positions[neighbor] = (positions[neighbor] + 2) % 4;
+}
+int SchoolRoom::aimedBoard(const Camera& camera) const {
+    if (!camera.grounded || notebookRatio_ > 0 || adjustingProjector_ || adjustingMirror_ || materializing_ || stairsReady_)
+        return -1;
+    const auto eye = camera.eye(), direction = camera.direction();
+    int index = -1;
+    float distance = 2.75f;
+    for (int i = 0; i < static_cast<int>(boardX.size()); ++i) {
+        const auto target = glm::vec3(boardX[i], 2.22f + boardShift(i), boardZ(i) + .08f);
+        const float hit = rayBox(eye, direction, bounds(target, {1.40f, 2.04f, .12f}));
+        if (hit > .01f && hit < distance) {
+            index = i;
+            distance = hit;
+        }
+    }
+    if (index >= 0)
+        for (const auto& b : collisionBoxes(false)) {
+            const float hit = rayBox(eye, direction, b);
+            if (hit > 0 && hit < distance - .035f)
+                return -1;
+        }
+    return index;
+}
+bool SchoolRoom::moveBoard(const Camera& camera) {
+    const int index = aimedBoard(camera);
+    if (index < 0)
+        return false;
+    boardFrom_ = boardOffsets_;
+    advanceBoards(boardPositions_, index);
+    boardMotion_ = boardMoveSeconds;
+    projectorAligned_ = false;
+    alignmentHeld_ = 0;
+    return true;
+}
+Box SchoolRoom::notebookBounds(const perspective::Pose& pose) const {
+    const auto axes = notebookAxes(pose.center, pose.center == notebookStart);
+    const auto extent = notebookSize.x * glm::abs(axes.right) + notebookSize.y * glm::abs(axes.up) +
+                        notebookSize.z * glm::abs(axes.normal);
+    return bounds(pose.center, pose.scale * extent);
+}
+bool SchoolRoom::canGrabNotebook(const Camera& camera) const {
+    if (notebookRatio_ > 0 || adjustingProjector_ || adjustingMirror_ || !camera.grounded)
+        return false;
+    const auto look = camera.direction(), eye = camera.eye();
+    const float t = rayBox(eye, look, notebookBounds(notebook_));
+    if (t < 0 || t > 1.85f)
+        return false;
+    for (const auto& b : collisionBoxes(false)) {
+        const float hit = rayBox(eye, look, b);
+        if (hit > 0 && hit < t - .025f)
+            return false;
+    }
+    return true;
+}
+float SchoolRoom::notebookSupport(const Box& area, const std::vector<Box>& solids) const {
+    const bool aboveClassroom = area.min.x >= -6.50f && area.max.x <= 6.50f &&
+                                area.min.z >= -4.95f && area.max.z <= 9.f;
+    float support = aboveClassroom ? 0.f : -std::numeric_limits<float>::infinity();
+    for (const auto& solid : solids)
+        if (solid.max.y <= area.min.y + .002f && overlapsXZ(solid, area))
+            support = std::max(support, solid.max.y);
+    return support;
+}
+std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& camera) const {
+    if (notebookRatio_ <= 0)
+        return std::nullopt;
+    const auto eye = camera.eye(), direction = camera.direction();
+    const auto solids = collisionBoxes(true, false);
+    auto fits = [&](const perspective::Pose& pose) {
+        const auto area = notebookBounds(pose);
+        if (pose.scale < minNotebookScale || pose.scale > maxNotebookScale + .001f ||
+            area.max.y > std::min(ceilingAt(area.min.z), ceilingAt(area.max.z)) ||
+            footprint(camera.feet, area, radius + .12f))
+            return false;
+        // Keep the only staircase approach open while the drawing is incomplete.
+        if (!stairsReady_ && area.max.x > 1.55f && area.min.z < .33f && area.max.z > -4.6f && area.min.x < 4.f)
+            return false;
+        const float support = notebookSupport(area, solids);
+        if (!std::isfinite(support) || support > camera.feet.y + 1.30f || area.min.y < support - .003f)
+            return false;
+        const auto toward = pose.center - eye;
+        const float reach = glm::length(toward);
+        if (reach < .001f)
+            return false;
+        return std::none_of(solids.begin(), solids.end(), [&](const Box& solid) {
+            const float hit = rayBox(eye, toward / reach, solid);
+            return (hit >= 0 && hit < reach - .002f) ||
+                   (overlapsXZ(solid, area) && area.min.y < solid.max.y - .002f &&
+                    area.max.y > solid.min.y + .002f);
+        });
+    };
+
+    // Start with the aimed surface. Search backward along the ray if the growing book clips a solid.
+    constexpr float maxAimReach = 12.f;
+    const float range = std::min(maxAimReach, maxNotebookScale / notebookRatio_);
+    float depth = maxAimReach;
+    const Box* aimedSurface = nullptr;
+    for (const auto& solid : solids) {
+        const float hit = rayBox(eye, direction, solid);
+        if (hit > .001f && hit < depth) {
+            depth = hit;
+            aimedSurface = &solid;
+        }
+    }
+    const auto receiver = bounds(notebookRest + glm::vec3(0, .045f, 0), {.65f, .26f, 1.92f});
+    const float standHit = rayBox(eye, direction, receiver);
+    if (standHit > .02f && standHit <= depth + .02f) {
+        const float scale = std::clamp(
+            perspective::scaleAtSupport(eye, direction, notebookRest, notebookRatio_, notebookHalfHeight),
+            minNotebookScale, maxStandNotebookScale);
+        const perspective::Pose pose{notebookRest + glm::vec3(0, notebookHalfHeight * scale, 0), scale};
+        if (fits(pose))
+            return pose;
+    }
+    if (depth > range) {
+        depth = range;
+        aimedSurface = nullptr;
+    }
+    if (aimedSurface) {
+        const auto anchor = eye + direction * depth;
+        if (direction.y < 0 && std::abs(anchor.y - aimedSurface->max.y) < .008f) {
+            // A small adjustment on the same surface keeps the book clear of things like chair backs.
+            for (const auto offset : {glm::vec3(0), glm::vec3(0, 0, -.16f), glm::vec3(0, 0, .16f),
+                                      glm::vec3(-.16f, 0, 0), glm::vec3(.16f, 0, 0)}) {
+                const auto point = anchor + offset;
+                if (point.x < aimedSurface->min.x || point.x > aimedSurface->max.x ||
+                    point.z < aimedSurface->min.z || point.z > aimedSurface->max.z)
+                    continue;
+                const float scale =
+                    perspective::scaleAtSupport(eye, direction, point, notebookRatio_, notebookHalfHeight);
+                const perspective::Pose pose{point + glm::vec3(0, notebookHalfHeight * scale, 0), scale};
+                if (fits(pose))
+                    return pose;
+            }
+        }
+        depth -= .023f;
+    }
+    if (const auto floor = perspective::onFloor(eye, direction, notebookRatio_, notebookHalfHeight)) {
+        const float floorDepth = glm::dot(floor->center - eye, direction);
+        if (floorDepth <= depth && fits(*floor))
+            return floor;
+        depth = std::min(depth, floorDepth);
+    }
+    for (int attempt = 0; attempt < 14 && depth * notebookRatio_ >= minNotebookScale; ++attempt, depth *= .84f) {
+        const perspective::Pose pose{eye + direction * depth, notebookRatio_ * depth};
+        if (fits(pose))
+            return pose;
+    }
+
+    // Even a wall or an upward glance leaves the player a nearby way to put the notebook down.
+    const glm::vec3 forward{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
+    const glm::vec3 right{-forward.z, 0, forward.x};
+    constexpr float diagonal = .70710678f;
+    const std::array headings{forward, (forward + right) * diagonal, (forward - right) * diagonal,
+                              right, -right, (-forward + right) * diagonal, (-forward - right) * diagonal,
+                              -forward};
+    for (float distance : {.70f, 1.05f, 1.45f}) {
+        const float scale = std::clamp(notebookRatio_ * distance, minNotebookScale, .85f);
+        for (const auto heading : headings) {
+            const auto center = camera.feet + heading * distance;
+            const float height = scale * notebookHalfHeight;
+            perspective::Pose pose{{center.x, camera.feet.y + height, center.z}, scale};
+            const float support = notebookSupport(notebookBounds(pose), solids);
+            if (!std::isfinite(support))
+                continue;
+            pose.center.y = support + height;
+            if (!fits(pose))
+                continue;
+            const auto toward = pose.center - eye;
+            const float reach = glm::length(toward);
+            const auto ray = toward / reach;
+            const bool blocked = std::any_of(solids.begin(), solids.end(), [&](const Box& solid) {
+                const float hit = rayBox(eye, ray, solid);
+                return hit > .001f && hit < reach - .025f;
+            });
+            if (!blocked)
+                return pose;
+        }
+    }
+    return std::nullopt;
+}
+perspective::Pose SchoolRoom::heldNotebookPose(const Camera& camera) const {
+    const auto eye = camera.eye(), direction = camera.direction();
+    const auto solids = collisionBoxes(true, false);
+    float depth = std::min(1.14f, maxNotebookScale / notebookRatio_);
+    // Keep a blocked placement visible in the player's hands. This does not change its carry ratio.
+    const auto carryDirection = direction - glm::vec3(0, .12f, 0);
+    float scale = depth * notebookRatio_;
+    perspective::Pose pose{};
+    for (int attempt = 0; attempt < 24; ++attempt) {
+        pose = {eye + carryDirection * depth, scale};
+        // A sphere encloses both pages and binding for any facing direction used by the held preview.
+        const float half = pose.scale * (glm::length(notebookSize) * .5f + .025f);
+        const auto area = bounds(pose.center, glm::vec3(half * 2));
+        const auto toward = pose.center - eye;
+        const float reach = glm::length(toward);
+        const auto ray = toward / reach;
+        const bool blocked = std::any_of(solids.begin(), solids.end(), [&](const Box& solid) {
+            const float hit = rayBox(eye, ray, solid);
+            return (hit >= 0 && hit < reach) ||
+                   (overlapsXZ(solid, area) && area.min.y < solid.max.y && area.max.y > solid.min.y);
+        });
+        if (!blocked && glm::dot(toward, direction) - half > .055f && area.min.y >= 0 &&
+            area.max.y <= std::min(ceilingAt(area.min.z), ceilingAt(area.max.z)))
+            return pose;
+        if (depth > .08f) {
+            depth = std::max(.08f, depth * .72f);
+            scale = depth * notebookRatio_;
+        } else
+            scale *= .72f;
+    }
+    return pose;
+}
+void SchoolRoom::updateNotebookFall(const Camera& camera, float dt) {
+    const auto area = notebookBounds(notebook_);
+    const auto solids = collisionBoxes(true, false);
+    const float support = notebookSupport(area, solids);
+    if (!std::isfinite(support)) {
+        notebookFalling_ = false;
+        return;
+    }
+    notebookFallSpeed_ += 9.8f * dt;
+    float bottom = std::max(support, area.min.y - notebookFallSpeed_ * dt);
+    const float playerTop = camera.feet.y + bodyHeight;
+    if (footprint(camera.feet, area, radius) && playerTop <= area.min.y + .002f && bottom < playerTop) {
+        bottom = playerTop;
+        notebookFallSpeed_ = 0;
+    }
+    notebook_.center.y += bottom - area.min.y;
+    notebookFalling_ = bottom > support + .002f;
+}
+bool SchoolRoom::toggleNotebook(const Camera& camera) {
+    if (notebookRatio_ > 0) {
+        if (const auto pose = notebookPlacement(camera)) {
+            notebook_ = *pose;
+            notebookRatio_ = notebookFallSpeed_ = 0;
+            notebookFalling_ = true;
+        }
+        return true;
+    }
+    if (!canGrabNotebook(camera))
+        return false;
+    notebookRatio_ = perspective::grabRatio(camera.eye(), camera.direction(), notebook_.center,
+                                            notebook_.scale, notebookSize.x);
+    notebookFalling_ = mirrorGuide_ = false;
+    return true;
+}
+std::optional<float> SchoolRoom::mirrorHit(glm::vec3 eye, glm::vec3 ray) const {
+    const auto normal = mirrorNormal();
+    const auto glass = mirrorCenter + normal * .006f;
+    const float angle = glm::dot(ray, normal);
+    if (angle > -.10f)
+        return std::nullopt;
+    const float depth = glm::dot(glass - eye, normal) / angle;
+    if (depth < .12f || depth > 3.15f)
+        return std::nullopt;
+    const auto at = eye + ray * depth - glass;
+    const glm::vec3 right{normal.z, 0, -normal.x};
+    if (std::abs(glm::dot(at, right)) > mirrorHalfWidth || std::abs(at.y) > mirrorHalfHeight)
+        return std::nullopt;
+    return depth;
+}
+bool SchoolRoom::canTurnMirror(const Camera& camera) const {
+    if (!camera.grounded || adjustingProjector_ || notebookRatio_ > 0)
+        return false;
+    const auto eye = camera.eye(), ray = camera.direction();
+    if (glm::distance(eye, mirrorCenter) > 3.1f)
+        return false;
+    const auto normal = mirrorNormal();
+    const glm::vec3 right{normal.z, 0, -normal.x};
+    auto local = [&](glm::vec3 v) {
+        return glm::vec3(glm::dot(v, right), v.y, glm::dot(v, normal));
+    };
+    // The frame can be turned from either side, even after the glass has rotated away.
+    const float depth = rayBox(local(eye - mirrorCenter), local(ray), bounds({0, 0, -.024f}, {1.51f, 2.06f, .15f}));
+    if (depth < .12f || depth > 2.8f)
+        return false;
+    const auto solids = collisionBoxes(false);
+    return std::none_of(solids.begin(), solids.end(), [&](const Box& b) {
+        const float hit = rayBox(eye, ray, b);
+        return hit > .01f && hit < depth - .025f;
+    });
+}
+bool SchoolRoom::toggleMirror(const Camera& camera) {
+    if (!adjustingMirror_ && !canTurnMirror(camera))
+        return false;
+    adjustingMirror_ = !adjustingMirror_;
+    mirrorGuide_ = false;
+    return true;
+}
+void SchoolRoom::rotateMirror(float yaw) {
+    if (adjustingMirror_)
+        mirrorYaw_ = std::clamp(mirrorYaw_ + yaw, mirrorStartYaw, mirrorMaxYaw);
+}
+bool SchoolRoom::canReadNotebook(const Camera& camera) const {
+    if (notebookRatio_ > 0 || notebook_.scale < readableNotebookScale || !camera.grounded || adjustingProjector_ || adjustingMirror_)
+        return false;
+    const auto eye = camera.eye(), look = camera.direction(), normal = mirrorNormal();
+    if (!mirrorHit(eye, look))
+        return false;
+    const auto solids = collisionBoxes(false);
+    auto occluded = [&](glm::vec3 origin, glm::vec3 ray, float depth) {
+        return std::any_of(solids.begin(), solids.end(), [&](const Box& b) {
+            const float hit = rayBox(origin, ray, b);
+            return hit > .01f && hit < depth - .025f;
+        });
+    };
+    const auto page = notebookAxes(notebook_.center, false);
+    const auto paper = notebook_.center + page.normal * (.043f * notebook_.scale);
+    const auto right = glm::normalize(glm::cross(look, glm::vec3(0, 1, 0)));
+    const auto up = glm::cross(right, look);
+    // A small group of nearby sight rays gives thin pages a forgiving read target.
+    for (const auto offset : {glm::vec3(0), right * .045f, right * -.045f, up * .045f, up * -.045f}) {
+        const auto ray = glm::normalize(look + offset);
+        const auto hit = mirrorHit(eye, ray);
+        if (!hit || occluded(eye, ray, *hit))
+            continue;
+        const auto bounced = glm::reflect(ray, normal);
+        const float angle = glm::dot(bounced, page.normal);
+        if (angle > -.15f)
+            continue;
+        const auto origin = eye + ray * *hit + bounced * .025f;
+        const float depth = glm::dot(paper - origin, page.normal) / angle;
+        const auto local = origin + bounced * depth - paper;
+        if (depth > 0 && std::abs(glm::dot(local, page.right)) <= notebookSize.x * notebook_.scale * .51f &&
+            std::abs(local.y) <= notebookSize.y * notebook_.scale * .51f && !occluded(origin, bounced, depth))
+            return true;
+    }
+    return false;
+}
+bool SchoolRoom::inspectMirror(const Camera& camera) {
+    if (!canReadNotebook(camera))
+        return false;
+    mirrorGuide_ = !mirrorGuide_;
+    return true;
+}
 bool SchoolRoom::canAdjustProjector(const Camera& camera) const {
-    if (stairsReady_ || materializing_ || !camera.grounded)
+    return projectorInReach(camera);
+}
+bool SchoolRoom::projectorInReach(const Camera& camera) const {
+    if (stairsReady_ || materializing_ || adjustingMirror_ || notebookRatio_ > 0 || !camera.grounded)
         return false;
     const auto direction = projectorOrigin - camera.eye();
     float distance = glm::length(direction);
@@ -343,7 +849,11 @@ SchoolRoom::ProjectionHit SchoolRoom::projectSlide(glm::vec3 point) const {
     float nearest = 1000;
     const auto& surfaces = projectionSurfaces();
     for (int i = 0; i < static_cast<int>(surfaces.size()); ++i) {
-        const auto& surface = surfaces[i];
+        auto surface = surfaces[i];
+        if (i < static_cast<int>(boardX.size())) {
+            surface.low.y += boardShift(i);
+            surface.high.y += boardShift(i);
+        }
         if (std::abs(direction[surface.axis]) < 0.00001f)
             continue;
         float distance = (surface.coordinate - projectorOrigin[surface.axis]) / direction[surface.axis];
@@ -483,7 +993,9 @@ float SchoolRoom::boardVisibility() const {
         float part = glm::length(stroke.projectedB - stroke.projectedA) / 4;
         for (int i = 0; i < 4; ++i) {
             length += part;
-            if (!projectorCovers(glm::mix(stroke.projectedA, stroke.projectedB, (i + 0.5f) / 4)))
+            auto point = glm::mix(stroke.projectedA, stroke.projectedB, (i + 0.5f) / 4);
+            point.y += boardShift(stroke.panel);
+            if (!projectorCovers(point))
                 visible += part;
         }
     }
@@ -506,22 +1018,27 @@ float SchoolRoom::projectorError() const {
     return found ? worst : 1000;
 }
 float SchoolRoom::alignment(const Camera& camera) const {
+    return stairViewAlignment(camera).value_or(0);
+}
+std::optional<float> SchoolRoom::stairViewAlignment(const Camera& camera) const {
     if (stairsReady_ || !camera.grounded)
-        return 0;
+        return std::nullopt;
+    const auto eye = camera.eye();
+    if (glm::dot(camera.direction(), glm::normalize(alignmentFocus - eye)) < .94f)
+        return std::nullopt;
     float error = 0;
     int count = 0;
     for (const Chalk& c : chalk_) {
         if (c.detail)
             continue;
-        glm::vec3 a = glm::normalize(c.projectedA - camera.eye()),
-                  b = glm::normalize(c.originalA - camera.eye());
+        glm::vec3 point = c.projectedA;
+        if (c.panel >= 0)
+            point.y += boardShift(c.panel);
+        glm::vec3 a = glm::normalize(point - eye), b = glm::normalize(c.originalA - eye);
         error += 1.0f - glm::clamp(glm::dot(a, b), -1.0f, 1.0f);
         ++count;
     }
     float angular = std::sqrt(error / std::max(count, 1));
-    float aim = glm::dot(camera.direction(), glm::normalize(alignmentFocus - camera.eye()));
-    if (aim < 0.965f)
-        return 0;
     // Judge the visible projection, not proximity to a hidden world-space activation spot.
     return std::clamp(1.0f - angular * 7.0f, 0.0f, 1.0f);
 }
@@ -552,8 +1069,9 @@ void SchoolRoom::makeChalk() {
             panel = id;
         };
         plane(1, 0.012f, {-6.5f, 0, -5}, {6.5f, 0, 9}, -1);
-        for (int i = 0; i < 3; ++i)
-            plane(2, boardZ(i) + 0.055f, {boardX[i] - 0.9f, 1.26f, 0}, {boardX[i] + 0.9f, 3.18f, 0}, i);
+        for (int i = 0; i < static_cast<int>(boardX.size()); ++i)
+            plane(2, boardZ(i) + 0.055f, {boardX[i] - boardHalf, 1.26f, 0}, {boardX[i] + boardHalf, 3.18f, 0},
+                  i);
         plane(2, -3.777f, {2.1f, 0, 0}, {4.5f, 1.8f, 0}, -1);
         plane(2, -2.89f, {0.45f, 0, 0}, {1.55f, 1.04f, 0}, -1);
         plane(0, 1.56f, {0, 0, -3.6f}, {0, 1.04f, -2.9f}, -1);
@@ -604,10 +1122,24 @@ void SchoolRoom::makeChalk() {
             edge({x, y, z}, {x, y, z - 0.6f});
             edge({x, y - 0.3f, z}, {x, y, z});
         }
-        // The left handrail projects across all three boards; lower edges cross the lectern and floor.
+        // The left handrail projects across the chalkboards; lower edges cross the lectern and floor.
         edge({1.8f, y, z}, {1.8f, y + 1.25f, z});
         if (i < 5)
             edge({1.8f, y + 1.25f, z}, {1.8f, y + 1.55f, z - 0.6f});
+    }
+    // An art-class construction line spans all the rails, even where the real stair edges
+    // miss a panel. Lay it out on a common image plane so its segments meet in perspective.
+    constexpr float guidePlane = -4.50f;
+    for (int i = 0; i < static_cast<int>(boardX.size()); ++i) {
+        const float z = boardZ(i) + .073f;
+        const float scale = (guidePlane - alignmentEye.z) / (z - alignmentEye.z);
+        auto point = [&](float x) {
+            const float imageX = alignmentEye.x + (x - alignmentEye.x) * scale;
+            const float imageY = 1.92f + .16f * (imageX + 3.70f);
+            return glm::vec3(x, alignmentEye.y + (imageY - alignmentEye.y) / scale, z);
+        };
+        const auto a = point(boardX[i] - .677f), b = point(boardX[i] + .677f);
+        chalk_.push_back({a, b, a, b, i, true});
     }
     edge({1.8f, 0.015f, -0.2f}, {3.6f, 0.015f, -0.2f});
 }
@@ -621,17 +1153,37 @@ void SchoolRoom::drawProjector(Renderer& r) const {
             r.box({x, 0.39f, z}, {0.045f, 0.74f, 0.045f}, mint * 0.7f);
             r.box({x, 0.055f, z}, {0.10f, 0.11f, 0.07f}, {0.20f, 0.24f, 0.22f});
         }
-    r.box({4.8f, 0.96f, 4.97f}, {0.58f, 0.30f, 0.47f}, {0.70f, 0.72f, 0.65f}, projectorYaw_);
-    r.box({4.80f, 1.13f, 5.00f}, {0.17f, 0.045f, 0.14f}, mint);
-    glm::vec3 direction{std::sin(projectorYaw_) * std::cos(projectorPitch_), std::sin(projectorPitch_),
-                        -std::cos(projectorYaw_) * std::cos(projectorPitch_)};
-    r.line(projectorOrigin - direction * 0.13f, projectorOrigin + direction * 0.04f, 0.19f,
-           {0.25f, 0.29f, 0.28f});
-    r.line(projectorOrigin + direction * 0.04f, projectorOrigin + direction * 0.065f, 0.14f,
-           {0.94f, 0.97f, 0.82f});
+    const glm::vec3 heading{std::sin(projectorYaw_), 0, -std::cos(projectorYaw_)};
+    const glm::vec3 right{-heading.z, 0, heading.x};
+    const auto body = projectorOrigin - heading * .24f - glm::vec3(0, .10f, 0);
+    r.box({4.8f, .817f, 4.97f}, {.32f, .034f, .31f}, mint * .60f);
+    r.box({4.8f, .874f, 4.97f}, {.21f, .10f, .18f}, mint * .45f, -projectorYaw_);
+    r.box(body, {.56f, .24f, .50f}, {.70f, .72f, .65f}, -projectorYaw_);
     for (int vent = 0; vent < 5; ++vent)
-        r.box({4.53f + vent * 0.06f, 0.96f, 5.213f}, {0.025f, 0.13f, 0.012f}, mint * 0.5f);
-    r.line({5.1f, 0.85f, 5.1f}, {5.25f, 0.025f, 5.2f}, 0.018f, timber * 0.5f);
+        r.box(body - heading * .251f + right * (-.19f + vent * .060f), {.024f, .09f, .008f}, mint * .50f,
+              -projectorYaw_);
+    r.box(body - heading * .255f + right * .18f, {.041f, .020f, .01f}, {.38f, .65f, .37f},
+          -projectorYaw_);
+
+    const glm::vec3 direction = heading * std::cos(projectorPitch_) + glm::vec3(0, std::sin(projectorPitch_), 0);
+    const auto up = glm::cross(right, direction);
+    const auto lens = projectorOrigin + direction * .064f;
+    for (int i = 0; i < 12; ++i) {
+        const float a = i * 6.2831853f / 12, b = (i + 1) * 6.2831853f / 12;
+        const auto rimA = (right * std::cos(a) + up * std::sin(a)) * .092f;
+        const auto rimB = (right * std::cos(b) + up * std::sin(b)) * .092f;
+        const auto neck = direction * .178f;
+        const glm::vec3 casing{.25f, .29f, .28f};
+        r.triangle(lens + rimA, lens - neck + rimB, lens - neck + rimA, casing);
+        r.triangle(lens + rimA, lens + rimB, lens - neck + rimB, casing);
+        r.triangle(lens, lens + rimB, lens + rimA, casing);
+        const auto glass = lens + direction * .001f;
+        r.triangle(glass, glass + rimB * .73f, glass + rimA * .73f, {.92f, .96f, .82f});
+    }
+    const auto socket = body - heading * .253f + right * .22f - glm::vec3(0, .065f, 0);
+    const glm::vec3 cableGuide{5.16f, .806f, 5.25f};
+    r.line(socket, cableGuide, .016f, timber * .5f);
+    r.line(cableGuide, {5.25f, 0.025f, 5.2f}, .018f, timber * .5f);
     r.line({5.25f, 0.025f, 5.2f}, {6.44f, 0.025f, 5.4f}, 0.018f, timber * 0.5f);
     r.line({6.44f, 0.025f, 5.4f}, {6.44f, 0.30f, 5.4f}, 0.018f, timber * 0.5f);
     r.box({6.44f, 0.30f, 5.4f}, {0.04f, 0.15f, 0.12f}, cream);
@@ -640,7 +1192,7 @@ void SchoolRoom::drawProjector(Renderer& r) const {
     const auto inverse = glm::transpose(projectorRotation());
     const float depth = projectorPaper.z - projectorOrigin.z;
     r.beginProjection(projectorOrigin, inverse, slideBounds_, projectorPaper.z, slideMask_, slideResolution,
-                      artworkProjection(), artworkFrame);
+                      artworkProjection(), artworkFrame, 1);
     auto distanceToEdge = [&](glm::vec3 point, int edge) {
         auto q = inverse * (point - projectorOrigin);
         switch (edge) {
@@ -658,7 +1210,11 @@ void SchoolRoom::drawProjector(Renderer& r) const {
     };
     const auto& surfaces = projectionSurfaces();
     for (std::size_t surfaceIndex = 0; surfaceIndex < surfaces.size(); ++surfaceIndex) {
-        const auto& surface = surfaces[surfaceIndex];
+        auto surface = surfaces[surfaceIndex];
+        if (surfaceIndex < boardX.size()) {
+            surface.low.y += boardShift(static_cast<int>(surfaceIndex));
+            surface.high.y += boardShift(static_cast<int>(surfaceIndex));
+        }
         int u = (surface.axis + 1) % 3, v = (surface.axis + 2) % 3;
         std::vector<glm::vec3> polygon;
         for (glm::vec2 uv : {glm::vec2(0, 0), {1, 0}, {1, 1}, {0, 1}}) {
@@ -691,7 +1247,7 @@ void SchoolRoom::drawProjector(Renderer& r) const {
         if (glm::dot(glm::cross(polygon[1] - polygon[0], polygon[2] - polygon[0]), normal) < 0)
             std::reverse(polygon.begin(), polygon.end());
         // Keep the translucent light above the board and just above the paper surface.
-        float offset = surfaceIndex < 3 ? 0.050f : 0.003f;
+        float offset = surfaceIndex < boardX.size() ? 0.050f : 0.003f;
         for (std::size_t i = 1; i + 1 < polygon.size(); ++i)
             r.triangle(polygon[0] + normal * offset, polygon[i] + normal * offset,
                        polygon[i + 1] + normal * offset, {0.98f, 0.96f, 0.79f});
@@ -724,7 +1280,102 @@ void SchoolRoom::drawProjector(Renderer& r) const {
     }
     r.endProjection();
 }
-void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
+void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
+                              const std::optional<perspective::Pose>& placement) const {
+    auto pose = notebook_;
+    const bool onStand = notebookRatio_ == 0 && pose.center == notebookStart;
+    bool preview = false;
+    if (notebookRatio_ > 0) {
+        if (placement) {
+            pose = *placement;
+        } else {
+            pose = heldNotebookPose(camera);
+            preview = true;
+        }
+    }
+    auto [right, up, normal] = notebookAxes(pose.center, onStand);
+    if (preview) {
+        auto toEye = camera.eye() - pose.center;
+        toEye.y = 0;
+        if (glm::dot(toEye, toEye) > .01f) {
+            normal = glm::normalize(toEye);
+            right = {normal.z, 0, -normal.x};
+        }
+    }
+    const float scale = pose.scale, yaw = std::atan2(normal.x, normal.z);
+    auto at = [&](float x, float y, float z) {
+        return pose.center + scale * (right * x + up * y + normal * z);
+    };
+    auto layer = [&](glm::vec3 center, glm::vec3 size, glm::vec3 color) {
+        if (!onStand) {
+            r.box(center, size * scale, color, yaw);
+            return;
+        }
+        const auto x = right * (size.x * scale * .5f);
+        const auto y = up * (size.y * scale * .5f);
+        const auto z = normal * (size.z * scale * .5f);
+        r.quad(center + z, x, y, color);
+        r.quad(center - z, -x, y, color);
+        r.quad(center + x, -z, y, color);
+        r.quad(center - x, z, y, color);
+        r.quad(center + y, x, -z, color);
+        r.quad(center - y, x, z, color);
+    };
+    const bool readable = scale >= readableNotebookScale;
+    layer(pose.center, notebookSize, notebookCover);
+    for (float side : {-1.f, 1.f}) {
+        layer(at(side * .103f, 0, .026f), {.191f, .295f, .024f}, cream * .86f);
+        layer(at(side * .103f, .002f, .038f), {.186f, .284f, .008f}, side > 0 ? cream : cream * .96f);
+        const int lineCount = readable ? 0 : 6;
+        for (int line = 0; line < lineCount; ++line) {
+            const float lineY = .081f - line * .035f;
+            r.line(at(side * .103f - .077f, lineY, .044f), at(side * .103f + .077f, lineY, .044f),
+                   .0013f * scale, mint * 1.10f);
+        }
+    }
+    for (float y : {-.106f, -.054f, -.002f, .050f, .102f})
+        layer(at(0, y, .041f), {.018f, .007f, .022f}, brass * .71f);
+    r.quad(at(.156f, -.117f, .046f), right * (.022f * scale), up * (.015f * scale), notebookCover * 1.16f);
+    if (!readable) {
+        // A broad study sketch stays legible at the notebook's original size.
+        const glm::vec3 pencil{.33f, .39f, .35f};
+        for (float x : {-.15f, -.11f, -.07f})
+            r.line(at(x, -.052f, .046f), at(x + .025f, .028f, .046f), .003f * scale, pencil);
+        r.line(at(-.154f, -.055f, .046f), at(-.047f, -.055f, .046f), .003f * scale, pencil);
+        return;
+    }
+    const auto ink = mint * .35f;
+    r.label(L"숫자 맞추기", at(.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
+    r.label(L"E로 밀기", at(-.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
+    // Logical left-to-right is reversed on the paper, then restored by the mirror.
+    for (int i = 0; i < 4; ++i) {
+        const float x = .164f - i * .04f;
+        r.quad(at(x, .064f, .050f), right * (.016f * scale), up * (.026f * scale), mint * .65f);
+        r.label(notebookPanelLabels[i], at(x, .064f, .052f),
+                right * (-.012f * scale), up * (.017f * scale), chalkWhite);
+    }
+    for (int i = 0; i < 2; ++i) {
+        const float x = -.061f - i * .086f;
+        r.quad(at(x, .064f, .050f), right * (.034f * scale), up * (.030f * scale), mint * .65f);
+        r.label(i == 0 ? L"+1" : L"+2", at(x, .064f, .052f),
+                right * (-.025f * scale), up * (.018f * scale), chalkWhite);
+    }
+    for (int i = 0; i < 4; ++i) {
+        const float y = .004f - i * .038f;
+        const auto textRight = right * (-.088f * scale);
+        const auto textUp = up * (.013f * scale);
+        r.label(notebookClues[i], at(.104f, y, .052f), textRight, textUp, ink);
+        r.label(notebookControls[i], at(-.104f, y, .052f), textRight, textUp, ink);
+    }
+}
+
+void SchoolRoom::scene(Renderer& r, const Camera& camera, bool reflection,
+                       const std::optional<perspective::Pose>& placement) const {
+    r.box(notebookStand.center, notebookStand.size, timber * 1.10f);
+    r.box({-6.36f, 1.195f, notebookStart.z}, {.16f, .105f, .46f}, timber * .86f);
+    r.box({-6.005f, 1.172f, notebookStart.z}, {.030f, .046f, .56f}, timber);
+    r.sign(L"관찰 노트", {-5.95f, 1.105f, notebookStart.z}, {0, 0, -.23f}, {0, .066f, 0});
+    drawNotebook(r, camera, placement);
     // Architecture. Every visible walkable solid has a corresponding collision box.
     r.box({0, -0.16f, 2}, {13.2f, 0.24f, 14.2f}, {0.30f, 0.22f, 0.15f});
     for (int x = 0; x < 26; ++x)
@@ -826,14 +1477,20 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
             ++seat;
         }
 
-    // Fixed chalkboards retain the art lesson; there is no symbol-order mechanism.
-    r.box({-0.85f, 2.23f, -4.83f}, {5.95f, 2.25f, 0.12f}, timber);
-    for (float y : {1.18f, 3.28f})
-        r.box({-0.85f, y, -4.37f}, {5.96f, 0.10f, 0.56f}, {0.39f, 0.42f, 0.33f});
-    for (int i = 0; i < 3; ++i) {
-        r.box({boardX[i], 2.22f, boardZ(i)}, {1.85f, 2.02f, 0.09f}, timber);
-        r.box({boardX[i], 2.22f, boardZ(i) + 0.055f}, {1.74f, 1.91f, 0.018f}, {0.13f, 0.29f, 0.23f});
+    // The moving boards sit in a single frame. The numbered detents belong to each rail.
+    r.box({-.85f, 2.23f, -4.86f}, {5.96f, 2.98f, .11f}, timber);
+    for (float x : {-3.78f, -2.31f, -.85f, .61f, 2.08f})
+        r.box({x, 2.23f, -4.78f}, {.036f, 2.89f, .064f}, {.38f, .42f, .38f});
+    for (int i = 0; i < static_cast<int>(boardX.size()); ++i) {
+        const float shift = boardShift(i), x = boardX[i], z = boardZ(i);
+        r.box({x, 2.22f + shift, z}, {1.42f, 1.97f, .09f}, timber);
+        r.box({x, 2.22f + shift, z + .055f}, {2 * boardHalf, 1.92f, .018f}, {.13f, .29f, .23f});
+        r.box(boardHandle(i), {.20f, .095f, .10f}, {.40f, .45f, .40f});
+        r.box({x, 3.67f, -4.27f}, {.42f, .25f, .03f}, cream * .91f);
+        const wchar_t* values[] = {L"1", L"2", L"3", L"4"};
+        r.label(values[boardPositions_[i]], {x, 3.67f, -4.25f}, {.062f, 0, 0}, {0, .083f, 0}, mint * .42f);
     }
+    r.box({-.85f, .71f, -4.37f}, {5.96f, .07f, .44f}, {.39f, .42f, .33f});
     r.box({-2.75f, 1.25f, -4.17f}, {0.24f, 0.075f, 0.13f}, {0.27f, 0.28f, 0.24f});
     r.box({-2.3f, 1.24f, -4.16f}, {0.10f, 0.025f, 0.025f}, chalkWhite);
     r.box({-2.1f, 1.24f, -4.16f}, {0.09f, 0.025f, 0.025f}, {0.78f, 0.65f, 0.44f});
@@ -858,21 +1515,26 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
     }
     r.box({4.30f, 1.79f, -4.43f}, {4.42f, 0.05f, 1.22f}, timber);
     for (float x : {3.95f, 4.75f, 5.55f, 6.35f})
-        r.line({x, 1.8f, -3.78f}, {x, 2.8f, -3.78f}, 0.05f, timber);
-    r.line({3.95f, 2.8f, -3.78f}, {6.40f, 2.8f, -3.78f}, 0.075f, timber);
+        r.line({x, 1.8f, -3.78f}, {x, gallerySideRail.y, -3.78f}, 0.05f, timber);
+    r.line({3.95f, gallerySideRail.y, -3.78f}, {6.40f, gallerySideRail.y, -3.78f}, 0.075f, timber);
     for (float x : {2.33f, 3.77f})
         r.box({x, 2.87f, -4.95f}, {0.12f, 2.22f, 0.15f}, timber);
     r.box({3.05f, 3.94f, -4.95f}, {1.56f, 0.12f, 0.15f}, timber);
-    // The ordinary doorway is already open. Recognizing the drawing does not unlock a remote door.
+    // A sliding safety rail protects the edge until the new stair flight meets the gallery.
+    r.box(gallerySideRail, gallerySideRailSize, timber);
+    for (float z : {-3.80f, -4.38f, -4.96f})
+        r.box({gallerySideRail.x, galleryRailPostY, z}, {.055f, galleryRailHeight, .055f}, timber);
+    r.box({4.0f, 1.822f, -3.834f}, {3.78f, .012f, .037f}, timber * .66f);
+    const auto gate = galleryGateCenter();
+    r.box(gate, galleryGateSize, timber);
+    for (float x : {-.86f, 0.f, .86f})
+        r.box({gate.x + x, galleryRailPostY, gate.z}, {.052f, galleryRailHeight, .045f}, timber);
+    // The materials room door remains open behind the gallery.
     r.box({4.05f, 2.85f, -4.65f}, {0.09f, 2.08f, 1.3f}, mint);
     r.box({4.11f, 3.24f, -4.65f}, {0.015f, 0.72f, 0.87f}, {0.64f, 0.76f, 0.71f});
     r.box({3.05f, 1.77f, -6.05f}, {1.35f, 0.06f, 2.1f}, timber);
     for (float x : {2.27f, 3.83f})
         r.box({x, 3.1f, -6.05f}, {0.2f, 2.6f, 2.1f}, cream);
-    for (int canvas = 0; canvas < 3; ++canvas) {
-        r.box({3.58f - canvas * 0.10f, 2.55f, -6.45f}, {0.08f, 1.45f, 0.85f}, timber, 0.12f);
-        r.box({3.53f - canvas * 0.10f, 2.55f, -6.45f}, {0.018f, 1.32f, 0.72f}, cream, 0.12f);
-    }
     r.box({3.05f, 4.20f, -6.1f}, {0.80f, 0.06f, 0.30f}, {1.0f, 0.96f, 0.77f});
     r.box({3.05f, 4.4f, -6.05f}, {1.76f, 0.15f, 2.2f}, cream);
     corridor_.draw(r);
@@ -892,15 +1554,16 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
         r.line({1.04f, 0.025f, 1.0f + pencil * 0.045f}, {1.30f, 0.025f, 1.04f + pencil * 0.045f}, 0.013f,
                pencil % 2 ? timber : brass);
     // A loose plant study reads as classwork, not another row of combination symbols.
+    const float shift = boardShift(0);
     const float sketchZ = boardZ(0) + 0.08f;
     const glm::vec3 sketch = chalkWhite * 0.58f;
-    r.line({-3.35f, 1.42f, sketchZ}, {-2.98f, 1.42f, sketchZ}, 0.010f, sketch);
-    r.line({-3.35f, 1.42f, sketchZ}, {-3.42f, 1.72f, sketchZ}, 0.010f, sketch);
-    r.line({-2.98f, 1.42f, sketchZ}, {-2.91f, 1.72f, sketchZ}, 0.010f, sketch);
-    r.line({-3.42f, 1.72f, sketchZ}, {-2.91f, 1.72f, sketchZ}, 0.010f, sketch);
+    r.line({-3.35f, 1.42f + shift, sketchZ}, {-2.98f, 1.42f + shift, sketchZ}, 0.010f, sketch);
+    r.line({-3.35f, 1.42f + shift, sketchZ}, {-3.42f, 1.72f + shift, sketchZ}, 0.010f, sketch);
+    r.line({-2.98f, 1.42f + shift, sketchZ}, {-2.91f, 1.72f + shift, sketchZ}, 0.010f, sketch);
+    r.line({-3.42f, 1.72f + shift, sketchZ}, {-2.91f, 1.72f + shift, sketchZ}, 0.010f, sketch);
     for (int leaf = 0; leaf < 5; ++leaf) {
-        float x = -3.43f + leaf * 0.12f, y = 1.91f + (leaf % 2) * 0.20f;
-        r.line({-3.17f, 1.70f, sketchZ}, {x, y, sketchZ}, 0.009f, sketch);
+        float x = -3.43f + leaf * 0.12f, y = 1.91f + shift + (leaf % 2) * 0.20f;
+        r.line({-3.17f, 1.70f + shift, sketchZ}, {x, y, sketchZ}, 0.009f, sketch);
         r.line({x, y, sketchZ}, {x - 0.10f, y - 0.035f, sketchZ}, 0.016f, sketch);
     }
     // Only board marks are permanent; the whole lower stair drawing rotates with the projector.
@@ -911,6 +1574,8 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
             for (int part = 0; part < 4; ++part) {
                 auto a = glm::mix(c.projectedA, c.projectedB, part / 4.0f);
                 auto b = glm::mix(c.projectedA, c.projectedB, (part + 1) / 4.0f);
+                a.y += boardShift(c.panel);
+                b.y += boardShift(c.panel);
                 float visibility = (1 - projectorLight((a + b) / 2.0f)) * (1 - stairFormation());
                 if (visibility > 0.01f)
                     r.line(a, b, c.detail ? 0.006f : 0.014f,
@@ -919,18 +1584,26 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
         }
     }
     drawProjector(r);
-    // A wooden studio mirror on simple feet, among the classroom's drawing materials.
-    for (float dx : {-0.78f, 0.78f}) {
-        r.box(mirrorCenter + glm::vec3(dx, -1.55f, 0), {0.13f, 0.20f, 0.90f}, timber);
-        r.box(mirrorCenter + glm::vec3(dx, -0.35f, 0), {0.07f, 2.60f, 0.09f}, timber);
-    }
-    glm::vec3 right{std::cos(mirrorAngle), 0, -std::sin(mirrorAngle)}, normal = mirrorNormal();
+    // Keep the support feet behind the glass and beside the stiles.
+    const auto normal = mirrorNormal();
+    const glm::vec3 right{normal.z, 0, -normal.x};
+    const glm::vec3 baseRight{std::cos(mirrorStartYaw), 0, -std::sin(mirrorStartYaw)};
     if (!reflection) {
-        r.box(mirrorCenter - normal * 0.055f, {1.42f, 1.96f, 0.09f}, timber, mirrorAngle);
-        for (float sign : {-1.0f, 1.0f}) {
-            r.box(mirrorCenter + right * (sign * 0.72f), {0.065f, 2.02f, 0.09f}, timber, mirrorAngle);
-            r.box(mirrorCenter + glm::vec3(0, sign * 1.0f, 0), {1.50f, 0.06f, 0.09f}, timber, mirrorAngle);
+        for (float x : {-.74f, .74f}) {
+            const auto side = baseRight * x;
+            r.box(mirrorCenter + side + glm::vec3(0, -1.56f, 0), {.12f, .18f, .54f}, timber,
+                  mirrorStartYaw);
         }
+        r.box(mirrorCenter + glm::vec3(0, -1.51f, 0), {1.48f, .12f, .16f}, timber, mirrorStartYaw);
+        r.box(mirrorCenter + glm::vec3(0, -1.24f, 0), {.14f, .56f, .14f}, brass * .70f);
+        r.box(mirrorCenter - normal * .055f, {1.42f, 1.96f, .09f}, timber, mirrorYaw_);
+        for (float sign : {-1.f, 1.f}) {
+            r.box(mirrorCenter + right * (sign * .72f), {.065f, 2.02f, .09f}, timber, mirrorYaw_);
+            r.box(mirrorCenter + glm::vec3(0, sign * 1.f, 0), {1.50f, .06f, .09f}, timber, mirrorYaw_);
+        }
+        const auto plaque = mirrorCenter + glm::vec3(0, -.92f, 0) + normal * .018f;
+        r.box(plaque, {1.05f, .19f, .05f}, mint * .62f, mirrorYaw_);
+        r.label(L"공책을 비춰 보기", plaque + normal * .028f, right * .43f, {0, .063f, 0}, chalkWhite);
     }
     // Rear cubbies, a reading bench and a stocked bookshelf establish the classroom's daily use.
     r.box(fixtures[0].center, fixtures[0].size, timber * 0.8f);
@@ -965,17 +1638,19 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
                 r.box({5.703f, y + 0.13f, 5.25f + book * 0.16f}, {0.009f, 0.035f, 0.08f}, cream);
             }
     }
-    r.box(fixtures[3].center, fixtures[3].size, timber);
+    r.box(artSuppliesCabinet.center, artSuppliesCabinet.size, timber);
     for (float z : {1.95f, 2.60f, 3.25f}) {
         r.box({5.68f, 0.46f, z}, {0.025f, 0.70f, 0.60f}, mint);
         r.box({5.65f, 0.55f, z + 0.17f}, {0.025f, 0.09f, 0.035f}, brass);
     }
-    bookStack(r, {6.0f, 0.88f, 1.92f}, 3);
-    r.box({6.0f, 1.0f, 2.55f}, {0.38f, 0.24f, 0.32f}, {0.55f, 0.56f, 0.44f});
-    r.box({6.0f, 1.13f, 2.55f}, {0.30f, 0.025f, 0.23f}, cream);
+    // A worn open portfolio tray sits on the existing supply cabinet.
+    r.quad(notebookRest + glm::vec3(0, .003f, 0), {.251f, 0, 0}, {0, 0, -.81f}, {.38f, .36f, .26f});
+    for (float z : {notebookRest.z - .82f, notebookRest.z + .82f})
+        r.box({notebookRest.x, notebookRest.y + .01f, z}, {.52f, .022f, .025f}, timber * .90f);
+    r.sign(L"미술 준비물", {5.65f, .75f, 2.60f}, {0, 0, .23f}, {0, .045f, 0});
     plant(r, {-5.95f, 0, 7.8f}, 1.25f);
     plant(r, {5.95f, 0, -0.8f}, 1.25f);
-    for (float z : {-1.9f, 3.4f, 6.7f})
+    for (float z : {-1.9f, 3.02f, 6.7f})
         plant(r, {-6.27f, 1.13f, z}, 0.65f);
     // Cleaning cupboard, broom and sorting bin sit against the walls, away from puzzle access.
     r.box(fixtures[6].center, fixtures[6].size, {0.53f, 0.57f, 0.48f});
@@ -1043,15 +1718,15 @@ void SchoolRoom::scene(Renderer& r, const Camera&, bool reflection) const {
     r.flush();
     // These are ordinary lesson headings, not instructions or a combination code.
     r.label(L"미술 · 공간 스케치", {-2.1f, 3.54f, -4.86f}, {0.93f, 0, 0}, {0, 0.12f, 0}, mint * 0.65f);
-    r.label(L"교실에서 찾은 형태", {boardX[0], 2.90f, boardZ(0) + 0.081f}, {0.69f, 0, 0}, {0, 0.075f, 0},
-            chalkWhite * 0.8f);
-    r.label(L"공간 드로잉", {boardX[1], 2.9f, boardZ(1) + 0.081f}, {0.60f, 0, 0}, {0, 0.075f, 0},
-            chalkWhite * 0.8f);
-    r.label(L"자료실", {3.05f, 4.15f, -4.9f}, {0.32f, 0, 0}, {0, 0.11f, 0}, mint * 0.65f);
+    r.label(L"교실에서 찾은 형태", {boardX[0], 2.90f + boardShift(0), boardZ(0) + 0.081f}, {0.69f, 0, 0},
+            {0, 0.075f, 0}, chalkWhite * 0.8f);
+    r.label(L"공간 드로잉", {boardX[1], 2.9f + boardShift(1), boardZ(1) + 0.081f}, {0.60f, 0, 0},
+            {0, 0.075f, 0}, chalkWhite * 0.8f);
+    r.sign(L"자료실", {3.05f, 4.17f, -4.89f}, {.54f, 0, 0}, {0, .17f, 0});
     r.label(L"미술 작품전", {-1.0f, 2.63f, 8.865f}, {-0.65f, 0, 0}, {0, 0.12f, 0}, mint * 0.65f);
     r.label(L"우리 학교의 공간", {-1.0f, 2.30f, 8.865f}, {-0.95f, 0, 0}, {0, 0.13f, 0}, mint * 0.65f);
     r.label(L"스케치 · 종이 · 색연필", {-1.0f, 1.99f, 8.865f}, {-0.94f, 0, 0}, {0, 0.09f, 0}, mint * 0.65f);
-    r.label(L"미술실", {4.80f, 2.70f, 8.89f}, {-0.42f, 0, 0}, {0, 0.14f, 0}, mint * 0.65f);
+    r.sign(L"미술실", {4.80f, 2.70f, 8.89f}, {-.55f, 0, 0}, {0, .17f, 0});
     r.label(L"시간표", {1.40f, 2.91f, 8.87f}, {-0.33f, 0, 0}, {0, 0.095f, 0}, mint * 0.65f);
     r.label(L"우리 반 약속", {2.95f, 2.91f, 8.87f}, {-0.48f, 0, 0}, {0, 0.095f, 0}, mint * 0.65f);
     r.label(L"우리들의 그림", {6.36f, 3.36f, 2.60f}, {0, 0, 0.70f}, {0, 0.11f, 0}, mint * 0.65f);
@@ -1078,37 +1753,145 @@ void SchoolRoom::drawStairs(Renderer& r) const {
     }
     r.opacity(1);
 }
-void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height) const {
+std::optional<AlignmentFeedback> SchoolRoom::alignmentFeedback(const Camera& camera) const {
+    if (projectorAligned_ && !adjustingProjector_ && !materializing_ && camera.feet.z >= -4.9f) {
+        if (const auto score = stairViewAlignment(camera))
+            return AlignmentFeedback{*score, stairAlignmentThreshold, *score >= stairAlignmentThreshold,
+                                     std::clamp(alignmentHeld_ / recognitionDuration, 0.f, 1.f)};
+    }
+    return corridor_.alignmentFeedback(camera);
+}
+const wchar_t* SchoolRoom::interactionLabel(const Camera& camera) const {
+    if (adjustingProjector_ || adjustingMirror_)
+        return L"마침";
+    if (canAdjustProjector(camera))
+        return L"돌리기";
+    if (notebookRatio_ > 0)
+        return nullptr;
+    if (canGrabNotebook(camera))
+        return L"집기";
+    if (canReadNotebook(camera))
+        return L"읽기";
+    if (canTurnMirror(camera))
+        return L"돌리기";
+    if (aimedBoard(camera) >= 0)
+        return L"밀기";
+    if (const auto action = corridor_.classroomInteractionLabel(camera))
+        return action;
+    if (canUseCupboard(camera))
+        return cupboardOpen() ? L"닫기" : L"열기";
+    return nullptr;
+}
+void SchoolRoom::drawNotebookPages(Renderer& r, int width, int height, float scale) const {
+    const float x = width / 2.f - 470 * scale, y = height / 2.f - 240 * scale;
+    const glm::vec3 ink{.15f, .24f, .22f}, rule{.75f, .79f, .75f};
+    r.panel(x - 10 * scale, y + 8 * scale, 960 * scale, 486 * scale, {.14f, .19f, .16f});
+    r.panel(x - 7 * scale, y - 4 * scale, 954 * scale, 488 * scale, {.27f, .37f, .28f});
+    r.panel(x, y + 6 * scale, 940 * scale, 480 * scale, {.78f, .75f, .61f});
+    r.panel(x, y, 470 * scale, 480 * scale, {.96f, .94f, .85f});
+    r.panel(x + 470 * scale, y, 470 * scale, 480 * scale, {.94f, .92f, .83f});
+    r.panel(x + 466 * scale, y, 4 * scale, 480 * scale, {.84f, .80f, .68f});
+    r.panel(x + 470 * scale, y, 2 * scale, 480 * scale, {.78f, .75f, .64f});
+
+    const float left = x + 38 * scale, right = x + 506 * scale;
+    for (float page : {left, right}) {
+        r.panel(page - 12 * scale, y + 24 * scale, scale, 403 * scale, {.85f, .70f, .69f});
+        for (int line = 0; line < 4; ++line)
+            r.panel(page - 6 * scale, y + (315 + line * 38) * scale, 398 * scale, scale, rule);
+    }
+    r.text(L"칠판 숫자 맞추기", left, y + 24 * scale, 34 * scale, ink);
+    r.text(L"E로 칠판 밀기", right, y + 24 * scale, 34 * scale, ink);
+    r.text(L"칠판을 바라보고, 왼쪽부터", left, y + 70 * scale, 22 * scale, ink);
+    r.text(L"한 번 누르면 두 판이 움직여요", right, y + 70 * scale, 22 * scale, ink);
+    const wchar_t* order[]{L"첫째", L"둘째", L"셋째", L"넷째"};
+    for (int i = 0; i < 4; ++i) {
+        const float panelX = left + (8 + i * 96) * scale;
+        r.panel(panelX, y + 142 * scale, 74 * scale, 74 * scale, timber);
+        r.panel(panelX + 4 * scale, y + 146 * scale, 66 * scale, 66 * scale, mint * .65f);
+        r.panel(panelX + 16 * scale, y + 103 * scale, 42 * scale, 32 * scale, rule);
+        const float numberWidth = r.textWidth(notebookPanelLabels[i], 27 * scale);
+        r.text(notebookPanelLabels[i], panelX + (74 * scale - numberWidth) * .5f,
+               y + 103 * scale, 27 * scale, ink);
+        const float labelWidth = r.textWidth(order[i], 20 * scale);
+        r.text(order[i], panelX + (74 * scale - labelWidth) * .5f, y + 237 * scale, 20 * scale, ink);
+    }
+    for (int i = 0; i < 2; ++i) {
+        const float panelX = right + (8 + i * 190) * scale;
+        const auto label = i == 0 ? L"선택한 판" : L"오른쪽 판";
+        const float labelWidth = r.textWidth(label, 22 * scale);
+        r.text(label, panelX + (156 * scale - labelWidth) * .5f, y + 103 * scale, 22 * scale, ink);
+        r.panel(panelX, y + 132 * scale, 156 * scale, 84 * scale, timber);
+        r.panel(panelX + 4 * scale, y + 136 * scale, 148 * scale, 76 * scale, mint * .65f);
+        const auto amount = i == 0 ? L"+1" : L"+2";
+        const float amountWidth = r.textWidth(amount, 44 * scale);
+        r.text(amount, panelX + (156 * scale - amountWidth) * .5f, y + 149 * scale, 44 * scale);
+    }
+    r.text(L"→", right + 166 * scale, y + 155 * scale, 28 * scale, ink);
+    r.panel(right + 68 * scale, y + 228 * scale, 36 * scale, 29 * scale, ink);
+    r.text(L"E", right + 79 * scale, y + 229 * scale, 23 * scale);
+    for (int i = 0; i < 4; ++i) {
+        const float lineY = y + (282 + i * 38) * scale;
+        r.text(notebookClues[i], left, lineY, 30 * scale, ink);
+        r.text(notebookControls[i], right, lineY, 28 * scale, ink);
+    }
+    const float closeX = x + 826 * scale, closeY = y + 441 * scale;
+    r.panel(closeX, closeY, 25 * scale, 25 * scale, {.25f, .35f, .29f});
+    r.text(L"E", closeX + 5 * scale, closeY + scale, 23 * scale);
+    r.text(L"닫기", closeX + 32 * scale, closeY + scale, 23 * scale, ink);
+}
+void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
+                     const std::optional<perspective::Pose>& placement) const {
     const float scale = std::min(width / 1280.0f, height / 800.0f);
     r.overlay(width, height);
-    if (time_ < 5.0f || escaped_) {
-        r.panel(24 * scale, 24 * scale, 254 * scale, 45 * scale, {0.12f, 0.22f, 0.18f});
-        r.text(escaped_ ? L"학교를 마쳤습니다." : L"방과 후 · 미술실", 39 * scale, 31 * scale, 27 * scale);
+    if (mirrorGuide_ && canReadNotebook(camera)) {
+        drawNotebookPages(r, width, height, scale);
+        glEnable(GL_DEPTH_TEST);
+        return;
     }
-    if (adjustingProjector_) {
-        r.panel(width / 2.0f - 325 * scale, height - 107 * scale, 650 * scale, 42 * scale,
-                {0.12f, 0.22f, 0.18f});
-        r.text(L"마우스  프로젝터 회전     E  조정 마침", width / 2.0f - 305 * scale, height - 101 * scale,
-               25 * scale);
-    } else if (canOpenCorridorDoor(camera)) {
-        r.panel(width / 2.0f - 162 * scale, height - 107 * scale, 324 * scale, 42 * scale,
-                {0.12f, 0.22f, 0.18f});
-        r.text(L"E  미닫이문 열기", width / 2.0f - 139 * scale, height - 101 * scale, 25 * scale);
-    } else if (canUseCupboard(camera)) {
-        r.panel(width / 2.0f - 190 * scale, height - 107 * scale, 380 * scale, 42 * scale,
-                {0.12f, 0.22f, 0.18f});
-        r.text(cupboardOpen() ? L"E  청소도구함 문 닫기" : L"E  청소도구함 문 열기",
-               width / 2.0f - 166 * scale, height - 101 * scale, 25 * scale);
-    } else if (canAdjustProjector(camera)) {
-        r.panel(width / 2.0f - 155 * scale, height - 107 * scale, 310 * scale, 42 * scale,
-                {0.12f, 0.22f, 0.18f});
-        r.text(L"E  프로젝터 조정", width / 2.0f - 132 * scale, height - 101 * scale, 25 * scale);
+    if (escaped_) {
+        r.panel(24 * scale, 24 * scale, 254 * scale, 45 * scale, {.12f, .22f, .18f});
+        r.text(L"학교를 마쳤습니다.", 39 * scale, 31 * scale, 27 * scale);
     }
-    // A short start instruction, not a permanent walkthrough or puzzle progress display.
-    if (time_ < 10.0f) {
-        r.panel(24 * scale, height - 62 * scale, 625 * scale, 38 * scale, {0.12f, 0.22f, 0.18f});
-        r.text(L"WASD 이동   마우스 시점   E 조작   Space 점프   Esc 일시정지", 36 * scale,
-               height - 58 * scale, 24 * scale);
+    const auto action = placement ? (onReflectionStand(*placement) ? L"거치" : L"놓기") : interactionLabel(camera);
+    if (action) {
+        const float actionWidth = r.textWidth(action, 23 * scale);
+        const float x = width / 2.f - (39 * scale + actionWidth) / 2.f;
+        const float y = height / 2.f + 11 * scale;
+        r.panel(x, y, 39 * scale + actionWidth, 29 * scale, {.12f, .22f, .18f});
+        r.panel(x + 3 * scale, y + 3 * scale, 23 * scale, 23 * scale, {.89f, .89f, .80f});
+        r.text(L"E", x + 7 * scale, y + 4 * scale, 21 * scale, {.12f, .22f, .18f});
+        r.text(action, x + 32 * scale, y + 3 * scale, 23 * scale);
+    } else if (const auto feedback = alignmentFeedback(camera)) {
+        const float trackWidth = 58 * scale;
+        const float trackHeight = std::max(2.f, 3 * scale);
+        const float x = (width - trackWidth) / 2.f, y = height / 2.f + 11 * scale;
+        const float fill = feedback->aligned ? 1.f : std::min(feedback->score / feedback->threshold, .98f);
+        r.panel(x, y, trackWidth, trackHeight, {.12f, .22f, .18f});
+        if (fill > 0)
+            r.panel(x, y, trackWidth * fill, trackHeight, {.96f, .96f, .86f});
+        if (feedback->holdProgress > 0)
+            r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
+    }
+    if (notebookRatio_ > 0 && !placement) {
+        const wchar_t* status = L"놓을 공간이 없어요 · 조금 물러나 주세요";
+        const float textWidth = r.textWidth(status, 23 * scale);
+        const float x = (width - textWidth) * .5f;
+        r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale,
+                {.12f, .22f, .18f});
+        r.text(status, x, height - 54 * scale, 23 * scale);
+    } else if (boardsReady() && !stairsReady_ && camera.feet.z >= -4.9f) {
+        const wchar_t* status = materializing_ ? L"계단이 만들어지고 있어요"
+                                : !projectorAligned_ ? L"칠판 완료 · 프로젝터 방향을 맞춰 주세요"
+                                : adjustingProjector_ ? L"투사 완료 · E로 조정을 마쳐 주세요"
+                                : L"투사 완료 · 오른쪽 통로에서 계단 그림을 바라보세요";
+        const float textWidth = r.textWidth(status, 23 * scale);
+        const float x = (width - textWidth) * .5f;
+        r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale,
+                {.12f, .22f, .18f});
+        r.text(status, x, height - 54 * scale, 23 * scale);
+    } else if (time_ < 5.0f) {
+        r.panel(24 * scale, height - 60 * scale, 255 * scale, 36 * scale, {.12f, .22f, .18f});
+        r.text(L"WASD 이동 · 마우스 시점", 36 * scale, height - 54 * scale, 23 * scale);
     }
     const glm::vec3 dot{0.96f, 0.96f, 0.86f};
     r.panel(width / 2.0f - 2.5f, height / 2.0f - 2.5f, 5, 5, {0.12f, 0.22f, 0.18f});
@@ -1118,27 +1901,36 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height) c
 void SchoolRoom::draw(Renderer& r, const Camera& camera, int width, int height) const {
     glm::vec3 eye = camera.eye(), normal = mirrorNormal();
     glm::mat4 projection = glm::perspective(glm::radians(68.0f), float(width) / height, 0.05f, 50.0f);
-    glm::vec3 reflectedEye = Renderer::reflectPoint(eye, mirrorCenter, normal);
-    glm::vec3 reflectedTarget = Renderer::reflectPoint(eye + camera.direction(), mirrorCenter, normal);
-    glm::mat4 reflectedView = glm::lookAt(reflectedEye, reflectedTarget, glm::vec3(0, 1, 0));
-    // Reflection reverses handedness. Flip clip X so the view maps back onto the mirror plane.
-    glm::mat4 flip(1);
-    flip[0][0] = -1;
-    glm::mat4 reflectedVP = flip * projection * reflectedView;
+    const auto target = eye + camera.direction();
+    const auto viewProjection = projection * glm::lookAt(eye, target, glm::vec3(0, 1, 0));
+    const auto glass = mirrorCenter + normal * .006f;
+    const glm::vec3 mirrorRight{normal.z * mirrorHalfWidth, 0, -normal.x * mirrorHalfWidth};
+    const glm::vec3 mirrorUp{0, mirrorHalfHeight, 0};
+    const bool reflect = glm::dot(eye - mirrorCenter, normal) > 0 &&
+                         Renderer::visible(viewProjection, glass, glm::abs(mirrorRight) + mirrorUp);
+    const auto placement = notebookPlacement(camera);
+    glm::mat4 reflectedVP{1};
     glEnable(GL_DEPTH_TEST);
-    r.beginReflection();
-    r.begin(reflectedVP, reflectedEye, glm::vec4(normal, -glm::dot(normal, mirrorCenter) - 0.01f));
-    scene(r, camera, true);
-    r.flush();
+    if (reflect) {
+        const auto reflectedEye = Renderer::reflectPoint(eye, mirrorCenter, normal);
+        const auto reflectedTarget = Renderer::reflectPoint(target, mirrorCenter, normal);
+        const auto reflectedView = glm::lookAt(reflectedEye, reflectedTarget, glm::vec3(0, 1, 0));
+        // Reflection reverses handedness. Flip clip X so the view maps back onto the mirror plane.
+        glm::mat4 flip(1);
+        flip[0][0] = -1;
+        reflectedVP = fitReflection(flip * projection * reflectedView, glass, mirrorRight, mirrorUp);
+        r.beginReflection();
+        r.begin(reflectedVP, reflectedEye, glm::vec4(normal, -glm::dot(normal, mirrorCenter) - 0.01f));
+        scene(r, camera, true, placement);
+        r.flush();
+    }
     r.endReflection(width, height);
     glClearColor(0.63f, 0.74f, 0.76f, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    r.begin(projection * glm::lookAt(eye, eye + camera.direction(), glm::vec3(0, 1, 0)), eye);
-    scene(r, camera, false);
-    if (glm::dot(eye - mirrorCenter, normal) > 0) {
-        glm::vec3 right{std::cos(mirrorAngle), 0, -std::sin(mirrorAngle)};
-        r.mirror(mirrorCenter + normal * 0.006f, right * 0.683f, {0, 0.965f, 0}, reflectedVP);
-    }
-    hud(r, camera, width, height);
+    r.begin(viewProjection, eye);
+    scene(r, camera, false, placement);
+    if (reflect)
+        r.mirror(glass, mirrorRight, mirrorUp, reflectedVP);
+    hud(r, camera, width, height, placement);
 }
 } // namespace school

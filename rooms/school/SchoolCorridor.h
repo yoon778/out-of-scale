@@ -2,12 +2,22 @@
 
 #include <GL/glm/glm.hpp>
 #include <array>
+#include <optional>
 #include <vector>
 
 namespace school {
 struct Box;
 struct Camera;
 class Renderer;
+
+struct AlignmentFeedback {
+    float score, threshold;
+    bool aligned;
+    float holdProgress = 0;
+};
+
+// Near-threshold jitter spends progress; an invalid view resets it immediately.
+float advanceAlignmentHold(float held, float score, float threshold, float dt);
 
 // School-owned continuation. The shared inter-stage connector is unchanged.
 class SchoolCorridor {
@@ -17,33 +27,37 @@ class SchoolCorridor {
     void update(const Camera& camera, float dt);
     bool canInteract(const Camera& camera) const;
     bool interact(const Camera& camera);
+    bool interactClassroom(const Camera& camera);
+    const wchar_t* classroomInteractionLabel(const Camera& camera) const;
     bool finished(const Camera& camera) const;
     bool doorOpen() const { return targetOpen_; }
     float doorAngle() const { return angle_; }
-    float alignment(const Camera& camera) const;
+    float alignment(const Camera& camera) const { return doorViewAlignment(camera).value_or(0); }
+    std::optional<AlignmentFeedback> alignmentFeedback(const Camera& camera) const;
     bool doorwayForming() const { return forming_; }
     bool doorwayReady() const { return opening_ >= 1; }
-    bool canOpenPassage(const Camera& camera) const;
-    bool openPassage(const Camera& camera);
     bool bridgeReady() const { return bridgeFormation_ >= 1; }
-    float bridgeAlignment(const Camera& camera) const;
+    float bridgeAlignment(const Camera& camera) const { return bridgeViewAlignment(camera).value_or(0); }
     float doorwayFormation() const { return formation_; }
     float doorwayOpening() const { return opening_; }
     std::vector<Box> collisionBoxes() const;
     void draw(Renderer& renderer) const;
     static constexpr float floorHeight = 1.8f;
+    static constexpr glm::vec3 classroomKeySpot{9.44f, 3.231f, -9.79f};
+    static constexpr glm::vec3 classroomRearDoor{11.675f, 2.951f, -11.73f};
     static constexpr glm::vec3 hinge{18.10f, floorHeight, -11.48f};
     static constexpr float doorWidth = 1.20f;
     static constexpr glm::vec3 illusionEye{15.30f, 3.45f, -10.70f};
     static constexpr glm::vec3 illusionFocus{20.45f, 3.0f, -9.90f};
     static constexpr float recognitionDuration = .55f;
-    static constexpr float formationDuration = .75f;
+    static constexpr float formationDuration = 1.8f;
     static constexpr float openingDuration = .9f;
     static constexpr glm::vec3 bridgeEye{23.95f, 3.45f, -10.45f};
     static constexpr glm::vec3 bridgeFocus{23.95f, 1.8f, -13.825f};
     static constexpr float exitZ = -21.85f;
 
   private:
+    enum class ClassroomAction { none, takeKey, unlockDoor };
     struct Solid {
         glm::vec3 center, size, color;
         bool visible = true;
@@ -59,10 +73,15 @@ class SchoolCorridor {
     };
     void build();
     void buildDrawing();
+    std::optional<float> doorViewAlignment(const Camera& camera) const;
+    std::optional<float> bridgeViewAlignment(const Camera& camera) const;
     void updateIllusion(const Camera& camera, float dt);
     void drawIllusion(Renderer& renderer) const;
     void buildBridgeDrawing();
     void drawFalseHall(Renderer& renderer) const;
+    void drawClassroomLock(Renderer& renderer) const;
+    ClassroomAction classroomAction(const Camera& camera) const;
+    Box classroomDoorBox(float opening) const;
     void drawBridge(Renderer& renderer) const;
     void updateBridge(const Camera& camera, float dt);
     glm::vec3 paintedPoint(const InkPatch& patch, int corner) const;
@@ -75,8 +94,10 @@ class SchoolCorridor {
     float angle_ = 0;
     float angularSpeed_ = 0;
     bool targetOpen_ = false;
+    bool classroomKeyTaken_ = false, classroomDoorUnlocked_ = false;
+    float classroomDoorOpening_ = 0;
     float recognition_ = 0, formation_ = 0, opening_ = 0;
-    bool forming_ = false, passageOpening_ = false;
+    bool forming_ = false;
     float bridgeHeld_ = 0, bridgeFormation_ = 0;
     bool bridgeForming_ = false;
 };
