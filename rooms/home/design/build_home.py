@@ -908,25 +908,24 @@ def add_door():
 
 
 def add_rpg_and_rack():
-    group = "Rpg"
-    cylinder(group, "RPG launch tube", (-0.205, 0.025, 0), (0.205, 0.025, 0), 0.043, "RpgGreen", 16)
-    cylinder(group, "RPG rear venturi", (-0.285, 0.025, 0), (-0.19, 0.025, 0), 0.071, "Metal", 16, 0.046)
-    cylinder(group, "RPG rear dark mouth", (-0.287, 0.025, 0), (-0.285, 0.025, 0), 0.056, "DarkRecess", 16)
-    cylinder(group, "RPG muzzle ring", (0.195, 0.025, 0), (0.218, 0.025, 0), 0.052, "Metal", 16)
-    cylinder(group, "RPG muzzle dark", (0.219, 0.025, 0), (0.221, 0.025, 0), 0.037, "DarkRecess", 16)
-    for x in (-0.145, -0.055):
-        cylinder(group, "RPG wood heatshield", (x - 0.025, 0.025, 0), (x + 0.025, 0.025, 0),
-                 0.050, "WalnutEdge", 12)
-    box(group, "RPG pistol grip", (0.073, -0.042, 0), (0.045, 0.104, 0.052), "WalnutEdge", 0.008)
-    box(group, "RPG sight base", (0.018, 0.087, 0), (0.081, 0.035, 0.026), "Metal", 0.004)
-    box(group, "RPG optical sight", (-0.025, 0.106, 0), (0.085, 0.023, 0.028), "BlackPlastic", 0.004)
-    group = "Rack"
-    box(group, "Miniature equipment rack base", (0, -0.18, 0), (0.80, 0.04, 0.55), "RpgGreen", 0.012)
-    box(group, "Miniature equipment rack back", (0, 0.02, -0.23), (0.80, 0.36, 0.045), "RpgGreen", 0.008)
-    for x in (-0.36, 0.36):
-        box(group, "Equipment rack end", (x, -0.05, 0.0), (0.055, 0.28, 0.51), "RpgGreen", 0.008)
-    for x in (-0.19, 0.19):
-        box(group, "Equipment cradle", (x, -0.11, 0.02), (0.045, 0.12, 0.23), "Metal", 0.005)
+    """Reuse the F2 gun cabinet, rifles, and RPG in their authored orientation."""
+    source_path = OUTPUT.parents[1] / "military" / "design" / "군대 방 맵.blend"
+    rpg_prefix = "Barracks storage | RPG display"
+    cabinet_prefixes = ("Barracks gun cabinet |", "Barracks storage | K2C1")
+    centers = {"Rpg": Vector((13.91, 0.76, -10.055)),
+               "Rack": Vector((13.90, 0.99, -10.045))}
+    with bpy.data.libraries.load(str(source_path), link=False) as (source, target):
+        target.objects = [name for name in source.objects
+                          if name.startswith((rpg_prefix,) + cabinet_prefixes)]
+    for obj in target.objects:
+        group = "Rpg" if obj.name.startswith(rpg_prefix) else "Rack"
+        obj.name = "F2 source | " + obj.name
+        obj["home_group"] = group
+        # Appended objects retain their authored local TRS before world evaluation.
+        obj.matrix_world = Matrix.Translation(-point(centers[group])) @ obj.matrix_basis
+        obj.modifiers.clear()
+        obj.hide_render = False
+        COLLECTIONS[group].objects.link(obj)
 
 
 def add_miniature_broken_wall():
@@ -1292,9 +1291,8 @@ def main():
     stored_door = instance("Detached miniature door", "Door", (5.20, 2.245, -3.25), 0.16, presentation)
     stored_door.rotation_euler.x = math.radians(-90.0)
     military_origin = Vector(DIORAMA_ORIGINS["MilitaryDiorama"])
-    mini_rack = instance("Miniature equipment rack", "Rack", military_origin + Vector((0, 0.036, 0)), 0.18, presentation)
-    mini_rack.rotation_euler.z = math.radians(180.0)
-    instance("Miniature RPG", "Rpg", military_origin + Vector((0, 0.032, 0)), 0.10, presentation)
+    instance("Miniature equipment rack", "Rack", military_origin + Vector((0.420, 0.07425, -0.363375)), 0.075, presentation)
+    instance("Miniature RPG", "Rpg", military_origin + Vector((0.42075, 0.057, -0.364125)), 0.075, presentation)
     instance("Cabinet representative rooms", "CabinetMiniatures", (0, 0, 0), 1.0, presentation)
     for group, origin in DIORAMA_ORIGINS.items():
         instance("Cabinet portable " + group, group, origin, 1.0, presentation)

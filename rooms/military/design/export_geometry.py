@@ -12,6 +12,10 @@ from pathlib import Path
 import bpy
 from mathutils import Vector
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'shared' / 'design'))
+from material_bake import sample_surface
+
 
 BARRICADE = "Barricade_Interactable"
 MOON = "Moon_Pickup"
@@ -41,11 +45,15 @@ def mesh_triangles(mesh, world):
         slot = triangle.material_index
         material = mesh.materials[slot] if slot < len(mesh.materials) else None
         base = material.diffuse_color[:3] if material else (0.5, 0.5, 0.5)
-        shade = 0.63 + 0.37 * max(0.0, normal.normalized().dot(LIGHT))
+        base, shading_normal, highlight = sample_surface(material, sum(corners, Vector()) / 3,
+                                                         normal.normalized(), LIGHT)
+        shade = 0.63 + 0.37 * max(0.0, shading_normal.dot(LIGHT))
         if material and (material.get("game_unlit", False) or
                          any(word in material.name.lower() for word in ("moon", "starlight"))):
             shade = 1.0
-        color = tuple(min(1.0, max(0.0, component) ** (1.0 / 2.2) * shade) for component in base)
+            base, highlight = material.diffuse_color[:3], 0.0
+        color = tuple(min(1.0, max(0.0, component) ** (1.0 / 2.2) * shade + highlight)
+                      for component in base)
         yield corners, color
 
 

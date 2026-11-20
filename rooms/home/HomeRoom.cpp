@@ -73,9 +73,18 @@ constexpr std::array completeKeyParts{
 constexpr std::array socketFlatParts{Box{{0,0,0},{.24f,.025f,.32f}}};
 constexpr std::array socketUprightParts{Box{{0,0,0},{.24f,.32f,.025f}}};
 constexpr std::array schoolParts{Box{{0,.117f,0},{1.50f,.261f,1.08f}}};
-constexpr std::array militaryParts{Box{{0,.20825f,0},{1.50f,.4635f,1.08f}}};
+constexpr std::array militaryParts{Box{{0,.10825f,0},{1.50f,.2635f,1.08f}}};
 constexpr std::array officeParts{Box{{0,.13675f,0},{1.50f,.3205f,1.08f}}};
 constexpr std::array homeParts{Box{{0,.1125f,0},{1.15f,.255f,2.05f}}};
+
+// Drawing, picking and occlusion must use the same miniature prop transforms.
+glm::mat4 miniatureRackModel(const glm::mat4& militaryModel) {
+    return glm::scale(glm::translate(militaryModel,{.420f,.07425f,-.363375f}),glm::vec3{roomMiniatureScale});
+}
+
+glm::mat4 miniatureRpgModel(const glm::mat4& militaryModel) {
+    return glm::scale(glm::translate(militaryModel,{.42075f,.057f,-.364125f}),glm::vec3{roomMiniatureScale});
+}
 
 std::span<const Box> portableParts(int index, bool flatSocket) {
     switch (index) {
@@ -542,12 +551,10 @@ float HomeRoom::portableVisibility(const glm::vec3& eye, const glm::vec3& direct
             if (exitState_ == ExitState::DoorPlaced)
                 limit = visibleMeshRange(HomeMesh::Door,glm::translate(model,door.center),eye,direction,limit);
         } else if (index == militaryObject) {
-            auto rack = glm::translate(portableModel(index),{0.0f,.28f,0.0f});
-            rack = glm::rotate(rack,glm::radians(180.0f),{0.0f,1.0f,0.0f});
-            rack = glm::scale(rack,glm::vec3{.8f});
+            const auto rack = miniatureRackModel(portableModel(index));
             limit = visibleMeshRange(HomeMesh::Rack,rack,eye,direction,limit);
             if (held_ != HeldItem::Rpg && exitState_ <= ExitState::WallRevealed) {
-                const auto rpg = glm::scale(glm::translate(portableModel(index),{0.0f,.29f,-.10f}),glm::vec3{.8f});
+                const auto rpg = miniatureRpgModel(portableModel(index));
                 limit = visibleMeshRange(HomeMesh::Rpg,rpg,eye,direction,limit);
             }
         }
@@ -1000,13 +1007,11 @@ bool HomeRoom::canReachMiniatureShelf(const glm::vec3& eye, const glm::vec3& dir
 
 bool HomeRoom::canTakeMiniatureRpg(const glm::vec3& eye, const glm::vec3& direction) const {
     if (!cabinetOpen_ || heldPortable_ == militaryObject) return false;
-    auto rack = glm::translate(portableModel(militaryObject),{0.0f,.036f,0.0f});
-    rack = glm::rotate(rack,glm::radians(180.0f),{0.0f,1.0f,0.0f});
-    rack = glm::scale(rack,glm::vec3{.18f});
+    const auto rack = miniatureRackModel(portableModel(militaryObject));
     float visible = portableVisibility(eye,direction,visibleRange(eye,direction,reach),militaryObject);
     visible = visibleMeshRange(HomeMesh::Rack,rack,eye,direction,visible);
     visible = visibleMeshRange(HomeMesh::MilitaryDiorama,portableModel(militaryObject),eye,direction,visible);
-    const auto model = glm::scale(glm::translate(portableModel(militaryObject),{0.0f,.032f,0.0f}),glm::vec3{.10f});
+    const auto model = miniatureRpgModel(portableModel(militaryObject));
     return visibleMeshRange(HomeMesh::Rpg,model,eye,direction,reach+.01f) <= visible;
 }
 
@@ -1552,12 +1557,10 @@ void HomeRoom::drawMiniature() const {
         drawHomeMesh(renderer_,portableMesh(index),portableModel(index));
     }
     drawRoom(homeModel(), true);
-    auto rack = glm::translate(portableModel(militaryObject),{0.0f,.036f,0.0f});
-    rack = glm::rotate(rack,glm::radians(180.0f),{0.0f,1.0f,0.0f});
-    rack = glm::scale(rack,glm::vec3{.18f});
+    const auto rack = miniatureRackModel(portableModel(militaryObject));
     drawHomeMesh(renderer_,HomeMesh::Rack,rack);
     if ((exitState_ == ExitState::Explore || exitState_ == ExitState::WallRevealed) && held_ != HeldItem::Rpg) {
-        const auto rpg = glm::scale(glm::translate(portableModel(militaryObject),{0.0f,.032f,0.0f}),glm::vec3{.10f});
+        const auto rpg = miniatureRpgModel(portableModel(militaryObject));
         drawHomeMesh(renderer_,HomeMesh::Rpg,rpg);
     }
 }
@@ -1670,7 +1673,8 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
     }
     if (held_ == HeldItem::Rpg) {
         const glm::vec3 center = eye + direction * 0.85f + carrySide(direction) * 0.34f - glm::vec3{0.0f, 0.31f, 0.0f};
-        drawRpg(renderer_, center, 1.1f);
+        // The source RPG now uses F2 meter dimensions; retain its hand-view size.
+        drawRpg(renderer_, center, 0.37f);
         if (shotFlashTime_ > 0.0f) {
             renderer_.drawBox(center + direction * 0.30f, {0.13f, 0.13f, 0.13f}, {1.0f, 0.79f, 0.30f});
         }

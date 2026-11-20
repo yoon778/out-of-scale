@@ -12,6 +12,10 @@ import bpy
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'shared' / 'design'))
+from material_bake import sample_surface
+
 
 GROUP_NAMES = (
     "Interior", "Shell", "IntactWall", "BrokenWall", "MiniWalls",
@@ -87,7 +91,8 @@ def lit_color(surface, position, normal, tree, group):
     if emission:
         brightness = 0.92 if emission < 1.0 else 1.0
         return tuple(min(1.0, component ** (1 / 2.2) * brightness) for component in base)
-    directional = max(0.0, normal.dot(LIGHT_DIRECTION))
+    base, shading_normal, highlight = sample_surface(surface, position, normal, LIGHT_DIRECTION)
+    directional = max(0.0, shading_normal.dot(LIGHT_DIRECTION))
     shade = 0.67 + directional * 0.28
     if group not in ("Shelf", "Door", "Rpg", "Rack", "MiniWalls", "LatchMounts", "LatchBolt",
                      "CabinetLeftDoor", "CabinetRightDoor", "LockSocket", "SchoolDiorama",
@@ -101,7 +106,7 @@ def lit_color(surface, position, normal, tree, group):
                               - ((position.z - 0.5) / 1.6) ** 2)
     else:
         warm = 0.0
-    return tuple(min(1.0, component ** (1 / 2.2) * (shade + warm * tint))
+    return tuple(min(1.0, max(0.0, component) ** (1 / 2.2) * (shade + warm * tint) + highlight)
                  for component, tint in zip(base, (1.0, 0.64, 0.25)))
 
 
