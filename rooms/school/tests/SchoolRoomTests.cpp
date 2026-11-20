@@ -1,7 +1,9 @@
 #include "../SchoolRoom.h"
 #include "../SchoolRenderer.h"
+#include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <string_view>
 #include <string>
 
 namespace school {
@@ -33,8 +35,44 @@ void aimProjector(SchoolRoom& room, float fraction = 1) {
     room.rotateProjector((std::atan2(target.x, -target.z) - std::atan2(start.x, -start.z)) * fraction,
                          (std::asin(target.y) - std::asin(start.y)) * fraction);
 }
+bool placeNotebook(SchoolRoom& room, Camera& camera) {
+    camera.face(room.notebookCenter());
+    if (!room.toggleNotebook(camera))
+        return false;
+    camera.face(SchoolRoom::notebookRest);
+    room.toggleNotebook(camera);
+    const auto center = room.notebookCenter();
+    return glm::distance(glm::vec2(center.x, center.z),
+                         glm::vec2(SchoolRoom::notebookRest.x, SchoolRoom::notebookRest.z)) < .002f;
+}
+void faceNotebookReflection(SchoolRoom& room, Camera& camera) {
+    camera.face(Renderer::reflectPoint(room.notebookCenter(), SchoolRoom::mirrorCenter, room.mirrorNormal()));
+}
+bool turnMirrorToNotebook(SchoolRoom& room, Camera& camera) {
+    const auto mirror = SchoolRoom::mirrorCenter;
+    camera.face(SchoolRoom::mirrorAim);
+    if (!room.toggleMirror(camera))
+        return false;
+    auto horizontal = [](glm::vec3 v) { return glm::normalize(glm::vec2(v.x, v.z)); };
+    const auto bisector = horizontal(camera.eye() - mirror) + horizontal(room.notebookCenter() - mirror);
+    const auto normal = room.mirrorNormal();
+    room.rotateMirror(std::atan2(bisector.x, bisector.y) - std::atan2(normal.x, normal.z));
+    return room.toggleMirror(camera);
+}
+void solveBoards(SchoolRoom& room, Camera& camera) {
+    for (int index : {0, 0, 1, 1, 1, 2, 3, 3, 3}) {
+        camera.feet = {SchoolRoom::boardX[index], 0, -2.18f};
+        camera.grounded = true;
+        camera.resetMotion();
+        camera.face(room.boardHandle(index) + glm::vec3(0, .55f, 0));
+        if (!room.moveBoard(camera))
+            throw std::runtime_error("test setup cannot move chalkboard");
+        tick(room, camera, {}, 36);
+    }
+}
 void positionProjector(SchoolRoom& room, Camera& camera) {
     camera = Camera();
+    solveBoards(room, camera);
     camera.feet = {4.8f, 0, 6.4f};
     camera.face(SchoolRoom::projectorOrigin);
     check(room.toggleProjector(camera), "projector can be rotated from behind its cart");
@@ -64,7 +102,7 @@ int runTests() {
     Camera camera;
     check(!room.stairsReady() && !room.escaped(),
           "reset starts with an incomplete drawing and an open destination");
-    std::array<int, 3> boardFragments{};
+    std::array<int, 4> boardFragments{};
     int floorFragments = 0, lecternFragments = 0, uncovered = 0, blocked = 0;
     float projectionError = 0;
     for (const auto& fragment : room.chalk_) {
@@ -104,6 +142,40 @@ int runTests() {
     check(uncovered == 0, "projected floor strokes remain in the front teaching area");
     check(blocked == 0, "furniture and gallery do not hide the aligned study");
     check(projectionError < 0.00001f, "surface drawing preserves the stair projection");
+    auto packed = [](const std::array<int, 4>& state) {
+        return state[0] + 4 * state[1] + 16 * state[2] + 64 * state[3];
+    };
+    std::vector<std::array<int, 4>> states{SchoolRoom::boardGoal};
+    std::array<int, 256> distance;
+    distance.fill(-1);
+    distance[packed(states.front())] = 0;
+    for (size_t i = 0; i < states.size(); ++i) {
+        for (int board = 0; board < 4; ++board) {
+            auto previous = states[i];
+            // Three forward presses undo a single press of that board.
+            for (int step = 0; step < 3; ++step)
+                SchoolRoom::advanceBoards(previous, board);
+            if (distance[packed(previous)] < 0) {
+                distance[packed(previous)] = distance[packed(states[i])] + 1;
+                states.push_back(previous);
+            }
+        }
+    }
+    check(states.size() == 256, "every four-board arrangement can return to the goal");
+    check(distance[packed(SchoolRoom::boardStart)] == 9,
+          "the new scramble requires at least nine board moves");
+    // The printed height clues determine one arrangement among all permutations of the four heights.
+    std::array<int, 4> permutation{1, 2, 3, 4};
+    int matching = 0;
+    bool matchesGoal = false;
+    do {
+        const auto [first, second, third, fourth] = permutation;
+        if (second == third + fourth && std::abs(second - third) == 3 * std::abs(first - fourth)) {
+            ++matching;
+            matchesGoal |= std::array{first - 1, second - 1, third - 1, fourth - 1} == SchoolRoom::boardGoal;
+        }
+    } while (std::next_permutation(permutation.begin(), permutation.end()));
+    check(matching == 1 && matchesGoal, "the two notebook clues imply exactly one board order");
     float initialVisible = room.boardVisibility();
     std::vector<glm::vec3> coveredInitially;
     for (const auto& stroke : room.chalk_)
@@ -112,13 +184,16 @@ int runTests() {
     check(initialVisible < 0.001f && !room.projectorAligned(),
           "initial image hides every board stair stroke");
     float leastCornerCoverage = 1;
-    for (int board = 0; board < 3; ++board)
-        for (float x : {-2.80f + board * 1.95f - 0.86f, -2.80f + board * 1.95f + 0.86f})
-            for (float y : {1.28f, 3.16f})
+    for (int board = 0; board < 4; ++board)
+        for (float x : {SchoolRoom::boardX[board] - .69f, SchoolRoom::boardX[board] + .69f})
+            for (float y : {1.28f + room.boardShift(board), 3.16f + room.boardShift(board)})
                 leastCornerCoverage = std::min(leastCornerCoverage,
-                                               room.projectorLight({x, y, -4.68f + board * 0.105f + 0.065f}));
-    check(leastCornerCoverage > 0.98f, "projection covers all four corners of all three boards");
-    check(!room.toggleProjector(camera), "projector cannot be controlled from the entrance");
+                                               room.projectorLight({x, y, -4.68f + board * 0.07f + 0.065f}));
+    check(leastCornerCoverage > 0.98f, "projection covers all four corners of all four boards");
+    Camera distantView;
+    distantView.feet.z = 7.6f;
+    distantView.face(SchoolRoom::projectorOrigin);
+    check(!room.toggleProjector(distantView), "projector cannot be controlled from outside its reach");
     float initialYaw = room.projectorYaw_, initialPitch = room.projectorPitch_;
     room.rotateProjector(1, 1);
     check(room.projectorYaw_ == initialYaw && room.projectorPitch_ == initialPitch,
@@ -129,7 +204,7 @@ int runTests() {
             continue;
         ++slideCount;
         auto hit = room.projectSlide(stroke.projectedA);
-        if (hit.surface >= 0 && hit.surface < 3)
+        if (hit.surface >= 0 && hit.surface < 4)
             ++initialOnBoard;
     }
     check(slideCount > 20 && initialOnBoard > 20, "actual missing stair drawing starts projected on board");
@@ -157,9 +232,142 @@ int runTests() {
     viewStudy(camera);
     tick(room, camera, {}, 240);
     check(!room.stairsReady(), "stair viewpoint alone cannot bypass incorrect projection");
+    camera = Camera();
+    const auto initialProjectorLabel = room.interactionLabel(camera);
+    check(initialProjectorLabel && std::wstring_view(initialProjectorLabel) == L"돌리기",
+          "the starting view offers the projector as the first action");
+    check(room.toggleProjector(camera), "scrambled boards still allow the first projector turn");
+    aimProjector(room, .5f);
+    const float partialReveal = room.boardVisibility();
+    check(partialReveal > .10f && partialReveal < .90f,
+          "turning the projector partly reveals the hidden board strokes before any board moves");
+    aimProjector(room, .5f);
+    room.toggleProjector(camera);
+    viewStudy(camera);
+    tick(room, camera, {}, 150);
+    check(room.boardVisibility() > .98f && !room.projectorAligned() && !room.stairsReady(),
+          "turning all the way reveals the board but cannot bypass the board order");
+    room.reset();
+    Camera mirrorView;
+    mirrorView.feet = {-5.64f, 0, 2.61f};
+    faceNotebookReflection(room, mirrorView);
+    check(!room.inspectMirror(mirrorView), "the initial small notebook cannot reveal the guide");
+    mirrorView.face(SchoolRoom::mirrorCenter);
+    const auto turnLabel = room.interactionLabel(mirrorView);
+    check(turnLabel && std::wstring_view(turnLabel) == L"돌리기", "the empty mirror offers turning");
+    mirrorView.feet = {-4.83f, 0, 3.80f};
+    const auto startNotebookPosition = room.notebookCenter();
+    mirrorView.face(startNotebookPosition);
+    const auto pickupLabel = room.interactionLabel(mirrorView);
+    check(pickupLabel && std::wstring_view(pickupLabel) == L"집기",
+          "a reachable notebook offers the pickup prompt");
+    check(placeNotebook(room, mirrorView),
+          "aiming the held notebook at the stand seats it in the cradle");
+    check(room.notebook_.scale > 3.f && room.notebook_.scale < 5.5f &&
+              glm::distance(room.notebookCenter(), startNotebookPosition) > 5.f &&
+              std::abs(room.notebookBounds(room.notebook_).min.y - SchoolRoom::notebookRest.y) < .004f,
+          "the enlarged notebook rests on the existing supply cabinet");
+    mirrorView.face(room.notebookCenter());
+    check(!room.inspectMirror(mirrorView), "a direct view of the notebook cannot open the mirror guide");
+    mirrorView.feet = {-5.64f, 0, 2.61f};
+    mirrorView.face(SchoolRoom::mirrorCenter);
+    check(!room.canReadNotebook(mirrorView), "the starting mirror angle does not show the stand");
+    const auto startMirrorNormal = room.mirrorNormal();
+    room.rotateMirror(.2f);
+    check(room.mirrorNormal() == startMirrorNormal, "mouse motion outside mirror adjustment cannot turn it");
+    check(turnMirrorToNotebook(room, mirrorView) && !room.adjustingMirror(),
+          "turn the mirror about its base and leave adjustment");
+    check(room.canReadNotebook(mirrorView), "the adjusted mirror makes the notebook readable without moving the player");
+    faceNotebookReflection(room, mirrorView);
+    const auto readLabel = room.interactionLabel(mirrorView);
+    check(readLabel && std::wstring_view(readLabel) == L"읽기", "a readable reflection offers the read prompt");
+    Camera edgeView = mirrorView;
+    auto justAbovePage = room.notebookCenter();
+    justAbovePage.y = room.notebookBounds(room.notebook_).max.y + .04f;
+    edgeView.face(Renderer::reflectPoint(justAbovePage, SchoolRoom::mirrorCenter, room.mirrorNormal()));
+    check(room.canReadNotebook(edgeView), "looking just outside the reflected page still offers reading");
+    check(room.inspectMirror(mirrorView) && room.mirrorGuide_,
+          "read the enlarged notebook through the mirror");
+    mirrorView.yaw += 1.5f;
+    tick(room, mirrorView, {}, 1);
+    check(!room.mirrorGuide_, "looking away from the reflection closes the guide");
+    mirrorView.face(SchoolRoom::mirrorCenter);
+    const bool enteredMirror = room.toggleMirror(mirrorView);
+    room.rotateMirror(2.f);
+    check(enteredMirror && room.toggleMirror(mirrorView) && !room.canReadNotebook(mirrorView) &&
+              room.toggleMirror(mirrorView),
+          "turning past the reflection remains recoverable from the back of the mirror");
+    room.stopAdjustingMirror();
+
+    SchoolRoom dropRoom;
+    Camera carrier;
+    auto grabForDrop = [&] {
+        dropRoom.reset();
+        carrier = Camera();
+        carrier.feet = {-4.83f, 0.f, 3.8f};
+        carrier.face(dropRoom.notebookCenter());
+        return dropRoom.toggleNotebook(carrier);
+    };
+    check(grabForDrop(), "pick up the notebook for a nearby stand placement");
+    carrier.feet = {4.55f, 0, 2.60f};
+    carrier.face(SchoolRoom::notebookRest);
+    check(dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0 &&
+              dropRoom.notebook_.scale < 2.65f &&
+              std::abs(dropRoom.notebookBounds(dropRoom.notebook_).min.y - SchoolRoom::notebookRest.y) < .004f,
+          "placing the notebook from close to the stand leaves it small");
+    carrier.feet = {-5.64f, 0, 2.61f};
+    check(turnMirrorToNotebook(dropRoom, carrier) && !dropRoom.canReadNotebook(carrier),
+          "the adjusted mirror still requires an enlarged notebook");
+    dropRoom.reset();
+    check(dropRoom.mirrorNormal() == startMirrorNormal && !dropRoom.adjustingMirror(),
+          "reset restores the starting mirror angle");
+    check(grabForDrop(), "pick up the notebook for level dropping");
+    carrier.feet = {3.8f, 0, 2.4f};
+    carrier.pitch = 0;
+    carrier.yaw = 3.14159265f;
+    const auto levelDrop = dropRoom.notebookPlacement(carrier);
+    check(levelDrop && levelDrop->center.y > 1.5f && dropRoom.toggleNotebook(carrier) &&
+              dropRoom.notebookRatio_ == 0,
+          "the notebook can release along a level sightline");
+    tick(dropRoom, carrier, {}, 120);
+    check(std::abs(dropRoom.notebookBounds(dropRoom.notebook_).min.y) < .003f && !dropRoom.notebookFalling_,
+          "the released notebook falls to a stable position on the classroom floor");
+    check(grabForDrop(), "pick up the notebook for blocked-ray dropping");
+    carrier.feet = {6.22f, 0, -.10f};
+    carrier.yaw = 1.5707963f;
+    carrier.pitch = 0;
+    const auto wallDrop = dropRoom.notebookPlacement(carrier);
+    check(wallDrop && wallDrop->center.x < 6.50f && std::abs(wallDrop->center.z - carrier.feet.z) > .3f &&
+              dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0,
+          "a wall immediately ahead redirects the drop to nearby free space");
+    check(grabForDrop(), "pick up the notebook for desk placement");
+    carrier.feet = {3.10f, 0, 1.86f};
+    carrier.face({1.15f, .78f, .65f});
+    const auto deskDrop = dropRoom.notebookPlacement(carrier);
+    check(deskDrop && std::abs(dropRoom.notebookBounds(*deskDrop).min.y - .78f) < .004f &&
+              dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0,
+          "the aimed tabletop supports the notebook");
+    check(grabForDrop(), "pick up the notebook for an upward drop");
+    carrier.feet = {3.8f, 0, 2.4f};
+    carrier.pitch = 1.48f;
+    const auto overheadDrop = dropRoom.notebookPlacement(carrier);
+    check(overheadDrop && dropRoom.notebookBounds(*overheadDrop).max.y <= 4.5f &&
+              dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0,
+          "an upward drop stays below the classroom ceiling");
+    check(grabForDrop(), "pick up the notebook for corridor placement");
+    carrier.feet = {6.2f, 1.8f, -10.45f};
+    carrier.face({5.2f, 1.8f, -9.4f});
+    const auto corridorDrop = dropRoom.notebookPlacement(carrier);
+    check(corridorDrop && std::abs(dropRoom.notebookBounds(*corridorDrop).min.y - 1.8f) < .004f &&
+              dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0,
+          "the notebook can be left on the elevated corridor floor");
+    solveBoards(room, camera);
+    check(room.boardsReady(), "linked physical board controls reach the target order");
+    check(room.boardVisibility() < .10f, "board movement alone keeps the projected artwork in place");
     camera.feet = {4.8f, 0, 6.4f};
     camera.face(SchoolRoom::projectorOrigin);
     check(room.toggleProjector(camera), "enter projector rotation");
+    tick(room, camera, {}, 30);
     const auto fixedOrigin = SchoolRoom::projectorOrigin;
     auto startDirection = glm::normalize(SchoolRoom::projectorStartAim - fixedOrigin);
     auto targetDirection = glm::normalize(SchoolRoom::projectorPaper - fixedOrigin);
@@ -236,10 +444,20 @@ int runTests() {
     camera.feet = {4.8f, 0, 8.0f};
     room.update(camera, {}, 1.0f / 120);
     check(!room.adjustingProjector(), "walking away exits projector controls");
+    camera.feet = {SchoolRoom::boardX[0], 0, -2.18f};
+    camera.face(room.boardHandle(0) + glm::vec3(0, .55f, 0));
+    check(room.moveBoard(camera), "a solved board can be changed before materialization");
+    viewStudy(camera);
+    tick(room, camera, {}, 150);
+    check(!room.boardsReady() && !room.projectorAligned() && !room.stairsReady(),
+          "disturbing a solved board blocks even a correctly aimed projector and alignment view");
     room.reset();
     positionProjector(room, camera);
     viewStudy(camera);
     check(room.alignment(camera) > 0.94f, "combined drawing matches without a symbol code");
+    const auto stairFeedback = room.alignmentFeedback(camera);
+    check(stairFeedback && stairFeedback->aligned && stairFeedback->score == room.alignment(camera),
+          "stair HUD uses the same alignment score as recognition");
     auto originalFeet = camera.feet;
     room.update(camera, {1, 0, true}, 0.1f, false);
     check(!room.stairsReady() && camera.feet == originalFeet,
@@ -273,6 +491,7 @@ int runTests() {
     camera.yaw += 1;
     room.update(camera, {}, 1.0f / 120);
     check(room.alignmentHeld_ == 0 && !room.materializing(), "looking away clears recognition progress");
+    check(!room.alignmentFeedback(camera), "the alignment HUD hides when the player looks away");
     viewStudy(camera);
     tick(room, camera, {}, 45);
     check(!room.materializing(), "recognition requires a continuous 0.4 second view");
@@ -324,6 +543,18 @@ int runTests() {
     camera.yaw = 0;
     tick(room, camera, {1, 0, true}, 160);
     check(!room.escaped() && camera.feet.z > -3.85f, "floor jump cannot pass through built-in storage");
+    Camera lecternJump;
+    lecternJump.feet = {1.30f, 1.02f, -3.34f};
+    lecternJump.face({2.9f, lecternJump.eye().y, -4.43f});
+    tick(room, lecternJump, {1, 0, true}, 85);
+    tick(room, lecternJump, {}, 80);
+    check(lecternJump.feet.y < 1.79f, "the safety rail stops the diagonal jump from the lectern");
+    Camera frontJump;
+    frontJump.feet = {1.4f, 1.02f, -3.18f};
+    frontJump.face({3.05f, frontJump.eye().y, -4.10f});
+    tick(room, frontJump, {1, 0, true}, 100);
+    tick(room, frontJump, {}, 80);
+    check(frontJump.feet.y < 1.79f, "the safety rail also blocks a jump around its front corner");
     // No artificial remote lock: reaching the doorway by a valid route permits walking out.
     camera.feet = {3.05f, 1.8f, -4.5f};
     camera.grounded = true;
@@ -369,15 +600,33 @@ int runTests() {
     // Full route uses normal movement, projector controls, mouse look and automatic materialization.
     room.reset();
     camera = Camera();
-    check(walkTo(room, camera, {-4.0f, 7.6f}), "walk rear aisle");
-    check(walkTo(room, camera, {-4.0f, -1.3f}), "walk window aisle");
+    check(room.toggleProjector(camera), "begin the continuous route by using the projector");
+    aimProjector(room, .5f);
+    room.toggleProjector(camera);
+    check(walkTo(room, camera, {4.8f, 7.6f}) && walkTo(room, camera, {-4.0f, 7.6f}), "walk rear aisle");
+    check(walkTo(room, camera, {-4.83f, 3.80f}), "walk to the notebook on the windowsill");
+    check(placeNotebook(room, camera), "carry and enlarge the notebook during the continuous route");
+    check(walkTo(room, camera, {-5.64f, 2.61f}), "walk to the reflection sightline");
+    check(turnMirrorToNotebook(room, camera), "turn the mirror toward the stand during the continuous route");
+    faceNotebookReflection(room, camera);
+    check(room.inspectMirror(camera), "read the enlarged notebook during the continuous route");
+    check(walkTo(room, camera, {-4.0f, 2.59f}) && walkTo(room, camera, {-4.0f, -2.18f}),
+          "walk around the mirror along the window aisle");
+    for (int index : {0, 0, 1, 1, 1, 2, 3, 3, 3}) {
+        check(walkTo(room, camera, {SchoolRoom::boardX[index], -2.18f}),
+              "reach the corresponding board rail");
+        camera.face(room.boardHandle(index) + glm::vec3(0, .55f, 0));
+        check(room.moveBoard(camera), "use chalkboard control while walking under normal movement");
+        tick(room, camera, {}, 36);
+    }
+    check(room.boardsReady(), "the continuous route aligns all four boards");
     check(walkTo(room, camera, {2.7f, -1.3f}), "cross teaching aisle");
     check(walkTo(room, camera, {2.7f, 7.6f}), "walk desk side aisle");
     check(!room.stairsReady(), "ordinary exploration does not solve a misaligned image");
     check(walkTo(room, camera, {4.8f, 6.4f}), "walk behind the projector cart");
     camera.face(SchoolRoom::projectorOrigin);
-    check(room.toggleProjector(camera), "operate projector during continuous play");
-    aimProjector(room);
+    check(room.toggleProjector(camera), "return to the projector after arranging the boards");
+    aimProjector(room, .5f);
     room.toggleProjector(camera);
     camera.face(SchoolRoom::projectorPaper);
     tick(room, camera, {}, 240);
@@ -395,17 +644,37 @@ int runTests() {
     check(std::abs(camera.feet.y - 1.8f) < .01f, "connector preserves the existing exit floor height");
     check(walkTo(room, camera, {6.25f, -9.9f}), "turn from connector into school corridor");
     camera.yaw = 1.570796327f;
-    tick(room, camera, {1, 0, true}, 125);
-    check(camera.feet.x < 7.80f, "the painted view of a hallway is a real solid wall");
+    tick(room, camera, {1, 0, true}, 200);
+    check(camera.feet.x > 9.25f && camera.feet.x < 9.40f,
+          "the extended approach still stops at the solid painted wall");
     check(walkTo(room, camera, {6.25f, -9.9f}), "step back to the ordinary classroom entrance");
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(!room.interactCorridor(camera), "the key is out of reach from the first classroom entrance");
     check(walkTo(room, camera, {6.25f, -12.4f}) && walkTo(room, camera, {9.7f, -12.4f}),
           "enter classroom A and reach observation window before the first obstruction");
     camera.yaw = 3.14159265f;
     tick(room, camera, {1, 0, true}, 90);
     check(camera.feet.z < -11.8f, "closed classroom glass prevents jumping through as a shortcut");
-    check(walkTo(room, camera, {9.7f, -12.4f}) && walkTo(room, camera, {11.67f, -12.55f}) &&
-              walkTo(room, camera, {11.67f, -9.9f}) && walkTo(room, camera, {13.45f, -9.9f}),
-          "walk through the real rear classroom door to bypass the false hall");
+    check(walkTo(room, camera, {9.7f, -12.4f}) && walkTo(room, camera, {11.67f, -12.55f}),
+          "reach the locked classroom rear door");
+    camera.face(SchoolCorridor::classroomRearDoor);
+    check(!room.interactCorridor(camera), "the rear door requires the corridor key");
+    camera.yaw = 3.14159265f;
+    tick(room, camera, {1, 0, true}, 120);
+    check(camera.feet.z < -11.97f, "jumping does not bypass the locked rear door");
+    check(walkTo(room, camera, {11.67f, -12.55f}) && walkTo(room, camera, {6.25f, -12.55f}) &&
+              walkTo(room, camera, {6.25f, -10.65f}) && walkTo(room, camera, {8.78f, -10.65f}),
+          "return around the classroom to inspect the false hall from the side");
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(room.interactCorridor(camera) && !room.interactCorridor(camera), "take the key hanging over the painted latch once");
+    check(walkTo(room, camera, {6.25f, -10.65f}) && walkTo(room, camera, {6.25f, -12.55f}) &&
+              walkTo(room, camera, {11.67f, -12.55f}),
+          "carry the key back to the rear door");
+    camera.face(SchoolCorridor::classroomRearDoor);
+    check(room.interactCorridor(camera), "use the key to unlock the classroom rear door");
+    tick(room, camera, {}, 100);
+    check(walkTo(room, camera, {11.67f, -9.9f}) && walkTo(room, camera, {13.45f, -9.9f}),
+          "walk through the opened rear classroom door to bypass the false hall");
     check(walkTo(room, camera, {13.45f, -12.4f}) && walkTo(room, camera, {16.5f, -12.4f}),
           "classroom B preserves a side view of the cupboard and partition");
     camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
@@ -445,6 +714,14 @@ int runTests() {
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::illusionFocus);
     check(room.corridorAlignment(camera) >= .80f, "normal walking can reach a visually aligned door");
+    const auto doorFeedback = room.alignmentFeedback(camera);
+    Camera offAxis = camera;
+    offAxis.feet.z += .45f;
+    offAxis.face(SchoolCorridor::illusionFocus);
+    const auto partialDoorFeedback = room.alignmentFeedback(offAxis);
+    check(doorFeedback && doorFeedback->aligned && partialDoorFeedback && !partialDoorFeedback->aligned &&
+              partialDoorFeedback->score > 0 && partialDoorFeedback->score < doorFeedback->threshold,
+          "the door HUD displays partial alignment before the recognition threshold");
     tick(room, camera, {}, 30);
     check(!room.corridorDoorForming(), "a brief aligned glance does not materialize the door");
     camera.yaw += 1.0f;
@@ -455,17 +732,15 @@ int runTests() {
     tick(room, camera, {}, 45);
     check(room.corridorDoorForming() && !room.corridorDoorReady(),
           "holding the assembled image starts materialization");
+    check(!room.alignmentFeedback(camera), "the door HUD clears when materialization begins");
     const float frozenFormation = room.corridor_.doorwayFormation();
     room.update(camera, {}, 1, false);
     check(room.corridor_.doorwayFormation() == frozenFormation, "pause freezes doorway materialization");
     camera.yaw += 1.0f;
     tick(room, camera, {}, 240);
-    check(!room.corridorDoorReady() && !room.cupboardOpen() && !room.openCorridorDoor(camera),
-          "the real door remains closed and cannot be operated from a distance");
-    check(walkTo(room, camera, {19.7f, -9.9f}), "approach the real door after materialization");
-    camera.face(SchoolCorridor::illusionFocus);
-    check(room.openCorridorDoor(camera), "E opens the physically accessible sliding door");
-    tick(room, camera, {}, 130);
+    check(room.corridorDoorReady() && !room.cupboardOpen(),
+          "the real door opens automatically even after looking away once materialization starts");
+    check(walkTo(room, camera, {19.7f, -9.9f}), "approach the automatically opened door");
     check(room.corridorDoorReady() && walkTo(room, camera, {21.2f, -9.9f}) &&
               walkTo(room, camera, {SchoolCorridor::bridgeEye.x, -10.65f}),
           "walk through the materialized doorway to the service stairwell");
@@ -494,6 +769,9 @@ int runTests() {
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::bridgeFocus);
     check(room.corridorBridgeAlignment(camera) >= .75f, "matching rays recognize the complete grating");
+    const auto bridgeFeedback = room.alignmentFeedback(camera);
+    check(bridgeFeedback && bridgeFeedback->aligned && bridgeFeedback->score == room.corridorBridgeAlignment(camera),
+          "the bridge HUD uses its own recognition threshold and alignment score");
     room.update(camera, {}, 1, false);
     check(!room.corridorBridgeReady(), "pause cannot form a bridge");
     tick(room, camera, {}, 165);
@@ -546,6 +824,15 @@ int runTests() {
               !room.corridorDoorReady() && !room.corridorBridgeReady() && !room.escaped() &&
               !room.stairsReady(),
           "restart restores both classroom and corridor puzzles");
+    camera.feet = {11.67f, 1.8f, -12.55f};
+    camera.face(SchoolCorridor::classroomRearDoor);
+    check(!room.interactCorridor(camera), "reset puts the lock back on the classroom rear door");
+    camera.feet = {10.05f, 1.8f, -9.9f};
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(!room.interactCorridor(camera), "the key cannot be reached through the painted wall");
+    camera.feet = {8.78f, 1.8f, -10.65f};
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(room.interactCorridor(camera), "reset returns the classroom key to its hook");
     camera.feet = {19.7f, 1.8f, -9.9f};
     camera.grounded = true;
     camera.verticalSpeed = 0;
@@ -599,14 +886,24 @@ int runTests() {
     for (int rate : {30, 144}) {
         prepareCorridor();
         float elapsed = 0;
-        while (room.corridor_.doorwayFormation() < 1 && elapsed < 3) {
+        bool stayedClosedWhileForming = true;
+        while (room.corridorDoorFormation() < 1 && elapsed < 3) {
+            room.update(camera, {}, 1.0f / rate);
+            elapsed += 1.0f / rate;
+            stayedClosedWhileForming &= room.corridorDoorFormation() == 1 || room.corridor_.doorwayOpening() == 0;
+        }
+        const float expected = SchoolCorridor::recognitionDuration + SchoolCorridor::formationDuration;
+        check(room.corridorDoorFormation() == 1 && stayedClosedWhileForming && !room.corridorDoorReady() &&
+                  elapsed >= expected && elapsed < expected + .08f,
+              "materialization finishes before the sliding door starts opening");
+        const float formedAt = elapsed;
+        while (!room.corridorDoorReady() && elapsed < 3) {
             room.update(camera, {}, 1.0f / rate);
             elapsed += 1.0f / rate;
         }
-        const float expected = SchoolCorridor::recognitionDuration + SchoolCorridor::formationDuration;
-        check(room.corridor_.doorwayFormation() == 1 && !room.corridorDoorReady() && elapsed >= expected &&
-                  elapsed < expected + .08f,
-              "recognition and materialization stay stable across frame rates");
+        const float openingTime = elapsed - formedAt;
+        check(room.corridorDoorReady() && std::abs(openingTime - SchoolCorridor::openingDuration) <= 1.01f / rate,
+              "the formed door opens automatically at the intended speed across frame rates");
     }
     for (float rate : {30.0f, 144.0f}) {
         room.reset();
