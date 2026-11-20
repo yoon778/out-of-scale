@@ -570,6 +570,194 @@ def add_reverse_door_latch():
              0.018, "MutedGold", 10)
 
 
+def add_lived_in_decor():
+    """Dress the existing furniture and walls without adding gameplay obstructions."""
+    decor_random = random.Random(20261124)
+    material("MutedOchreCloth", (0.39, 0.277, 0.133), 0.96, texture="fabric")
+
+    def ceramic_cup(group, name, center, radius, height, surface):
+        x, y, z = center
+        vertices = []
+        sides = 16
+        for level, ring_radius in ((0.0, radius * 0.84), (height, radius),
+                                   (height, radius - 0.009), (0.012, radius * 0.84 - 0.009)):
+            for index in range(sides):
+                angle = index * math.tau / sides
+                vertices.append((x + math.cos(angle) * ring_radius, y + level,
+                                 z + math.sin(angle) * ring_radius))
+        faces = []
+        for ring in range(3):
+            for index in range(sides):
+                following = (index + 1) % sides
+                faces.append((ring * sides + index, ring * sides + following,
+                              (ring + 1) * sides + following, (ring + 1) * sides + index))
+        mesh(group, name, vertices, faces, surface)
+        return x, y, z
+
+    def flat_picture(name, x, y, width, height, color):
+        z = -6.296
+        box("Shell", "Decor | " + name + " frame", (x, y, z), (width, height, 0.048), "Walnut", 0.010)
+        box("Shell", "Decor | " + name + " mat", (x, y, z + 0.027),
+            (width - 0.08, height - 0.08, 0.006), "Paper")
+        box("Shell", "Decor | " + name + " print", (x, y, z + 0.032),
+            (width - 0.23, height - 0.23, 0.002), color)
+        return z + 0.034
+
+    z = flat_picture("Large quiet abstract", -4.48, 2.00, 1.30, 1.38, "Linen")
+    cylinder("Shell", "Decor | Abstract ochre sun", (-4.70, 2.19, z), (-4.70, 2.19, z + 0.001),
+             0.185, "MutedOchreCloth", 24)
+    mesh("Shell", "Decor | Abstract sage hillside", [(-5.00, 1.47, z + 0.003),
+         (-5.00, 1.89, z + 0.003), (-4.73, 1.99, z + 0.003), (-4.46, 1.87, z + 0.003),
+         (-4.18, 1.77, z + 0.003), (-3.96, 1.86, z + 0.003), (-3.96, 1.47, z + 0.003)],
+         [(0, 1, 2, 3, 4, 5, 6)], "SageLinen")
+    box("Shell", "Decor | Abstract clay column", (-4.30, 1.73, z + 0.005),
+        (0.15, 0.41, 0.001), "Terracotta")
+    for index, (x, y, width, height) in enumerate(((2.35, 2.08, 0.72, 0.91),
+                                                (3.20, 2.32, 0.88, 0.66),
+                                                (3.52, 1.65, 0.54, 0.56))):
+        color = ("Sky", "SageLinen", "Terracotta")[index]
+        depth = flat_picture("Travel print " + str(index), x, y, width, height, color)
+        if index < 2:
+            left, right = x - (width - 0.23) * 0.5, x + (width - 0.23) * 0.5
+            low = y - (height - 0.23) * 0.5
+            mesh("Shell", "Decor | Travel photograph ridgeline", [(left, low, depth + 0.001),
+                 (left, y - 0.03, depth + 0.001), (x - 0.06, y + 0.11, depth + 0.001),
+                 (x + 0.08, y - 0.025, depth + 0.001), (right, y + 0.045, depth + 0.001),
+                 (right, low, depth + 0.001)], [(0, 1, 2, 3, 4, 5)], "NearMountain")
+
+    # Simple raised hands keep the wall clock legible without any type or labels.
+    center_y, center_z = 2.25, -0.76
+    cylinder("Shell", "Decor | Wall clock walnut rim", (5.658, center_y, center_z),
+             (5.595, center_y, center_z), 0.275, "WalnutEdge", 32)
+    cylinder("Shell", "Decor | Wall clock ivory dial", (5.593, center_y, center_z),
+             (5.588, center_y, center_z), 0.244, "Paper", 32)
+    for index in range(12):
+        angle = index * math.tau / 12
+        cylinder("Shell", "Decor | Clock hour mark",
+                 (5.582, center_y + math.cos(angle) * 0.205, center_z + math.sin(angle) * 0.205),
+                 (5.582, center_y + math.cos(angle) * 0.227, center_z + math.sin(angle) * 0.227),
+                 0.006, "Metal", 4)
+    for angle, length in ((-0.85, 0.125), (1.02, 0.182)):
+        cylinder("Shell", "Decor | Clock hand", (5.572, center_y, center_z),
+                 (5.572, center_y + math.cos(angle) * length, center_z + math.sin(angle) * length),
+                 0.009, "Metal", 6)
+    cylinder("Shell", "Decor | Clock brass spindle", (5.57, center_y, center_z),
+             (5.563, center_y, center_z), 0.015, "MutedGold", 10)
+
+    # Peg rail and draped canvas tote occupy the front wall, above floor clearance.
+    box("Shell", "Decor | Oak peg rail", (-2.20, 1.90, 6.285), (1.50, 0.13, 0.055), "Oak", 0.012)
+    for x in (-2.75, -2.20, -1.65):
+        cylinder("Shell", "Decor | Coat peg", (x, 1.90, 6.25), (x, 1.90, 6.145),
+                 0.022, "Walnut", 10, 0.027)
+    bag_x = -2.20
+    bag_vertices = []
+    rows, columns = 12, 14
+    for row in range(rows + 1):
+        v = row / rows
+        for column in range(columns + 1):
+            u = column / columns
+            half_width = 0.255 - math.sin(v * math.pi * 0.5) * 0.035
+            bag_vertices.append((bag_x + (u * 2 - 1) * half_width, 0.88 + v * 0.66,
+                                 6.095 + math.sin(u * 17 + v * 3.4) * 0.013 + (v - 0.5) ** 2 * 0.06))
+    bag_faces = []
+    for row in range(rows):
+        for column in range(columns):
+            a = row * (columns + 1) + column
+            bag_faces.append((a, a + columns + 1, a + columns + 2, a + 1))
+    mesh("Shell", "Decor | Soft canvas tote", bag_vertices, bag_faces, "Linen")
+    for side in (-1, 1):
+        for segment in range(10):
+            angle0 = segment * math.pi / 10
+            angle1 = (segment + 1) * math.pi / 10
+            cylinder("Shell", "Decor | Tote woven handle",
+                     (bag_x + side * 0.125 + math.cos(angle0) * 0.055,
+                      1.53 + math.sin(angle0) * 0.35, 6.105),
+                     (bag_x + side * 0.125 + math.cos(angle1) * 0.055,
+                      1.53 + math.sin(angle1) * 0.35, 6.105), 0.009, "Linen", 4)
+    box("Shell", "Decor | Tote sewn patch", (bag_x, 1.23, 6.072), (0.12, 0.08, 0.002), "SageLinen")
+
+    # The bed and bedside keep all added volume inside their existing footprints.
+    rounded_fabric("Interior", "Decor | Woven ochre accent cushion", (-3.18, 0.81, 0.97),
+                   (0.58, 0.115, 0.47), "MutedOchreCloth", 18, 14, 2.5)
+    for stripe in range(3):
+        z0 = 2.77 + stripe * 0.09
+        box("Interior", "Decor | Throw woven stripe", (-3.75, 0.893, z0),
+            (2.00, 0.002, 0.015), "RugWeave")
+    for index in range(23):
+        x = -4.73 + index * 0.086
+        cylinder("Interior", "Decor | Throw soft tassel", (x, 0.88, 3.186),
+                 (x + 0.006, 0.84, 3.27), 0.003, "Linen", 4)
+    ceramic_cup("Interior", "Decor | Bedside ceramic mug", (-5.075, 0.77, -0.39), 0.057, 0.104, "Linen")
+    cylinder("Interior", "Decor | Morning coffee", (-5.075, 0.853, -0.39),
+             (-5.075, 0.855, -0.39), 0.045, "Walnut", 16)
+    for segment in range(9):
+        angle0 = -math.pi * 0.5 + segment * math.pi / 9
+        angle1 = -math.pi * 0.5 + (segment + 1) * math.pi / 9
+        cylinder("Interior", "Decor | Mug rounded handle",
+                 (-5.123 - math.cos(angle0) * 0.035, 0.824 + math.sin(angle0) * 0.033, -0.39),
+                 (-5.123 - math.cos(angle1) * 0.035, 0.824 + math.sin(angle1) * 0.033, -0.39),
+                 0.008, "Linen", 6)
+    box("Interior", "Decor | Bedside reading journal", (-4.66, 0.838, -0.44),
+        (0.215, 0.023, 0.285), "Paper", 0.004, 1)
+
+    # A low basket fits beneath the reading chair's existing frame and collision box.
+    for index in range(7):
+        y = 0.020 + index * 0.017
+        box("Interior", "Decor | Basket front woven rib", (-3.65, y, 4.875), (0.56, 0.010, 0.015), "Oak")
+        box("Interior", "Decor | Basket rear woven rib", (-3.65, y, 4.425), (0.56, 0.010, 0.015), "Oak")
+        for x in (-3.92, -3.38):
+            box("Interior", "Decor | Basket end woven rib", (x, y, 4.65), (0.015, 0.010, 0.45), "Oak")
+    for index in range(11):
+        for z in (4.425, 4.875):
+            box("Interior", "Decor | Basket vertical weave", (-3.91 + index * 0.052, 0.075, z),
+                (0.010, 0.135, 0.019), "WalnutEdge")
+    for x in (-3.79, -3.54):
+        cylinder("Interior", "Decor | Folded textile roll", (x, 0.118, 4.49),
+                 (x, 0.118, 4.81), 0.047, "Linen" if x < -3.7 else "SageLinen", 14)
+
+    # Window plants remain Shell fixtures so the cutaway has no unsupported miniature pots.
+    for index, z in enumerate((-2.91, -1.30)):
+        center = (-5.52, 0.991, z)
+        ceramic_cup("Shell", "Decor | Window glazed planter", center, 0.10, 0.14,
+                    "Terracotta" if index == 0 else "Linen")
+        cylinder("Shell", "Decor | Window pot soil", (-5.52, 1.11, z), (-5.52, 1.115, z), 0.085, "DarkRecess", 12)
+        for leaf in range(7):
+            angle = leaf * 2.39996 + index
+            tip = Vector((-5.52 + math.cos(angle) * 0.125,
+                          1.21 + decor_random.random() * 0.14, z + math.sin(angle) * 0.125))
+            cylinder("Shell", "Decor | Window plant stem", (-5.52, 1.11, z), tuple(tip), 0.0035, "Leaf", 5)
+            offset = Vector((math.sin(angle) * 0.04, 0, -math.cos(angle) * 0.04))
+            upper = tip + Vector((math.cos(angle) * 0.08, 0.03, math.sin(angle) * 0.08))
+            lower = tip - Vector((math.cos(angle) * 0.05, 0.04, math.sin(angle) * 0.05))
+            mesh("Shell", "Decor | Window broad leaf", [tuple(lower), tuple(tip + offset),
+                 tuple(upper), tuple(tip - offset), tuple(tip + Vector((0, 0.018, 0)))],
+                 [(0, 1, 4), (1, 2, 4), (2, 3, 4), (3, 0, 4)], "LeafLight" if leaf % 3 == 0 else "Leaf")
+    for center_z in (-3.66, -0.54):
+        for segment in range(17):
+            z = center_z - 0.32 + segment * 0.04
+            x = -5.38 + math.sin(segment * 0.04 / 0.64 * math.pi * 10) * 0.062
+            cylinder("Shell", "Decor | Curtain stitched lower hem", (x, 0.403, z),
+                     (x, 0.403, z + 0.035), 0.003, "Linen", 4)
+
+    # Stationery stays on the rear/right edge, beyond the model, RPG, and door targets.
+    ceramic_cup("Interior", "Decor | Desk pencil cup", (4.42, 1.003, 0.55), 0.050, 0.125, "Terracotta")
+    for index in range(5):
+        x = 4.399 + (index % 3) * 0.019
+        z = 0.535 + (index // 3) * 0.024
+        cylinder("Interior", "Decor | Desk pencil", (x, 1.02, z),
+                 (x + (index - 2) * 0.008, 1.20 + index * 0.012, z + 0.008),
+                 0.0035, "Oak" if index % 2 else "Metal", 6)
+    for index in range(12):
+        a0, a1 = index * math.pi / 12, (index + 1) * math.pi / 12
+        cylinder("Interior", "Decor | Headphone headband",
+                 (4.34 + math.cos(a0) * 0.102, 1.020, 1.16 + math.sin(a0) * 0.14),
+                 (4.34 + math.cos(a1) * 0.102, 1.020, 1.16 + math.sin(a1) * 0.14),
+                 0.009, "Metal", 6)
+    for x in (4.24, 4.44):
+        box("Interior", "Decor | Headphone padded earcup", (x, 1.03, 1.16),
+            (0.061, 0.046, 0.10), "BlackPlastic", 0.013, 2)
+
+
 def instance(name, source, translation, scale=1.0, collection=None):
     obj = bpy.data.objects.new(name, None)
     obj.instance_type = "COLLECTION"
@@ -655,6 +843,7 @@ def main():
     add_door()
     add_rpg_and_rack()
     add_reverse_door_latch()
+    add_lived_in_decor()
     presentation = bpy.data.collections.new("Presentation | linked instances excluded from game export")
     scene.collection.children.link(presentation)
     instance("Real bookcase default pose", "Shelf", (0, 1.3, -5.95), collection=presentation)
