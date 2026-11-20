@@ -66,6 +66,7 @@ private:
 
     float visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const;
     bool canFitDoor(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const;
     void drawMiniature() const;
     void drawRoom(const glm::mat4& model, bool miniature) const;
@@ -79,6 +80,7 @@ private:
     ComputerScreen computer_;
     std::optional<ComputerCube> computerCube_;
     bool computerActive_ = false;
+    bool standingOnCube_ = false;
     ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
     float shelfOffset_ = 0.0f;

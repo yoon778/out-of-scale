@@ -41,7 +41,7 @@ constexpr Box shelf{{0.0f, 1.30f, -5.95f}, {2.05f, 2.60f, 0.60f}};
 constexpr Box miniShelf{roomMiniatureOrigin + shelf.center * roomMiniatureScale,
                         shelf.size * roomMiniatureScale + glm::vec3{0.05f, 0.04f, 0.05f}};
 constexpr Box miniRpg{{3.16f, 1.21f, 0.59f}, {0.58f, 0.27f, 0.24f}};
-constexpr Box miniDoor{{4.05f, 1.23f, 0.56f}, {0.31f, 0.48f, 0.18f}};
+constexpr Box shelvedDoor{{5.20f, 2.245f, -3.25f}, {0.31f, 0.09f, 0.48f}};
 constexpr Box wallPanel{{0.0f, 1.30f, wallZ}, {1.80f, 2.60f, 0.31f}};
 constexpr Box door{{0.0f, 1.30f, wallZ}, {1.76f, 2.60f, 0.105f}};
 constexpr Box openDoor{{-0.85f, 1.30f, wallZ + 0.86f}, {0.105f, 2.60f, 1.76f}};
@@ -57,6 +57,15 @@ constexpr std::array staticInterior{
     Box{{-4.85f, 0.37f, -0.55f}, {0.85f, 0.74f, 0.78f}},
     Box{{4.90f, 0.71f, -3.25f}, {1.20f, 1.42f, 1.50f}},
     Box{{-3.65f, 0.48f, 4.65f}, {1.25f, 0.96f, 1.05f}},
+};
+
+// These match the artist's shelf platform, front lip, side rails and rear rail.
+constexpr std::array doorShelf{
+    Box{{5.28f, 2.1675f, -3.25f}, {0.80f, 0.065f, 1.50f}},
+    Box{{4.905f, 2.245f, -3.25f}, {0.05f, 0.09f, 1.50f}},
+    Box{{5.28f, 2.255f, -3.9775f}, {0.80f, 0.11f, 0.045f}},
+    Box{{5.28f, 2.255f, -2.5225f}, {0.80f, 0.11f, 0.045f}},
+    Box{{5.665f, 2.26f, -3.25f}, {0.03f, 0.12f, 1.50f}},
 };
 
 struct HomeMeshRange {
@@ -298,6 +307,9 @@ bool HomeRoom::cubeFits(const ComputerCube& cube, const glm::vec3& eye) const {
     for (const auto& obstacle : staticInterior) {
         if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
     }
+    for (const auto& obstacle : doorShelf) {
+        if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
+    }
     return !cubeOverlapsBox(cube.center, cube.edge, cube.yaw, shelfAt(shelfOffset_)) &&
            !cubeOverlapsBox(cube.center, cube.edge, cube.yaw, monitorBody);
 }
@@ -345,6 +357,10 @@ float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, f
             maxDistance = std::min(maxDistance, *distance);
         }
     }
+    for (const Box& obstacle : doorShelf) {
+        const auto distance = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * 0.5f);
+        if (distance) maxDistance = std::min(maxDistance, *distance);
+    }
     const auto shelfHit = perspective::rayBoxDistance(
         eye, direction, shelfAt(shelfOffset_).center, shelf.size * 0.5f);
     if (shelfHit) {
@@ -364,6 +380,21 @@ bool HomeRoom::canFitDoor(const glm::vec3& eye, const glm::vec3& direction) cons
     const float depth = glm::dot(door.center - eye, direction);
     const float scale = doorRatio_ * doorWheelScale_ * depth;
     return scale >= 0.72f && scale <= 1.35f;
+}
+
+bool HomeRoom::canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const {
+    if (!computerCube_ || held_ != HeldItem::None || !standingOnCube_) return false;
+    const auto& cube = *computerCube_;
+    const float cubeTop = cube.center.y + cube.edge * .5f;
+    const float visible = visibleRange(eye, direction, reach);
+    if (std::abs(cube.verticalSpeed) >= .05f ||
+        std::abs(eye.y - eyeHeight - cubeTop) >= .03f ||
+        !cubeFootprint(eye, cube.center, cube.edge, cube.yaw) ||
+        !aimsAt(eye, direction, shelvedDoor, visible)) return false;
+    auto model = glm::translate(glm::mat4{1.0f}, shelvedDoor.center);
+    model = glm::rotate(model, glm::radians(-90.0f), {1.0f, 0.0f, 0.0f});
+    model = glm::scale(model, glm::vec3{miniatureScale});
+    return visibleMeshRange(HomeMesh::Door, model, eye, direction, reach + .01f) <= visible;
 }
 
 bool HomeRoom::canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const {
@@ -438,9 +469,9 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
                     held_ = HeldItem::None;
                     exitState_ = ExitState::DoorPlaced;
                 }
-            } else if (aimsAt(eye, direction, miniDoor, nearby)) {
+            } else if (canTakeShelvedDoor(eye, direction)) {
                 held_ = HeldItem::Door;
-                doorRatio_ = perspective::grabRatio(eye, direction, miniDoor.center, miniatureScale, door.size.y);
+                doorRatio_ = perspective::grabRatio(eye, direction, shelvedDoor.center, miniatureScale, door.size.y);
                 doorWheelScale_ = 1.0f;
             }
             break;
@@ -483,6 +514,7 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     for (const auto& obstacle : staticInterior) {
         hit(obstacle);
     }
+    for (const auto& obstacle : doorShelf) hit(obstacle);
     hit(shelfAt(shelfOffset_));
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}});
     hit({{0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}});
@@ -497,6 +529,7 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     for (const auto& obstacle : staticInterior) {
         hit(obstacle, false, true);
     }
+    for (const auto& obstacle : doorShelf) hit(obstacle, false, true);
     hit(shelfAt(shelfOffset_), false, true);
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}}, false, true);
     hit({{0.0f, 0.30f, 6.51f}, {11.7f, 0.60f, 0.34f}}, false, true);
@@ -597,6 +630,7 @@ void HomeRoom::updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& 
             }
         };
         for (const auto& obstacle : staticInterior) supportedBy(obstacle);
+        for (const auto& obstacle : doorShelf) supportedBy(obstacle);
         supportedBy(shelfAt(shelfOffset_));
         supportedBy(monitorBody);
         const float head = eye.y + headClearance;
@@ -726,6 +760,8 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
     if (landed) position.y = support + eyeHeight;
     position.y = std::min(position.y, 3.22f - headClearance);
     if (grounded) *grounded = landed;
+    standingOnCube_ = landed && support > .01f && computerCube_ && held_ != HeldItem::Cube &&
+        std::abs(support - (computerCube_->center.y + computerCube_->edge * .5f)) < .01f;
     if (exitState_ == ExitState::DoorOpen && position.z < wallZ - 0.55f) {
         exitState_ = ExitState::Escaped;
     }
@@ -749,10 +785,6 @@ void HomeRoom::drawMiniature() const {
         drawRpg(renderer_, miniRpg.center, 1.0f);
     }
 
-    renderer_.drawBox({4.05f, 1.025f, 0.57f}, {0.52f, 0.05f, 0.45f}, {0.56f, 0.48f, 0.35f});
-    if (exitState_ <= ExitState::WallBroken && held_ != HeldItem::Door) {
-        drawDoor(renderer_, {miniDoor.center, door.size * miniatureScale}, glm::vec3{1.0f});
-    }
 }
 
 void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
@@ -764,6 +796,12 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
     drawHomeMesh(renderer_, rearWall, model);
     const auto shelfModel = glm::translate(model, shelfAt(shelfOffset_).center);
     drawHomeMesh(renderer_, HomeMesh::Shelf, shelfModel);
+    if (exitState_ <= ExitState::WallBroken && held_ != HeldItem::Door) {
+        auto storedModel = glm::translate(model, shelvedDoor.center);
+        storedModel = glm::rotate(storedModel, glm::radians(-90.0f), {1.0f, 0.0f, 0.0f});
+        storedModel = glm::scale(storedModel, glm::vec3{miniatureScale});
+        drawHomeMesh(renderer_, HomeMesh::Door, storedModel);
+    }
     const bool exitOpen = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
     auto doorParent = model;
     if (exitState_ == ExitState::DoorPlaced) {

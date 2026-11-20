@@ -390,6 +390,34 @@ def add_wall_monitor():
              0.006, "ScreenLight", 10)
 
 
+def add_high_door_storage():
+    """A recessed walnut shelf conceals the flat door behind its front retaining lip."""
+    group = "Interior"
+    box(group, "High door shelf platform", (5.28, 2.1675, -3.25), (0.80, 0.065, 1.50),
+        "WalnutEdge", 0.010, 2)
+    box(group, "High door shelf front retaining lip", (4.905, 2.245, -3.25),
+        (0.05, 0.09, 1.50), "WalnutEdge", 0.006, 2)
+    for z in (-3.9775, -2.5225):
+        box(group, "High door shelf side rail", (5.28, 2.255, z), (0.80, 0.11, 0.045),
+            "Walnut", 0.006, 2)
+    box(group, "High door shelf back rail", (5.665, 2.26, -3.25), (0.03, 0.12, 1.50),
+        "Walnut", 0.005, 2)
+    # These rests support the small door at its agreed center without touching the underside handle.
+    for z in (-3.42, -3.08):
+        box(group, "High door shelf raised timber rest", (5.20, 2.21875, z),
+            (0.32, 0.0375, 0.028), "Oak")
+    for z in (-3.78, -2.72):
+        box(group, "High door shelf vertical wall bracket", (5.65, 1.93, z),
+            (0.06, 0.42, 0.055), "Walnut", 0.006, 1)
+        box(group, "High door shelf supporting bracket arm", (5.40, 2.105, z),
+            (0.56, 0.055, 0.055), "Walnut", 0.006, 1)
+        cylinder(group, "High door shelf diagonal brace", (5.65, 1.77, z),
+                 (5.15, 2.105, z), 0.024, "WalnutEdge", 10)
+        for y in (1.80, 2.06):
+            cylinder(group, "High door shelf bracket screw", (5.618, y, z),
+                     (5.613, y, z), 0.009, "MutedGold", 8)
+
+
 def add_window():
     group = "Shell"
     box(group, "Window view sky", (-5.975, 1.84, -2.1), (0.02, 1.75, 3.22), "Sky")
@@ -443,10 +471,10 @@ def add_decor():
              (-5.625, 2.08, z + 0.18), (-5.625, 2.16, z + 0.335), (-5.625, 1.80, z + 0.335)],
              [(0, 1, 2, 3, 4, 5)], "NearMountain")
     # Small back-wall fixtures avoid the central moving bookcase strip.
-    box(group, "Right wall notice frame", (5.67, 2.03, -2.98), (0.055, 1.03, 1.18), "Oak", 0.014)
-    box(group, "Right wall linen panel", (5.637, 2.03, -2.98), (0.006, 0.91, 1.06), "Linen")
+    box(group, "Right wall notice frame", (5.67, 2.03, -4.70), (0.055, 1.03, 1.18), "Oak", 0.014)
+    box(group, "Right wall linen panel", (5.637, 2.03, -4.70), (0.006, 0.91, 1.06), "Linen")
     for index in range(3):
-        box(group, "Pinned small photograph", (5.631, 2.04 + (index % 2) * 0.18, -3.31 + index * 0.30),
+        box(group, "Pinned small photograph", (5.631, 2.04 + (index % 2) * 0.18, -5.03 + index * 0.30),
             (0.003, 0.22, 0.20), ("Sky", "NearMountain", "Terracotta")[index])
     box(group, "Front interior door surround", (3.48, 1.12, 6.30), (1.28, 2.26, 0.045), "Walnut")
     box(group, "Front interior flush door", (3.48, 1.10, 6.27), (1.13, 2.12, 0.04), "Oak", 0.01)
@@ -890,6 +918,7 @@ def main():
     add_rpg_and_rack()
     add_reverse_door_latch()
     add_lived_in_decor()
+    add_high_door_storage()
     presentation = bpy.data.collections.new("Presentation | linked instances excluded from game export")
     scene.collection.children.link(presentation)
     instance("Real bookcase default pose", "Shelf", (0, 1.3, -5.95), collection=presentation)
@@ -898,7 +927,8 @@ def main():
         instance("Tabletop same-layout " + group, group, base, 0.10, presentation)
     instance("Tabletop bookcase same-layout", "Shelf", base + Vector((0, 1.3, -5.95)) * 0.10,
              0.10, presentation)
-    instance("Detached miniature door", "Door", (4.05, 1.23, 0.56), 0.16, presentation)
+    stored_door = instance("Detached miniature door", "Door", (5.20, 2.245, -3.25), 0.16, presentation)
+    stored_door.rotation_euler.x = math.radians(-90.0)
     instance("Miniature equipment rack", "Rack", (3.15, 1.20, 0.67), 1.0, presentation)
     instance("Miniature RPG", "Rpg", (3.16, 1.21, 0.59), 1.0, presentation)
     add_presentation(scene)
