@@ -307,6 +307,9 @@ void Renderer::appendQuad(glm::vec3 c, glm::vec3 r, glm::vec3 u, glm::vec3 color
         vertices_.push_back({p[i], n, color, uv[i]});
 }
 void Renderer::triangle(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 color) {
+    const auto low = glm::min(a, glm::min(b, c)), high = glm::max(a, glm::max(b, c));
+    if (!visible((low + high) * .5f, (high - low) * .5f))
+        return;
     auto normal = glm::cross(b - a, c - a);
     if (glm::length(normal) < 0.000001f)
         return;

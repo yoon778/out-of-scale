@@ -104,6 +104,7 @@ MSBuild.exe rooms/school/preview/SchoolPreview.slnx /t:Rebuild /p:Configuration=
 
 - `--self-test`: 기존 교실부터 현관까지 연속 보행, 가짜 복도의 충돌, 2-1 뒷문 잠금과 열쇠 회수, 문 정렬·실물화·자동 개방, 발판의 오답·정답 시점, 도움닫기 우회 차단, 추락 후 복귀, 실물 발판의 지지·초기화를 확인한다. 연속 완주에서는 좌표·퍼즐 상태를 강제로 변경하지 않는다.
 - `--capture-dir`: 교실과 복도 장면을 숨겨진 실제 OpenGL 창에서 렌더링해 PPM으로 저장하고 GL 오류를 검사한다. 장면별 위치 설정은 연속 보행 검사와 구분한다.
+- `powershell -File rooms/school/tests/run-performance.ps1`: 숨김 OpenGL 창에서 걷기·거울 보기·거울 회전 경로를 각각 3회 측정한다. Release 최적화, 1280×800/MSAA 4/VSync 0, 120프레임 예열 후 600프레임의 CPU update/submit·GPU query·완료 대기 포함 total 평균/p95/p99(ms)를 출력한다. 결과는 `build/school-performance/performance.log`. 실제 표시 FPS나 첫 로딩 시간과는 구분한다.
 - 2026-11-16 미술 수업·실물화 개선판: Debug·Release 빌드와 각 106개 검증 통과. 최종 그림 여백 조정 후 두 구성 재빌드 및 13개 장면 OpenGL 오류 검사 통과. 초기 칠판 선 노출 0%, 중간 회전 약 43.5%, 정렬 완료 100%. 이미지: `captures/art-polish-20261116/`. 이전 자산과 캡처는 보존했다.
 - 2026-11-16 복도 확장판: Debug·Release 빌드와 각 137개 검증 통과. 총 20장면 OpenGL 오류 검사 및 복도 주요 화면 확인. 이미지: `captures/corridor-final-20261116/`. 연속 보행은 이동·상호작용 API로 검증했고 실제 키보드·마우스 수동 완주는 미수행이다.
 - 2026-11-16 조작감·연결부 개선판: Debug·Release 빌드와 각 149개 검증 통과. 가감속·정지거리·원형 발밑 충돌·계단 시점·문 가감속을 추가 검증했다. 최종 20장면 OpenGL 캡처: `captures/corridor-polish-20261116/`. 사람의 체감 평가는 미확인이다.

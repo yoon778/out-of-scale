@@ -230,6 +230,7 @@ SchoolRoom::SchoolRoom() {
     makeSlideMask();
 }
 void SchoolRoom::reset() {
+    projectionGeometry_.valid = false;
     corridor_.reset();
     stairsReady_ = escaped_ = false;
     alignmentHeld_ = formation_ = 0;
@@ -1189,10 +1190,33 @@ void SchoolRoom::drawProjector(Renderer& r) const {
     r.box({6.44f, 0.30f, 5.4f}, {0.04f, 0.15f, 0.12f}, cream);
     // Clip the light to receiving surfaces; the shader leaves unprinted areas transparent.
     // The same soft slide mask controls the chalk being covered and uncovered.
+    refreshProjectionGeometry();
+    r.beginProjection(projectorOrigin, glm::transpose(projectorRotation()), slideBounds_, projectorPaper.z,
+                      slideMask_, slideResolution, artworkProjection(), artworkFrame, 1);
+    for (const auto& face : projectionGeometry_.light)
+        r.triangle(face[0], face[1], face[2], {.98f, .96f, .79f});
+    r.projectionWash(1 - stairFormation());
+    for (const auto& face : projectionGeometry_.wash)
+        r.triangle(face[0], face[1], face[2], {.75f, .70f, .57f});
+    r.projectionStrokes(1 - stairFormation());
+    for (const auto& stroke : projectionGeometry_.strokes)
+        r.projectedStroke(stroke.a, stroke.b, stroke.normal, stroke.width, {.32f, .29f, .22f});
+    r.endProjection();
+}
+void SchoolRoom::refreshProjectionGeometry() const {
+    auto& cache = projectionGeometry_;
+    if (cache.valid && cache.yaw == projectorYaw_ && cache.pitch == projectorPitch_ && cache.boards == boardOffsets_)
+        return;
+    // Camera movement and the mirror share these receivers. Only the projector or boards change them.
+    cache.valid = true;
+    cache.yaw = projectorYaw_;
+    cache.pitch = projectorPitch_;
+    cache.boards = boardOffsets_;
+    cache.light.clear();
+    cache.wash.clear();
+    cache.strokes.clear();
     const auto inverse = glm::transpose(projectorRotation());
     const float depth = projectorPaper.z - projectorOrigin.z;
-    r.beginProjection(projectorOrigin, inverse, slideBounds_, projectorPaper.z, slideMask_, slideResolution,
-                      artworkProjection(), artworkFrame, 1);
     auto distanceToEdge = [&](glm::vec3 point, int edge) {
         auto q = inverse * (point - projectorOrigin);
         switch (edge) {
@@ -1249,10 +1273,9 @@ void SchoolRoom::drawProjector(Renderer& r) const {
         // Keep the translucent light above the board and just above the paper surface.
         float offset = surfaceIndex < boardX.size() ? 0.050f : 0.003f;
         for (std::size_t i = 1; i + 1 < polygon.size(); ++i)
-            r.triangle(polygon[0] + normal * offset, polygon[i] + normal * offset,
-                       polygon[i + 1] + normal * offset, {0.98f, 0.96f, 0.79f});
+            cache.light.push_back({polygon[0] + normal * offset, polygon[i] + normal * offset,
+                                   polygon[i + 1] + normal * offset});
     }
-    r.projectionWash(1 - stairFormation());
     for (const auto& face : pageFaces_) {
         std::array<ProjectionHit, 4> hits;
         bool visible = true;
@@ -1262,23 +1285,19 @@ void SchoolRoom::drawProjector(Renderer& r) const {
         }
         if (visible) {
             auto offset = hits[0].normal * 0.020f;
-            r.triangle(hits[0].point + offset, hits[1].point + offset, hits[2].point + offset,
-                       {0.75f, 0.70f, 0.57f});
-            r.triangle(hits[0].point + offset, hits[2].point + offset, hits[3].point + offset,
-                       {0.75f, 0.70f, 0.57f});
+            cache.wash.push_back({hits[0].point + offset, hits[1].point + offset, hits[2].point + offset});
+            cache.wash.push_back({hits[0].point + offset, hits[2].point + offset, hits[3].point + offset});
         }
     }
-    r.projectionStrokes(1 - stairFormation());
     // Soft strokes stay on the receiving plane, with the light's grain and faded margins.
     for (const auto& stroke : chalk_) {
         if (!isSlideStroke(stroke))
             continue;
         auto a = projectSlide(stroke.projectedA), b = projectSlide(stroke.projectedB);
         if (a.surface >= 0 && a.surface == b.surface && glm::distance(a.point, b.point) < 0.9f)
-            r.projectedStroke(a.point + a.normal * 0.037f, b.point + b.normal * 0.037f, a.normal,
-                              stroke.detail ? 0.018f : 0.040f, {0.32f, 0.29f, 0.22f});
+            cache.strokes.push_back({a.point + a.normal * 0.037f, b.point + b.normal * 0.037f, a.normal,
+                                     stroke.detail ? 0.018f : 0.040f});
     }
-    r.endProjection();
 }
 void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
                               const std::optional<perspective::Pose>& placement) const {
