@@ -132,6 +132,13 @@ bool footprint(glm::vec3 p, const Box& b, float radius) {
     const float dz = p.z - std::clamp(p.z, b.min.z, b.max.z);
     return dx * dx + dz * dz < radius * radius;
 }
+float horizontalClearance(glm::vec3 p, const Box& b) {
+    const glm::vec2 outside{p.x - std::clamp(p.x, b.min.x, b.max.x),
+                            p.z - std::clamp(p.z, b.min.z, b.max.z)};
+    if (glm::dot(outside, outside) > 0)
+        return glm::length(outside);
+    return -std::min({p.x - b.min.x, b.max.x - p.x, p.z - b.min.z, b.max.z - p.z});
+}
 bool overlap(glm::vec3 p, const Box& b) {
     return footprint(p, b, SchoolRoom::radius) && p.y + SchoolRoom::bodyHeight > b.min.y + 0.002f &&
            p.y < b.max.y - 0.002f;
@@ -338,8 +345,12 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
             if (overlap(next, b) && camera.grounded && b.max.y - camera.feet.y <= 0.31f)
                 step = std::max(step, b.max.y);
         next.y = step;
-        const bool blocked = (book && overlap(next, *book)) ||
-                             std::any_of(boxes.begin(), boxes.end(), [&](const Box& b) { return overlap(next, b); });
+        // An existing shallow overlap must allow movement back into free space.
+        const auto blocks = [&](const Box& b) {
+            return overlap(next, b) &&
+                   (!overlap(camera.feet, b) || horizontalClearance(next, b) <= horizontalClearance(camera.feet, b));
+        };
+        const bool blocked = (book && blocks(*book)) || std::any_of(boxes.begin(), boxes.end(), blocks);
         if (!blocked) {
             camera.stepOffset = std::clamp(camera.stepOffset + camera.feet.y - next.y, -.35f, .30f);
             camera.feet = next;
@@ -351,7 +362,8 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
     float newY = oldY + camera.verticalSpeed * dt;
     float support = 0;
     for (const Box& b : boxes)
-        if (footprint(camera.feet, b, radius - 0.02f)) {
+        // Landing and side collision use the same body radius, including furniture corners.
+        if (footprint(camera.feet, b, radius)) {
             if (b.max.y <= oldY + 0.02f)
                 support = std::max(support, b.max.y);
             if (camera.verticalSpeed > 0 && oldY + bodyHeight <= b.min.y && newY + bodyHeight >= b.min.y) {
@@ -359,7 +371,7 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
                 camera.verticalSpeed = 0;
             }
         }
-    if (book && footprint(camera.feet, *book, radius - .02f) && camera.verticalSpeed > 0 &&
+    if (book && footprint(camera.feet, *book, radius) && camera.verticalSpeed > 0 &&
         oldY + bodyHeight <= book->min.y && newY + bodyHeight >= book->min.y) {
         newY = book->min.y - bodyHeight;
         camera.verticalSpeed = 0;
@@ -630,6 +642,38 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
         }
     }
     return std::nullopt;
+}
+perspective::Pose SchoolRoom::heldNotebookPose(const Camera& camera) const {
+    const auto eye = camera.eye(), direction = camera.direction();
+    const auto solids = collisionBoxes(true, false);
+    float depth = std::min(1.14f, maxNotebookScale / notebookRatio_);
+    // Keep a blocked placement visible in the player's hands. This does not change its carry ratio.
+    const auto carryDirection = direction - glm::vec3(0, .12f, 0);
+    float scale = depth * notebookRatio_;
+    perspective::Pose pose{};
+    for (int attempt = 0; attempt < 24; ++attempt) {
+        pose = {eye + carryDirection * depth, scale};
+        // A sphere encloses both pages and binding for any facing direction used by the held preview.
+        const float half = pose.scale * (glm::length(notebookSize) * .5f + .025f);
+        const auto area = bounds(pose.center, glm::vec3(half * 2));
+        const auto toward = pose.center - eye;
+        const float reach = glm::length(toward);
+        const auto ray = toward / reach;
+        const bool blocked = std::any_of(solids.begin(), solids.end(), [&](const Box& solid) {
+            const float hit = rayBox(eye, ray, solid);
+            return (hit >= 0 && hit < reach) ||
+                   (overlapsXZ(solid, area) && area.min.y < solid.max.y && area.max.y > solid.min.y);
+        });
+        if (!blocked && glm::dot(toward, direction) - half > .055f && area.min.y >= 0 &&
+            area.max.y <= std::min(ceilingAt(area.min.z), ceilingAt(area.max.z)))
+            return pose;
+        if (depth > .08f) {
+            depth = std::max(.08f, depth * .72f);
+            scale = depth * notebookRatio_;
+        } else
+            scale *= .72f;
+    }
+    return pose;
 }
 void SchoolRoom::updateNotebookFall(const Camera& camera, float dt) {
     const auto area = notebookBounds(notebook_);
@@ -1239,8 +1283,7 @@ void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
         if (placement) {
             pose = *placement;
         } else {
-            const float depth = std::min(1.14f, maxNotebookScale / notebookRatio_);
-            pose = {camera.eye() + camera.direction() * depth, depth * notebookRatio_};
+            pose = heldNotebookPose(camera);
             preview = true;
         }
     }
@@ -1827,7 +1870,14 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
         if (feedback->holdProgress > 0)
             r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
-    if (boardsReady() && !stairsReady_ && camera.feet.z >= -4.9f) {
+    if (notebookRatio_ > 0 && !placement) {
+        const wchar_t* status = L"놓을 공간이 없어요 · 조금 물러나 주세요";
+        const float textWidth = r.textWidth(status, 23 * scale);
+        const float x = (width - textWidth) * .5f;
+        r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale,
+                {.12f, .22f, .18f});
+        r.text(status, x, height - 54 * scale, 23 * scale);
+    } else if (boardsReady() && !stairsReady_ && camera.feet.z >= -4.9f) {
         const wchar_t* status = materializing_ ? L"계단이 만들어지고 있어요"
                                 : !projectorAligned_ ? L"칠판 완료 · 프로젝터 방향을 맞춰 주세요"
                                 : adjustingProjector_ ? L"투사 완료 · E로 조정을 마쳐 주세요"

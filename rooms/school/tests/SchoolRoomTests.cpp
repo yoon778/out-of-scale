@@ -1189,6 +1189,99 @@ int runTests() {
               "looking away resets both corridor puzzles before the next attempt");
     }
 
+    room.reset();
+    const auto solidOverlap = [](glm::vec3 feet, const Box& b) {
+        const float dx = feet.x - std::clamp(feet.x, b.min.x, b.max.x);
+        const float dz = feet.z - std::clamp(feet.z, b.min.z, b.max.z);
+        return dx * dx + dz * dz < SchoolRoom::radius * SchoolRoom::radius &&
+               feet.y + SchoolRoom::bodyHeight > b.min.y + .002f && feet.y < b.max.y - .002f;
+    };
+    const auto roomSolids = room.collisionBoxes(true, false);
+    for (int fps : {30, 144}) {
+        for (const auto landing : {glm::vec3(-4.f, 1.5f, 8.005f), glm::vec3(-5.95f, 1.5f, 8.065f),
+                                   glm::vec3(-6.015f, 1.5f, 8.5f)}) {
+            camera = Camera();
+            camera.feet = landing;
+            camera.grounded = false;
+            camera.verticalSpeed = -1.f;
+            for (int frame = 0; frame < fps; ++frame)
+                room.update(camera, {}, 1.f / fps);
+            check(camera.grounded && std::abs(camera.feet.y - 1.4f) < .002f &&
+                      std::none_of(roomSolids.begin(), roomSolids.end(),
+                                   [&](const Box& b) { return solidOverlap(camera.feet, b); }),
+                  "landing on rear cabinet edges and corners cannot sink into its collision");
+        }
+        camera = Camera();
+        camera.feet = {-4.f, 0, 8.005f};
+        for (int frame = 0; frame < fps; ++frame)
+            room.update(camera, {1, 0, false}, 1.f / fps);
+        check(camera.feet.z < 7.5f &&
+                  std::none_of(roomSolids.begin(), roomSolids.end(),
+                               [&](const Box& b) { return solidOverlap(camera.feet, b); }),
+              "walking away recovers an existing rear-cabinet overlap without restarting");
+    }
+    for (float ratio : {1.f, 2.3f}) {
+        for (float yaw : {-3.14159265f, -1.5707963f}) {
+            for (float pitch : {-1.4f, 0.f, 1.4f}) {
+                room.reset();
+                room.notebookRatio_ = ratio;
+                camera = Camera();
+                camera.feet = {-6.1f, 0, 8.75f};
+                camera.yaw = yaw;
+                camera.pitch = pitch;
+                check(!room.notebookPlacement(camera), "rear-corner fixture has no safe drop position");
+                const auto preview = room.heldNotebookPose(camera);
+                const float half = preview.scale * (glm::length(glm::vec3(.42f, .32f, .064f)) * .5f + .025f);
+                const Box area{preview.center - glm::vec3(half), preview.center + glm::vec3(half)};
+                const auto toward = preview.center - camera.eye();
+                const float reach = glm::length(toward);
+                check(area.min.x >= -6.5f && area.max.x <= 6.5f && area.min.z >= -4.95f && area.max.z <= 9.f &&
+                          area.min.y >= 0 && area.max.y <= 4.5f &&
+                          glm::dot(toward, camera.direction()) - half > .055f &&
+                          std::none_of(roomSolids.begin(), roomSolids.end(), [&](const Box& solid) {
+                              const float hit = SchoolRoom::rayBox(camera.eye(), toward / reach, solid);
+                              const bool overlap = area.min.x < solid.max.x && area.max.x > solid.min.x &&
+                                                   area.min.z < solid.max.z && area.max.z > solid.min.z &&
+                                                   area.min.y < solid.max.y && area.max.y > solid.min.y;
+                              return overlap || (hit >= 0 && hit < reach);
+                          }),
+                      "blocked carry preview stays visible inside the walls with no clipping or occlusion");
+                const auto oldBook = room.notebook_;
+                room.toggleNotebook(camera);
+                check(room.notebookRatio_ == ratio && room.notebook_.center == oldBook.center &&
+                          room.notebook_.scale == oldBook.scale,
+                      "pressing drop in the blocked corner keeps the notebook held and preserves its size ratio");
+            }
+        }
+    }
+    camera.feet = {-4.83f, 0, 3.8f};
+    camera.face(SchoolRoom::notebookRest);
+    room.toggleNotebook(camera);
+    tick(room, camera, {}, 120);
+    check(room.notebookRatio_ == 0 && !room.notebookFalling_ &&
+              glm::distance(glm::vec2(room.notebook_.center.x, room.notebook_.center.z),
+                            glm::vec2(SchoolRoom::notebookRest.x, SchoolRoom::notebookRest.z)) < .002f,
+          "leaving the blocked corner permits normal notebook placement on its mirror stand");
+    camera.feet = {5.4f, 0, 2.6f};
+    camera.resetMotion();
+    camera.face(room.notebookCenter());
+    check(room.toggleNotebook(camera) && room.notebookRatio_ > 0,
+          "the recovered notebook can be picked up from its stand again");
+    for (int cycle = 0; cycle < 5; ++cycle) {
+        camera.feet = {4.8f, 0, 2.4f};
+        camera.resetMotion();
+        camera.face({3.8f, 0, 2.4f});
+        room.toggleNotebook(camera);
+        tick(room, camera, {}, 120);
+        const auto placed = room.notebookBounds(room.notebook_);
+        check(room.notebookRatio_ == 0 && !room.notebookFalling_ && placed.min.x >= -6.5f &&
+                  placed.max.x <= 6.5f && placed.min.z >= -4.95f && placed.max.z <= 9.f && placed.min.y >= -.003f,
+              "repeated notebook drops settle inside the classroom");
+        camera.face(room.notebookCenter());
+        check(room.toggleNotebook(camera) && room.notebookRatio_ > 0,
+              "repeated notebook pickups retain the book after recovery from a blocked drop");
+    }
+
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

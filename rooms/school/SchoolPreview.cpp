@@ -242,6 +242,22 @@ void stageCapture(Application& state, const std::string& stage) {
             state.camera.feet = {4.8f, 1.8f, -9.9f};
             state.camera.face({22.5f, 3.3f, -9.9f});
         }
+    } else if (stage == "rear-cabinet-landing" || stage == "rear-cabinet-recovered") {
+        state.camera.feet = {-4.f, stage == "rear-cabinet-landing" ? 1.5f : 0.f, 8.005f};
+        state.camera.grounded = false;
+        state.camera.verticalSpeed = -1.f;
+        for (int frame = 0; frame < 120; ++frame)
+            state.room.update(state.camera, {stage == "rear-cabinet-recovered" ? 1.f : 0.f, 0, false}, 1.f / 120);
+        state.camera.face({-4.4f, .9f, 8.6f});
+    } else if (stage == "notebook-blocked-wall" || stage == "notebook-blocked-rear") {
+        state.camera.feet = {-5.4f, 0, 3.8f};
+        state.camera.face(state.room.notebookCenter());
+        if (!state.room.toggleNotebook(state.camera))
+            throw std::runtime_error("Capture could not pick up the notebook near its stand");
+        state.camera.feet = {-6.1f, 0, 8.75f};
+        state.camera.yaw = glm::radians(stage == "notebook-blocked-wall" ? -90.f : -180.f);
+        state.camera.pitch = 0;
+        state.room.update(state.camera, {}, 1.f / 120);
     } else if (stage == "notebook-start") {
         state.camera.feet = {-4.83f, 0, 3.80f};
         state.camera.face(state.room.notebookCenter());
@@ -421,6 +437,10 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "focus-mirror-end",
                                         "projector-first-turn",
                                         "notebook-start",
+                                        "rear-cabinet-landing",
+                                        "rear-cabinet-recovered",
+                                        "notebook-blocked-wall",
+                                        "notebook-blocked-rear",
                                         "notebook-on-desk",
                                         "pause-controls",
                                         "notebook-at-stand",

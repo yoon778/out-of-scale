@@ -114,6 +114,7 @@ class SchoolRoom {
     bool canReadNotebook(const Camera& camera) const;
     bool canGrabNotebook(const Camera& camera) const;
     std::optional<perspective::Pose> notebookPlacement(const Camera& camera) const;
+    perspective::Pose heldNotebookPose(const Camera& camera) const;
     float notebookSupport(const Box& area, const std::vector<Box>& solids) const;
     void updateNotebookFall(const Camera& camera, float dt);
     Box notebookBounds(const perspective::Pose& pose) const;
