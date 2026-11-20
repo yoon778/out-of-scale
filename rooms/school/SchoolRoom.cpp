@@ -191,9 +191,24 @@ glm::vec3 Camera::direction() const {
     return {std::sin(yaw) * std::cos(pitch), std::sin(pitch), -std::cos(yaw) * std::cos(pitch)};
 }
 void Camera::face(glm::vec3 target) {
+    focusTime = 0;
     glm::vec3 d = glm::normalize(target - eye());
     yaw = std::atan2(d.x, -d.z);
     pitch = std::asin(d.y);
+}
+void Camera::focusOn(glm::vec3 target) {
+    const auto d = glm::normalize(target - eye());
+    focusStart = {yaw, pitch};
+    focusDelta = {std::remainder(std::atan2(d.x, -d.z) - yaw, 6.283185307f), std::asin(d.y) - pitch};
+    focusTime = .20f;
+}
+void Camera::updateFocus(float dt) {
+    if (focusTime <= 0 || dt <= 0)
+        return;
+    focusTime = std::max(0.f, focusTime - dt);
+    const auto angles = focusStart + focusDelta * glm::smoothstep(0.f, 1.f, 1.f - focusTime / .20f);
+    yaw = angles.x;
+    pitch = angles.y;
 }
 SchoolRoom::SchoolRoom() {
     reset();
@@ -214,6 +229,7 @@ void SchoolRoom::reset() {
     boardPositions_ = boardStart;
     for (int i = 0; i < static_cast<int>(boardX.size()); ++i)
         boardOffsets_[i] = (boardPositions_[i] - boardGoal[i]) * boardTravel;
+    boardFrom_ = boardOffsets_;
     boardMotion_ = 0;
     mirrorGuide_ = adjustingMirror_ = false;
     mirrorYaw_ = mirrorStartYaw;
@@ -300,7 +316,9 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
     velocity /= std::max(1.0f, glm::length(velocity));
     velocity *= 3.0f;
     const float response = glm::length(velocity) > .01f ? 26.0f : 38.0f;
-    camera.movement = glm::mix(camera.movement, velocity, 1 - std::exp(-response * dt));
+    const float blend = -std::expm1(-response * dt);
+    const glm::vec3 displacement = velocity * dt + (camera.movement - velocity) * (blend / response);
+    camera.movement += (velocity - camera.movement) * blend;
     if (glm::length(velocity) < .01f && glm::length(camera.movement) < .015f)
         camera.movement = {};
     camera.stepOffset *= std::exp(-14.0f * dt);
@@ -308,7 +326,7 @@ void SchoolRoom::move(Camera& camera, const Input& input, float dt) {
         camera.stepOffset = 0;
     for (int axis : {0, 2}) {
         glm::vec3 next = camera.feet;
-        next[axis] += camera.movement[axis] * dt;
+        next[axis] += displacement[axis];
         float step = next.y;
         for (const Box& b : boxes)
             if (overlap(next, b) && camera.grounded && b.max.y - camera.feet.y <= 0.31f)
@@ -383,11 +401,15 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
         adjustingProjector_ = false;
     if (input.jump || glm::distance(camera.eye(), mirrorCenter) > 3.1f)
         adjustingMirror_ = false;
+    if (adjustingProjector_ || adjustingMirror_)
+        camera.updateFocus(dt);
+    else
+        camera.focusTime = 0;
     boardMotion_ = std::max(0.f, boardMotion_ - dt);
     for (int i = 0; i < static_cast<int>(boardX.size()); ++i) {
         const float target = (boardPositions_[i] - boardGoal[i]) * boardTravel;
-        boardOffsets_[i] =
-            boardMotion_ == 0 ? target : glm::mix(boardOffsets_[i], target, std::min(dt * 15.f, 1.f));
+        boardOffsets_[i] = glm::mix(boardFrom_[i], target,
+                                   glm::smoothstep(0.f, 1.f, 1.f - boardMotion_ / boardMoveSeconds));
     }
     if (mirrorGuide_ && !canReadNotebook(camera))
         mirrorGuide_ = false;
@@ -400,11 +422,9 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
             materializing_ = false;
         }
     } else if (!stairsReady_) {
-        if (projectorAligned_ && alignment(camera) > stairAlignmentThreshold)
-            alignmentHeld_ += dt;
-        else
-            alignmentHeld_ = 0;
-        if (alignmentHeld_ >= recognitionDuration) {
+        const float score = projectorAligned_ ? alignment(camera) : 0;
+        alignmentHeld_ = advanceAlignmentHold(alignmentHeld_, score, stairAlignmentThreshold, dt);
+        if (score >= stairAlignmentThreshold && alignmentHeld_ >= recognitionDuration) {
             materializing_ = true;
             adjustingProjector_ = false;
         }
@@ -452,12 +472,11 @@ bool SchoolRoom::moveBoard(const Camera& camera) {
     const int index = aimedBoard(camera);
     if (index < 0)
         return false;
-    if (boardMotion_ == 0) {
-        advanceBoards(boardPositions_, index);
-        boardMotion_ = boardMoveSeconds;
-        projectorAligned_ = false;
-        alignmentHeld_ = 0;
-    }
+    boardFrom_ = boardOffsets_;
+    advanceBoards(boardPositions_, index);
+    boardMotion_ = boardMoveSeconds;
+    projectorAligned_ = false;
+    alignmentHeld_ = 0;
     return true;
 }
 Box SchoolRoom::notebookBounds(const perspective::Pose& pose) const {
@@ -1668,7 +1687,8 @@ void SchoolRoom::drawStairs(Renderer& r) const {
 std::optional<AlignmentFeedback> SchoolRoom::alignmentFeedback(const Camera& camera) const {
     if (projectorAligned_ && !adjustingProjector_ && !materializing_ && camera.feet.z >= -4.9f) {
         if (const auto score = stairViewAlignment(camera))
-            return AlignmentFeedback{*score, stairAlignmentThreshold, *score > stairAlignmentThreshold};
+            return AlignmentFeedback{*score, stairAlignmentThreshold, *score >= stairAlignmentThreshold,
+                                     std::clamp(alignmentHeld_ / recognitionDuration, 0.f, 1.f)};
     }
     return corridor_.alignmentFeedback(camera);
 }
@@ -1686,7 +1706,7 @@ const wchar_t* SchoolRoom::interactionLabel(const Camera& camera) const {
     if (canTurnMirror(camera))
         return L"돌리기";
     if (aimedBoard(camera) >= 0)
-        return boardMotion_ == 0 ? L"밀기" : nullptr;
+        return L"밀기";
     if (const auto action = corridor_.classroomInteractionLabel(camera))
         return action;
     if (canUseCupboard(camera))
@@ -1753,6 +1773,8 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
         r.panel(x, y, trackWidth, trackHeight, {.12f, .22f, .18f});
         if (fill > 0)
             r.panel(x, y, trackWidth * fill, trackHeight, {.96f, .96f, .86f});
+        if (feedback->holdProgress > 0)
+            r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
     if (time_ < 5.0f) {
         r.panel(24 * scale, height - 60 * scale, 255 * scale, 36 * scale, {.12f, .22f, .18f});

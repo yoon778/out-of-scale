@@ -13,7 +13,11 @@ class Renderer;
 struct AlignmentFeedback {
     float score, threshold;
     bool aligned;
+    float holdProgress = 0;
 };
+
+// Near-threshold jitter spends progress; an invalid view resets it immediately.
+float advanceAlignmentHold(float held, float score, float threshold, float dt);
 
 // School-owned continuation. The shared inter-stage connector is unchanged.
 class SchoolCorridor {

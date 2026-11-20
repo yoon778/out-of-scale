@@ -946,8 +946,8 @@ int runTests() {
             room.update(camera, {}, 1.0f / rate);
         ratePositions[rateIndex++] = camera.feet;
     }
-    check(glm::distance(ratePositions[0], ratePositions[1]) < .015f,
-          "walk and braking differ by under 1.5 cm at 30 and 144 FPS");
+    check(glm::distance(ratePositions[0], ratePositions[1]) < .0005f,
+          "walk and braking differ by under 0.5 mm at 30 and 144 FPS");
     camera = Camera();
     camera.feet = {8.92f, 1.8f, -10.28f};
     camera.yaw = 1.570796327f;
@@ -1001,6 +1001,157 @@ int runTests() {
         check(first < middle * .3f && room.cupboardAngle() > 1.57079f && bounded,
               "cupboard accelerates gently, respects speed cap and settles exactly at both frame rates");
     }
+    // Every physical press counts even if the previous linked panels are still moving.
+    room.reset();
+    camera = Camera();
+    for (int index : {0, 0, 1, 1, 1, 2, 3, 3, 3}) {
+        camera.feet = {SchoolRoom::boardX[index], 0, -2.18f};
+        camera.resetMotion();
+        camera.face(room.boardHandle(index) + glm::vec3(0, .55f, 0));
+        const auto before = room.boardOffsets_;
+        check(room.moveBoard(camera) && room.boardOffsets_ == before,
+              "rapid board presses retarget from the visible pose without snapping");
+        room.update(camera, {}, .05f);
+    }
+    check(room.boardPositions_ == SchoolRoom::boardGoal && !room.boardsReady(),
+          "rapid solution accepts all nine presses but waits for panels to settle");
+    tick(room, camera, {}, 32);
+    check(room.boardsReady() && room.boardOffsets_ == std::array<float, 4>{},
+          "retargeted panels finish exactly at the solved drawing");
+    room.reset();
+    camera = Camera();
+    camera.feet = {SchoolRoom::boardX[0], 0, -2.18f};
+    camera.face(room.boardHandle(0) + glm::vec3(0, .55f, 0));
+    room.moveBoard(camera);
+    auto boardAt30 = room, boardAt144 = room;
+    auto camera30 = camera, camera144 = camera;
+    for (int i = 0; i < 5; ++i)
+        boardAt30.update(camera30, {}, 1.f / 30);
+    for (int i = 0; i < 24; ++i)
+        boardAt144.update(camera144, {}, 1.f / 144);
+    check(std::abs(boardAt30.boardShift(0) - boardAt144.boardShift(0)) < .00001f,
+          "moving chalkboard has the same visible pose at 30 and 144 FPS");
+
+    // Short equipment focus uses the shortest yaw arc; ordinary mouse look remains direct.
+    for (int fps : {30, 60, 144}) {
+        Camera focusCamera;
+        focusCamera.yaw = 3.10f;
+        const auto target = focusCamera.eye() + glm::vec3(-.04f, .1f, 1.f);
+        const auto before = focusCamera.direction();
+        focusCamera.focusOn(target);
+        check(focusCamera.direction() == before, "equipment interaction does not teleport the view");
+        focusCamera.updateFocus(1.f / fps);
+        check(focusCamera.yaw > 3.10f && focusCamera.yaw < 3.19f,
+              "equipment view crosses the yaw seam by the shortest arc");
+        for (int i = 1; i < fps; ++i)
+            focusCamera.updateFocus(1.f / fps);
+        check(focusCamera.focusTime == 0 &&
+                  glm::distance(focusCamera.direction(), glm::normalize(target - focusCamera.eye())) < .00001f,
+              "equipment focus finishes at the same exact direction across frame rates");
+    }
+    room.reset();
+    camera = Camera();
+    camera.face(SchoolRoom::projectorOrigin);
+    room.toggleProjector(camera);
+    camera.focusOn({0, 1.9f, -4.f});
+    const auto focusBeforePause = camera.direction();
+    room.update(camera, {}, .05f, false);
+    check(camera.direction() == focusBeforePause && camera.focusTime == .20f,
+          "paused room freezes equipment focus along with its puzzle");
+    room.update(camera, {}, .05f);
+    check(glm::distance(camera.direction(), focusBeforePause) > .01f && camera.focusTime > 0,
+          "active room eases equipment focus while keeping its controls active");
+    room.update(camera, {0, 0, true}, .02f);
+    check(!room.adjustingProjector() && camera.focusTime == 0,
+          "jump cancels both equipment control and camera focus");
+
+    for (float threshold : {.94f, .80f, .75f}) {
+        float held = 0;
+        for (int i = 0; i < 120; ++i)
+            held = advanceAlignmentHold(held, threshold - .01f, threshold, 1.f / 120);
+        check(held == 0, "nearby but incorrect alignment never earns recognition time");
+        held = advanceAlignmentHold(.2f, threshold - .01f, threshold, 1.f / 120);
+        check(held > .18f && held < .2f, "one near-threshold wobble spends time instead of erasing it");
+        check(advanceAlignmentHold(held, 0, threshold, 1.f / 120) == 0,
+              "looking away or invalidating the puzzle immediately clears recognition");
+    }
+    room.reset();
+    positionProjector(room, camera);
+    viewStudy(camera);
+    tick(room, camera, {}, 24);
+    auto correctView = camera;
+    bool nearThreshold = false;
+    for (int i = 1; i < 400; ++i) {
+        camera = correctView;
+        camera.feet.x += i * .001f;
+        const float score = room.alignment(camera);
+        if (score >= .91f && score < .94f) {
+            nearThreshold = true;
+            break;
+        }
+    }
+    check(nearThreshold, "regression fixture finds an actual near-threshold classroom view");
+    room.update(camera, {}, 1.f / 120);
+    const auto wobbleFeedback = room.alignmentFeedback(camera);
+    check(!room.materializing() && room.alignmentHeld_ > .18f && room.alignmentHeld_ < .20f &&
+              wobbleFeedback && !wobbleFeedback->aligned && wobbleFeedback->holdProgress > 0,
+          "real alignment wobble preserves partial HUD progress without creating stairs");
+    tick(room, camera, {}, 120);
+    check(room.alignmentHeld_ == 0 && !room.materializing(),
+          "remaining outside the real threshold drains progress and never solves the puzzle");
+    viewStudy(camera);
+    tick(room, camera, {}, 24);
+    const auto heldFeedback = room.alignmentFeedback(camera);
+    check(heldFeedback && heldFeedback->aligned && heldFeedback->holdProgress > .49f &&
+              heldFeedback->holdProgress < .51f,
+          "green alignment fill reports actual hold time rather than an instant full bar");
+    room.reset();
+    check(room.alignmentHeld_ == 0 && !room.alignmentFeedback(camera),
+          "reset clears retained alignment progress and its feedback");
+
+    for (bool bridge : {false, true}) {
+        prepareCorridor();
+        if (bridge) {
+            tick(room, camera, {}, 300);
+            camera.feet = SchoolCorridor::bridgeEye - glm::vec3(0, 1.65f, 0);
+            camera.resetMotion();
+            camera.face(SchoolCorridor::bridgeFocus);
+        }
+        tick(room, camera, {}, 24);
+        const auto steadyView = camera;
+        const float threshold = bridge ? .75f : .80f;
+        bool found = false;
+        for (int axis : {0, 2}) {
+            for (float sign : {-1.f, 1.f}) {
+                for (int i = 1; i < 1300 && !found; ++i) {
+                    camera = steadyView;
+                    camera.feet[axis] += sign * i * .001f;
+                    const auto feedback = room.alignmentFeedback(camera);
+                    if (feedback && feedback->score >= threshold - .03f && feedback->score < threshold)
+                        found = true;
+                }
+            }
+        }
+        check(found, bridge ? "find the actual bridge alignment boundary" : "find the actual door alignment boundary");
+        room.update(camera, {}, 1.f / 120);
+        const auto wobble = room.alignmentFeedback(camera);
+        check(wobble && !wobble->aligned && wobble->holdProgress > .30f,
+              "corridor door and bridge retain only partial progress during a small wobble");
+        tick(room, camera, {}, 120);
+        const auto drained = room.alignmentFeedback(camera);
+        check(drained && drained->holdProgress == 0 &&
+                  (bridge ? !room.corridorBridgeReady() : !room.corridorDoorForming()),
+              "incorrect corridor views drain progress without forming a passage");
+        camera = steadyView;
+        tick(room, camera, {}, 24);
+        camera.yaw += 1;
+        room.update(camera, {}, 1.f / 120);
+        camera = steadyView;
+        const auto returned = room.alignmentFeedback(camera);
+        check(returned && returned->holdProgress == 0,
+              "looking away resets both corridor puzzles before the next attempt");
+    }
+
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;
 }

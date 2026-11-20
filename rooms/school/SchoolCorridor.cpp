@@ -44,6 +44,13 @@ void beveledBoard(Renderer& r, glm::vec3 c, glm::vec3 size, glm::vec3 color, flo
     }
 }
 } // namespace
+float advanceAlignmentHold(float held, float score, float threshold, float dt) {
+    if (score >= threshold)
+        return held + dt;
+    if (score >= threshold - .035f)
+        return std::max(0.f, held - 2.f * dt);
+    return 0;
+}
 SchoolCorridor::SchoolCorridor() {
     build();
     buildDrawing();
@@ -375,11 +382,9 @@ std::optional<float> SchoolCorridor::doorViewAlignment(const Camera& camera) con
 }
 void SchoolCorridor::updateIllusion(const Camera& camera, float dt) {
     if (!forming_) {
-        if (std::abs(angle_ - halfPi) < cupboardAngleTolerance && alignment(camera) >= doorAlignmentThreshold)
-            recognition_ += dt;
-        else
-            recognition_ = 0;
-        if (recognition_ >= recognitionDuration) {
+        const float score = std::abs(angle_ - halfPi) < cupboardAngleTolerance ? alignment(camera) : 0;
+        recognition_ = advanceAlignmentHold(recognition_, score, doorAlignmentThreshold, dt);
+        if (score >= doorAlignmentThreshold && recognition_ >= recognitionDuration) {
             forming_ = true;
             targetOpen_ = false;
         }
@@ -601,18 +606,21 @@ std::optional<float> SchoolCorridor::bridgeViewAlignment(const Camera& camera) c
 std::optional<AlignmentFeedback> SchoolCorridor::alignmentFeedback(const Camera& camera) const {
     if (!forming_ && std::abs(angle_ - halfPi) < cupboardAngleTolerance) {
         if (const auto score = doorViewAlignment(camera))
-            return AlignmentFeedback{*score, doorAlignmentThreshold, *score >= doorAlignmentThreshold};
+            return AlignmentFeedback{*score, doorAlignmentThreshold, *score >= doorAlignmentThreshold,
+                                     std::clamp(recognition_ / recognitionDuration, 0.f, 1.f)};
     }
     if (!bridgeForming_) {
         if (const auto score = bridgeViewAlignment(camera))
-            return AlignmentFeedback{*score, bridgeAlignmentThreshold, *score >= bridgeAlignmentThreshold};
+            return AlignmentFeedback{*score, bridgeAlignmentThreshold, *score >= bridgeAlignmentThreshold,
+                                     std::clamp(bridgeHeld_ / .5f, 0.f, 1.f)};
     }
     return std::nullopt;
 }
 void SchoolCorridor::updateBridge(const Camera& camera, float dt) {
     if (!bridgeForming_) {
-        bridgeHeld_ = bridgeAlignment(camera) >= bridgeAlignmentThreshold ? bridgeHeld_ + dt : 0;
-        bridgeForming_ = bridgeHeld_ >= .5f;
+        const float score = bridgeAlignment(camera);
+        bridgeHeld_ = advanceAlignmentHold(bridgeHeld_, score, bridgeAlignmentThreshold, dt);
+        bridgeForming_ = score >= bridgeAlignmentThreshold && bridgeHeld_ >= .5f;
         return;
     }
     bridgeFormation_ = std::min(1.0f, bridgeFormation_ + dt / .72f);

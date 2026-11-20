@@ -24,6 +24,8 @@ struct Camera {
     glm::vec3 movement{}, motionFeet{};
     float stepOffset = 0;
     bool motionTracked = false;
+    float focusTime = 0;
+    glm::vec2 focusStart{}, focusDelta{};
     glm::vec3 eye() const { return feet + glm::vec3(0, 1.65f + stepOffset, 0); }
     void resetMotion() {
         movement = {};
@@ -32,6 +34,8 @@ struct Camera {
     }
     glm::vec3 direction() const;
     void face(glm::vec3 target);
+    void focusOn(glm::vec3 target);
+    void updateFocus(float dt);
 };
 class SchoolRoom {
   public:
@@ -151,6 +155,7 @@ class SchoolRoom {
     std::vector<float> slideMask_;
     std::array<int, 4> boardPositions_ = boardStart;
     std::array<float, 4> boardOffsets_{};
+    std::array<float, 4> boardFrom_{};
     float boardMotion_ = 0;
     bool mirrorGuide_ = false, adjustingMirror_ = false;
     float mirrorYaw_ = 0;

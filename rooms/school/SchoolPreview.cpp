@@ -25,6 +25,7 @@ void pause(GLFWwindow* window, bool paused) {
         state.room.stopAdjustingProjector();
         state.room.stopAdjustingMirror();
         state.camera.movement = {};
+        state.camera.focusTime = 0;
     }
     state.sample = false;
     state.jump = false;
@@ -121,6 +122,25 @@ void aimProjector(Application& state, float fraction = 1) {
     state.room.update(state.camera, {}, 1.0f / 120);
 }
 void stageCapture(Application& state, const std::string& stage) {
+    if (stage.rfind("focus-", 0) == 0) {
+        const bool mirror = stage.find("mirror") != std::string::npos;
+        if (mirror) {
+            state.camera.feet = {-4.83f, 0.f, 2.50f};
+            state.camera.face(school::SchoolRoom::mirrorCenter + glm::vec3(.35f, -.5f, 0));
+            if (!state.room.toggleMirror(state.camera))
+                throw std::runtime_error("Capture could not start mirror focus");
+            state.camera.focusOn(school::SchoolRoom::mirrorAim);
+        } else {
+            state.camera.face(school::SchoolRoom::projectorOrigin);
+            if (!state.room.toggleProjector(state.camera))
+                throw std::runtime_error("Capture could not start projector focus");
+            state.camera.focusOn({0, 1.9f, -4.f});
+        }
+        const int frames = stage.ends_with("end") ? 26 : stage.ends_with("middle") ? 12 : 0;
+        for (int i = 0; i < frames; ++i)
+            state.room.update(state.camera, {}, 1.f / 120);
+        return;
+    }
     if (stage.rfind("corridor-", 0) == 0) {
         aimProjector(state);
         state.camera.feet = school::SchoolRoom::alignmentEye - glm::vec3(0, 1.65f, 0);
@@ -309,6 +329,7 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
             else if (a.room.adjustingMirror())
                 a.room.rotateMirror(float(x - a.mouseX) * 0.003f);
             else {
+                a.camera.focusTime = 0;
                 a.camera.yaw += float(x - a.mouseX) * 0.0025f;
                 a.camera.pitch = std::clamp(a.camera.pitch - float(y - a.mouseY) * 0.0025f, -1.54f, 1.54f);
             }
@@ -351,7 +372,7 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
             return;
         if (a.room.toggleProjector(a.camera)) {
             if (a.room.adjustingProjector())
-                a.camera.face({0.0f, 1.9f, -4.0f});
+                a.camera.focusOn({0.0f, 1.9f, -4.0f});
         } else {
             if (a.room.toggleNotebook(a.camera) || a.room.inspectMirror(a.camera))
                 return;
@@ -361,16 +382,22 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                 return;
             }
             if (a.room.adjustingMirror())
-                a.camera.face(school::SchoolRoom::mirrorAim);
+                a.camera.focusOn(school::SchoolRoom::mirrorAim);
         }
         a.sample = false;
-        a.mouseResumeAt = glfwGetTime() + 0.12;
+        a.mouseResumeAt = glfwGetTime();
     });
     if (captureFolder.empty())
         pause(window, false);
     if (!captureFolder.empty()) {
         std::filesystem::create_directories(captureFolder);
         for (const std::string stage : {"entrance",
+                                        "focus-projector-start",
+                                        "focus-projector-middle",
+                                        "focus-projector-end",
+                                        "focus-mirror-start",
+                                        "focus-mirror-middle",
+                                        "focus-mirror-end",
                                         "projector-first-turn",
                                         "notebook-start",
                                         "notebook-on-desk",
@@ -484,6 +511,7 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
     state.room.stopAdjustingProjector();
     state.room.stopAdjustingMirror();
     state.camera.movement = {};
+    state.camera.focusTime = 0;
     glEnable(GL_DEPTH_TEST);
     glfwSetCursorPosCallback(window, nullptr);
     glfwSetKeyCallback(window, nullptr);
