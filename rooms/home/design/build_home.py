@@ -11,7 +11,7 @@ from mathutils import Vector
 OUTPUT = Path(__file__).resolve().parent
 GROUP_NAMES = (
     "Interior", "Shell", "IntactWall", "BrokenWall", "MiniWalls",
-    "Shelf", "Door", "Rpg", "Rack",
+    "Shelf", "Door", "Rpg", "Rack", "MiniBrokenWall", "LatchMounts", "LatchBolt",
 )
 RANDOM = random.Random(20261120)
 COLLECTIONS = {}
@@ -510,6 +510,66 @@ def add_rpg_and_rack():
         box(group, "Equipment cradle", (x, -0.11, 0.02), (0.045, 0.12, 0.23), "Metal", 0.005)
 
 
+def add_miniature_broken_wall():
+    """Retain the true opening while exposing the reverse face above a low corridor."""
+    for original in list(COLLECTIONS["BrokenWall"].objects):
+        if original.name.startswith("Exit corridor ceiling"):
+            continue
+        duplicate = original.copy()
+        duplicate.data = original.data.copy()
+        duplicate.name = "Mini cutaway | " + original.name
+        duplicate["home_group"] = "MiniBrokenWall"
+        if original.name.startswith(("Exit corridor wall", "Exit warm end")):
+            for vertex in duplicate.data.vertices:
+                vertex.co.z = min(vertex.co.z, 0.60)
+            duplicate.data.update()
+        COLLECTIONS["MiniBrokenWall"].objects.link(duplicate)
+
+
+def latch_guide(name, center_x):
+    """A hollow guide aligned with the horizontal bolt, including its visible bore."""
+    sides = 10
+    vertices = []
+    for x in (center_x - 0.035, center_x + 0.035):
+        for radius in (0.031, 0.019):
+            for index in range(sides):
+                angle = math.tau * index / sides
+                vertices.append((x, math.cos(angle) * radius, math.sin(angle) * radius))
+    faces = []
+    for index in range(sides):
+        following = (index + 1) % sides
+        faces.extend((
+            (index, following, following + sides * 2, index + sides * 2),
+            (index + sides, index + sides * 3, following + sides * 3, following + sides),
+            (index, index + sides, following + sides, following),
+            (index + sides * 2, following + sides * 2,
+             following + sides * 3, index + sides * 3),
+        ))
+    return mesh("LatchMounts", name, vertices, faces, "Metal")
+
+
+def add_reverse_door_latch():
+    """Keep fixed guides and the retractable bolt as independent local-origin assets."""
+    group = "LatchMounts"
+    box(group, "Reverse latch brass backplate", (0, 0, 0.026), (0.44, 0.09, 0.012), "MutedGold")
+    for center_x in (-0.11, 0.18):
+        latch_guide("Reverse latch hollow guide", center_x)
+        box(group, "Reverse latch guide saddle", (center_x, 0, 0.019),
+            (0.07, 0.055, 0.021), "Metal")
+    for x in (-0.19, 0.115):
+        for y in (-0.031, 0.031):
+            cylinder(group, "Latch countersunk screw", (x, y, 0.019), (x, y, 0.014),
+                     0.007, "Metal", 6)
+            box(group, "Latch screw slot", (x, y, 0.013), (0.008, 0.0015, 0.001), "DarkRecess")
+    group = "LatchBolt"
+    cylinder(group, "Horizontal sliding brass bolt", (-0.21, 0, 0), (0.21, 0, 0),
+             0.0175, "MutedGold", 12)
+    cylinder(group, "Sliding bolt raised handle stem", (0.02, 0, -0.011), (0.02, 0, -0.045),
+             0.009, "MutedGold", 8)
+    cylinder(group, "Sliding bolt tactile handle", (0.02, -0.019, -0.045), (0.02, 0.019, -0.045),
+             0.018, "MutedGold", 10)
+
+
 def instance(name, source, translation, scale=1.0, collection=None):
     obj = bpy.data.objects.new(name, None)
     obj.instance_type = "COLLECTION"
@@ -583,6 +643,7 @@ def main():
     add_palette()
     add_floor()
     add_shell()
+    add_miniature_broken_wall()
     add_bed()
     add_rug()
     add_storage()
@@ -593,6 +654,7 @@ def main():
     add_shelf()
     add_door()
     add_rpg_and_rack()
+    add_reverse_door_latch()
     presentation = bpy.data.collections.new("Presentation | linked instances excluded from game export")
     scene.collection.children.link(presentation)
     instance("Real bookcase default pose", "Shelf", (0, 1.3, -5.95), collection=presentation)

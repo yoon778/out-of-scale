@@ -32,6 +32,8 @@ constexpr glm::vec3 roomMiniatureOrigin{1.99f, 1.04f, 0.77f};
 constexpr float debrisDuration = 1.4f;
 constexpr float projectileSpeed = 12.0f;
 constexpr float impactDuration = 0.20f;
+constexpr float latchOpenTravel = 0.27f;
+constexpr glm::vec3 latchCenter{0.70f, 1.45f, -6.58f};
 constexpr glm::vec3 plaster{0.856f, 0.837f, 0.777f};
 
 constexpr Box desk{{2.90f, 0.50f, 0.80f}, {3.30f, 1.00f, 1.40f}};
@@ -58,11 +60,14 @@ struct HomeMeshRange {
     GLsizei count;
 };
 
-enum class HomeMesh { Interior, Shell, IntactWall, BrokenWall, MiniWalls, Shelf, Door, Rpg, Rack };
+enum class HomeMesh {
+    Interior, Shell, IntactWall, BrokenWall, MiniWalls, Shelf, Door, Rpg, Rack,
+    MiniBrokenWall, LatchMounts, LatchBolt
+};
 
 #include "HomeGeometry.inc"
 
-static_assert(std::size(homeMeshes) == 9);
+static_assert(std::size(homeMeshes) == 12);
 
 struct WallShard {
     glm::vec3 center;
@@ -153,6 +158,10 @@ Box shelfAt(float offset) {
     return {shelf.center + glm::vec3{offset, 0.0f, 0.0f}, shelf.size};
 }
 
+Box miniatureBox(const Box& box) {
+    return {roomMiniatureOrigin + box.center * roomMiniatureScale, box.size * roomMiniatureScale};
+}
+
 bool overlapsPlayer(const glm::vec3& position, const Box& box) {
     return std::abs(position.x - box.center.x) < box.size.x * 0.5f + playerRadius &&
            std::abs(position.z - box.center.z) < box.size.z * 0.5f + playerRadius;
@@ -183,6 +192,35 @@ void drawDoor(const BoxRenderer& renderer, const Box& box, const glm::vec3& tint
     }
     model = glm::scale(model, glm::vec3{box.size.y / door.size.y});
     drawHomeMesh(renderer, HomeMesh::Door, model, tint);
+}
+
+float visibleMeshRange(HomeMesh mesh, const glm::mat4& model, const glm::vec3& eye,
+                       const glm::vec3& direction, float limit) {
+    const auto& range = homeMeshes[static_cast<std::size_t>(mesh)];
+    for (GLint first = range.first; first < range.first + range.count; first += 3) {
+        const auto a = glm::vec3{model * glm::vec4{homeGeometry[first].position, 1.0f}};
+        const auto b = glm::vec3{model * glm::vec4{homeGeometry[first + 1].position, 1.0f}};
+        const auto c = glm::vec3{model * glm::vec4{homeGeometry[first + 2].position, 1.0f}};
+        const auto edge = b - a;
+        const auto otherEdge = c - a;
+        const auto perpendicular = glm::cross(direction, otherEdge);
+        const float determinant = glm::dot(edge, perpendicular);
+        if (std::abs(determinant) < 1e-9f) {
+            continue;
+        }
+        const auto offset = eye - a;
+        const float u = glm::dot(offset, perpendicular) / determinant;
+        const auto crossOffset = glm::cross(offset, edge);
+        const float v = glm::dot(direction, crossOffset) / determinant;
+        if (u < 0.0f || v < 0.0f || u + v > 1.0f) {
+            continue;
+        }
+        const float distance = glm::dot(otherEdge, crossOffset) / determinant;
+        if (distance > 0.0f) {
+            limit = std::min(limit, distance);
+        }
+    }
+    return limit;
 }
 
 glm::vec3 carrySide(const glm::vec3& direction) {
@@ -221,6 +259,22 @@ bool HomeRoom::canFitDoor(const glm::vec3& eye, const glm::vec3& direction) cons
     return scale >= 0.72f && scale <= 1.35f;
 }
 
+bool HomeRoom::canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const {
+    const Box latch = miniatureBox({latchCenter, {0.50f, 0.35f, 0.28f}});
+    float visible = visibleRange(eye, direction, 2.3f);
+    if (eye.z >= latch.center.z - 0.02f || !aimsAt(eye, direction, latch, visible)) {
+        return false;
+    }
+    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin),
+                                  glm::vec3{roomMiniatureScale});
+    visible = visibleMeshRange(HomeMesh::MiniWalls, model, eye, direction, visible);
+    visible = visibleMeshRange(HomeMesh::MiniBrokenWall, model, eye, direction, visible);
+    visible = visibleMeshRange(HomeMesh::Door, glm::translate(model, door.center), eye, direction, visible);
+    visible = visibleMeshRange(HomeMesh::Shelf, glm::translate(model, shelfAt(shelfOffset_).center),
+                               eye, direction, visible);
+    return aimsAt(eye, direction, latch, visible);
+}
+
 void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
     const float nearby = visibleRange(eye, direction, reach);
     switch (exitState_) {
@@ -247,8 +301,14 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
             }
             break;
         case ExitState::DoorPlaced:
-            if (aimsAt(eye, direction, door, nearby)) {
-                exitState_ = ExitState::DoorOpen;
+            if (!latchReleased_ && canReachMiniatureLatch(eye, direction)) {
+                latchReleased_ = true;
+            } else if (aimsAt(eye, direction, door, nearby)) {
+                if (latchTravel_ >= latchOpenTravel) {
+                    exitState_ = ExitState::DoorOpen;
+                } else {
+                    doorRattleTime_ = 0.30f;
+                }
             }
             break;
         case ExitState::DoorOpen:
@@ -264,12 +324,15 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     shotFlashTime_ = 0.14f;
     float distance = 24.0f;
     bool breaksWall = false;
+    bool miniature = false;
     // Test the complete flight segment so fast shots cannot skip thin furniture.
-    const auto hit = [&](const Box& obstacle, bool breakable = false) {
-        const auto depth = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * 0.5f);
+    const auto hit = [&](const Box& obstacle, bool breakable = false, bool small = false) {
+        const Box target = small ? miniatureBox(obstacle) : obstacle;
+        const auto depth = perspective::rayBoxDistance(eye, direction, target.center, target.size * 0.5f);
         if (depth && *depth < distance) {
             distance = *depth;
             breaksWall = breakable;
+            miniature = small;
         }
     };
     hit(wallPanel, true);
@@ -285,12 +348,27 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
         hit({{side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}});
     }
     hit({{0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}});
+
+    hit(wallPanel, true, true);
+    for (const auto& obstacle : staticInterior) {
+        hit(obstacle, false, true);
+    }
+    hit(shelfAt(shelfOffset_), false, true);
+    hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}}, false, true);
+    hit({{0.0f, 0.30f, 6.51f}, {11.7f, 0.60f, 0.34f}}, false, true);
+    for (const float side : {-1.0f, 1.0f}) {
+        hit({{side * 5.87f, 0.30f, 0.0f}, {0.34f, 0.60f, 13.1f}}, false, true);
+        hit({{side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}}, false, true);
+    }
+    hit({{0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}}, false, true);
     const float launchDepth = std::min(distance, 0.45f);
-    projectile_ = Projectile{eye + direction * launchDepth, direction, distance - launchDepth, breaksWall};
+    projectile_ = Projectile{eye + direction * launchDepth, direction, distance - launchDepth, breaksWall,
+                             0.0f, miniature};
 }
 
 void HomeRoom::impact(const Projectile& projectile) {
-    impactCenter_ = projectile.center - projectile.direction * 0.08f;
+    impactScale_ = projectile.miniature ? roomMiniatureScale : 1.0f;
+    impactCenter_ = projectile.center - projectile.direction * (0.08f * impactScale_);
     impactTime_ = impactDuration;
     const glm::vec3 side = carrySide(projectile.direction);
     const glm::vec3 up = glm::normalize(glm::cross(side, projectile.direction));
@@ -301,9 +379,9 @@ void HomeRoom::impact(const Projectile& projectile) {
         const glm::vec3 radial = side * std::cos(angle) + up * std::sin(angle);
         particles_[index] = {
             impactCenter_,
-            (radial * spread - projectile.direction * 1.1f) * (spark ? 2.0f : 0.7f),
+            (radial * spread - projectile.direction * 1.1f) * (spark ? 2.0f : 0.7f) * impactScale_,
             spark ? 0.40f : 0.95f,
-            spark ? 0.045f : 0.18f + static_cast<float>(index % 4) * 0.025f,
+            (spark ? 0.045f : 0.18f + static_cast<float>(index % 4) * 0.025f) * impactScale_,
             spark,
         };
     }
@@ -314,9 +392,11 @@ void HomeRoom::impact(const Projectile& projectile) {
         std::mt19937 random{0xB019u};
         std::uniform_real_distribution<float> jitter{-1.0f, 1.0f};
         const auto& shapes = fractureMesh().shards;
+        const glm::vec3 realImpact = projectile.miniature
+            ? (projectile.center - roomMiniatureOrigin) / roomMiniatureScale : projectile.center;
         for (std::size_t index = 0; index < fragments_.size(); ++index) {
             const glm::vec3 center = wallPanel.center + shapes[index].center;
-            const glm::vec3 outward = center - impactCenter_;
+            const glm::vec3 outward = center - realImpact;
             const glm::vec3 axis = glm::normalize(glm::vec3{jitter(random), jitter(random), jitter(random)});
             fragments_[index] = {
                 center,
@@ -341,6 +421,10 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye) {
     if (elapsed <= 0.0f) {
         return;
     }
+    if (latchReleased_) {
+        latchTravel_ = std::min(latchOpenTravel, latchTravel_ + elapsed * 0.80f);
+    }
+    doorRattleTime_ = std::max(0.0f, doorRattleTime_ - elapsed);
     if (shelfMoving_) {
         const float nextOffset = std::max(shelfParkedOffset, shelfOffset_ - elapsed * 2.1f);
         if (!overlapsPlayer(eye, shelfAt(nextOffset))) {
@@ -358,7 +442,7 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye) {
             continue;
         }
         particle.life = std::max(0.0f, particle.life - elapsed);
-        particle.velocity.y += (particle.spark ? -7.5f : 0.5f) * elapsed;
+        particle.velocity.y += (particle.spark ? -7.5f : 0.5f) * elapsed * impactScale_;
         particle.center += particle.velocity * elapsed;
     }
     if (debrisTime_ > 0.0f) {
@@ -457,17 +541,35 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
     drawHomeMesh(renderer_, HomeMesh::Interior, model);
     drawHomeMesh(renderer_, miniature ? HomeMesh::MiniWalls : HomeMesh::Shell, model);
     const bool wallBroken = exitState_ >= ExitState::WallBroken;
-    drawHomeMesh(renderer_, wallBroken ? HomeMesh::BrokenWall : HomeMesh::IntactWall, model);
+    const HomeMesh rearWall = wallBroken
+        ? (miniature ? HomeMesh::MiniBrokenWall : HomeMesh::BrokenWall) : HomeMesh::IntactWall;
+    drawHomeMesh(renderer_, rearWall, model);
     const auto shelfModel = glm::translate(model, shelfAt(shelfOffset_).center);
     drawHomeMesh(renderer_, HomeMesh::Shelf, shelfModel);
     const bool exitOpen = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
+    auto doorParent = model;
     if (exitState_ == ExitState::DoorPlaced) {
-        drawDoor(renderer_, door, glm::vec3{1.0f}, false, model);
+        const glm::vec3 hinge = door.center - glm::vec3{door.size.x * 0.5f, 0.0f, 0.0f};
+        doorParent = glm::translate(model, hinge);
+        const float rattle = std::sin(doorRattleTime_ * 55.0f) * doorRattleTime_ * 0.04f;
+        doorParent = glm::rotate(doorParent, rattle, {0.0f, 1.0f, 0.0f});
+        doorParent = glm::translate(doorParent, -hinge);
+        drawDoor(renderer_, door, glm::vec3{1.0f}, false, doorParent);
     } else if (exitOpen) {
         drawDoor(renderer_, openDoor, glm::vec3{1.0f}, true, model);
         const auto center = glm::vec3{model * glm::vec4{0.0f, 1.35f, -8.38f, 1.0f}};
         const float scale = miniature ? roomMiniatureScale : 1.0f;
         renderer_.drawBox(center, glm::vec3{1.87f, 2.65f, 0.02f} * scale, {0.95f, 0.80f, 0.48f});
+    }
+    if (exitState_ >= ExitState::DoorPlaced) {
+        auto latchModel = glm::translate(doorParent, exitOpen ? openDoor.center : door.center);
+        if (exitOpen) {
+            latchModel = glm::rotate(latchModel, glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
+        }
+        latchModel = glm::translate(latchModel, latchCenter - door.center);
+        drawHomeMesh(renderer_, HomeMesh::LatchMounts, latchModel);
+        latchModel = glm::translate(latchModel, {-latchTravel_, 0.0f, 0.0f});
+        drawHomeMesh(renderer_, HomeMesh::LatchBolt, latchModel);
     }
 
     if (debrisTime_ > 0.0f) {
@@ -503,7 +605,7 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
         }
     }
     if (impactTime_ > 0.0f) {
-        const float size = 0.35f + (impactDuration - impactTime_) * 2.0f;
+        const float size = (0.35f + (impactDuration - impactTime_) * 2.0f) * impactScale_;
         renderer_.drawBox(impactCenter_, glm::vec3{size}, {1.0f, 0.82f, 0.43f});
     }
     for (const Particle& particle : particles_) {

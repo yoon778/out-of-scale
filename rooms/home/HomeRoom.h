@@ -39,6 +39,7 @@ private:
         float remaining;
         bool breaksWall;
         float traveled = 0.0f;
+        bool miniature = false;
     };
 
     struct Particle {
@@ -51,6 +52,7 @@ private:
 
     float visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const;
     bool canFitDoor(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const;
     void drawMiniature() const;
     void drawRoom(const glm::mat4& model, bool miniature) const;
     void impact(const Projectile& projectile);
@@ -62,6 +64,9 @@ private:
     bool shelfMoving_ = false;
     float doorRatio_ = 0.0f;
     float doorWheelScale_ = 1.0f;
+    bool latchReleased_ = false;
+    float latchTravel_ = 0.0f;
+    float doorRattleTime_ = 0.0f;
     std::array<Fragment, 18> fragments_{};
     float debrisTime_ = 0.0f;
     float shotFlashTime_ = 0.0f;
@@ -69,4 +74,5 @@ private:
     std::array<Particle, 36> particles_{};
     glm::vec3 impactCenter_{0.0f};
     float impactTime_ = 0.0f;
+    float impactScale_ = 1.0f;
 };
