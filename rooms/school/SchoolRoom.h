@@ -97,7 +97,7 @@ class SchoolRoom {
     static constexpr glm::vec3 projectorStartAim{-0.85f, 2.30f, -4.50f};
     static constexpr glm::vec4 artworkFrame{-4.05f, .73f, 2.30f, 3.75f};
     static constexpr float recognitionDuration = 0.25f;
-    static constexpr float formationDuration = 0.65f;
+    static constexpr float formationDuration = 1.8f;
 
   private:
     friend int runTests();

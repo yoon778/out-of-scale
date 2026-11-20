@@ -29,6 +29,9 @@ void viewStudy(Camera& camera) {
     camera.grounded = true;
     camera.verticalSpeed = 0;
 }
+void tickFor(SchoolRoom& room, Camera& camera, float seconds) {
+    tick(room, camera, {}, static_cast<int>(std::ceil(seconds * 120)) + 2);
+}
 void aimProjector(SchoolRoom& room, float fraction = 1) {
     auto start = glm::normalize(SchoolRoom::projectorStartAim - SchoolRoom::projectorOrigin);
     auto target = glm::normalize(SchoolRoom::projectorPaper - SchoolRoom::projectorOrigin);
@@ -465,7 +468,7 @@ int runTests() {
         camera.feet = {4.7f, 0, 4.f};
         camera.face(SchoolRoom::alignmentFocus);
         camera.yaw += glm::radians(18.f);
-        tick(room, camera, {}, 120);
+        tickFor(room, camera, SchoolRoom::recognitionDuration + SchoolRoom::formationDuration);
         check(room.stairsReady(), "approximate projection and a nearby off-center view create walkable stairs");
     }
     for (const auto offset : {glm::vec2(6.f, 0), glm::vec2(0, 8.f), glm::vec2(3.5f, 3.5f)}) {
@@ -485,7 +488,7 @@ int runTests() {
         viewStudy(camera);
         camera.feet = position;
         camera.face(SchoolRoom::alignmentFocus);
-        tick(room, camera, {}, 120);
+        tickFor(room, camera, SchoolRoom::recognitionDuration + SchoolRoom::formationDuration);
         check(room.stairsReady(), "nearby views in front of and behind the reference point are accepted");
     }
     room.reset();
@@ -508,7 +511,7 @@ int runTests() {
     viewStudy(camera);
     camera.yaw += 1.0f;
     tick(room, camera, {}, 150);
-    check(!room.stairsReady(), "looking away does not materialize");
+    check(!room.stairsReady() && !room.materializing(), "looking away does not materialize");
     for (glm::vec3 position : {glm::vec3(4.8f, 0, 7.6f), glm::vec3(-4, 0, -1.3f), glm::vec3(0, 0, -1.3f),
                                glm::vec3(-4, 0, 6), glm::vec3(2.7f, 0, -1.5f)}) {
         room.reset();
@@ -517,7 +520,7 @@ int runTests() {
         camera.face(SchoolRoom::alignmentFocus);
         camera.grounded = true;
         tick(room, camera, {}, 150);
-        check(!room.stairsReady(), "misaligned classroom views do not trigger the study");
+        check(!room.stairsReady() && !room.materializing(), "misaligned classroom views do not trigger the study");
     }
     room.reset();
     positionProjector(room, camera);
@@ -551,7 +554,7 @@ int runTests() {
     tick(room, camera, {0, 0, true}, 12);
     check(room.stairFormation() > progress && !room.stairsReady(),
           "committed formation continues when looking away or jumping");
-    tick(room, camera, {}, 90);
+    tickFor(room, camera, SchoolRoom::formationDuration);
     check(room.stairsReady() && room.stairFormation() == 1 && !room.materializing(),
           "formation finishes with solid walkable stairs");
     tick(room, camera, {}, 240);
@@ -672,7 +675,7 @@ int runTests() {
     check(walkTo(room, camera, {3.8f, 2.4f}), "continue along the clear side aisle");
     check(walkTo(room, camera, {4.05f, 2.4f}), "approach the art study naturally");
     camera.face(SchoolRoom::alignmentFocus);
-    tick(room, camera, {}, 150);
+    tickFor(room, camera, SchoolRoom::recognitionDuration + SchoolRoom::formationDuration);
     check(room.stairsReady(), "discover and materialize with mouse look alone");
     check(walkTo(room, camera, {2.7f, 0.6f}), "walk onto the materialized study");
     check(walkTo(room, camera, {2.9f, -6.1f}) && !room.escaped(),
@@ -774,7 +777,7 @@ int runTests() {
     room.update(camera, {}, 1, false);
     check(room.corridor_.doorwayFormation() == frozenFormation, "pause freezes doorway materialization");
     camera.yaw += 1.0f;
-    tick(room, camera, {}, 240);
+    tickFor(room, camera, SchoolCorridor::formationDuration + SchoolCorridor::openingDuration);
     check(room.corridorDoorReady() && !room.cupboardOpen(),
           "the real door opens automatically even after looking away once materialization starts");
     check(walkTo(room, camera, {19.7f, -9.9f}), "approach the automatically opened door");
@@ -811,7 +814,7 @@ int runTests() {
           "the bridge HUD uses its own recognition threshold and alignment score");
     room.update(camera, {}, 1, false);
     check(!room.corridorBridgeReady(), "pause cannot form a bridge");
-    tick(room, camera, {}, 165);
+    tickFor(room, camera, .5f + SchoolCorridor::formationDuration);
     check(room.corridorBridgeReady(), "the assembled grating becomes a physical crossing");
     check(walkTo(room, camera, {SchoolCorridor::bridgeEye.x, -13.75f}) && camera.feet.y > 1.78f,
           "the formed grating supports walking above the lower level");
@@ -934,7 +937,7 @@ int runTests() {
                   elapsed >= expected && elapsed < expected + .08f,
               "materialization finishes before the sliding door starts opening");
         const float formedAt = elapsed;
-        while (!room.corridorDoorReady() && elapsed < 3) {
+        while (!room.corridorDoorReady() && elapsed < expected + SchoolCorridor::openingDuration + .1f) {
             room.update(camera, {}, 1.0f / rate);
             elapsed += 1.0f / rate;
         }
@@ -947,7 +950,7 @@ int runTests() {
         positionProjector(room, camera);
         viewStudy(camera);
         float elapsed = 0;
-        while (!room.stairsReady() && elapsed < 1.3f) {
+        while (!room.stairsReady() && elapsed < SchoolRoom::recognitionDuration + SchoolRoom::formationDuration + .1f) {
             room.update(camera, {}, 1.0f / rate);
             elapsed += 1.0f / rate;
         }
@@ -1149,7 +1152,8 @@ int runTests() {
     for (bool bridge : {false, true}) {
         prepareCorridor();
         if (bridge) {
-            tick(room, camera, {}, 300);
+            tickFor(room, camera, SchoolCorridor::recognitionDuration + SchoolCorridor::formationDuration +
+                                      SchoolCorridor::openingDuration);
             camera.feet = SchoolCorridor::bridgeEye - glm::vec3(0, 1.65f, 0);
             camera.resetMotion();
             camera.face(SchoolCorridor::bridgeFocus);

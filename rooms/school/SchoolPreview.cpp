@@ -56,8 +56,8 @@ void drawSchoolControls(school::Renderer& r, int width, int height) {
     r.text(L"프로젝터와 거울의 방향은 마우스로 돌립니다.",
            x + 22 * scale, y + 104 * scale, 21 * scale);
 }
-void settle(Application& state) {
-    for (int i = 0; i < 180; ++i)
+void settle(Application& state, float seconds = 1.5f) {
+    for (int i = 0; i < static_cast<int>(std::ceil(seconds * 120)); ++i)
         state.room.update(state.camera, {}, 1.0f / 120);
 }
 void stageMirrorCapture(Application& state, const std::string& stage) {
@@ -145,7 +145,7 @@ void stageCapture(Application& state, const std::string& stage) {
         aimProjector(state);
         state.camera.feet = school::SchoolRoom::alignmentEye - glm::vec3(0, 1.65f, 0);
         state.camera.face(school::SchoolRoom::alignmentFocus);
-        settle(state);
+        settle(state, school::SchoolRoom::recognitionDuration + school::SchoolRoom::formationDuration + .05f);
         if (stage == "corridor-connection") {
             state.camera.feet = {2.9f, 1.8f, -6.1f};
             state.camera.face({3.1f, 3.4f, -9.8f});
@@ -195,17 +195,18 @@ void stageCapture(Application& state, const std::string& stage) {
                     state.camera.feet.z += .45f;
                 state.camera.face(school::SchoolCorridor::illusionFocus);
                 if (stage == "corridor-illusion-forming") {
-                    for (int frame = 0; frame < 105; ++frame)
-                        state.room.update(state.camera, {}, 1.0f / 120);
+                    settle(state, school::SchoolCorridor::recognitionDuration + school::SchoolCorridor::formationDuration * .5f);
                 } else if (stage == "corridor-illusion-formed") {
-                    for (int frame = 0; frame < 180 && state.room.corridorDoorFormation() < 1; ++frame)
+                    const int frames = static_cast<int>(std::ceil((school::SchoolCorridor::recognitionDuration +
+                                                                  school::SchoolCorridor::formationDuration + .05f) * 120));
+                    for (int frame = 0; frame < frames && state.room.corridorDoorFormation() < 1; ++frame)
                         state.room.update(state.camera, {}, 1.0f / 120);
                     if (state.room.corridorDoorFormation() < 1)
                         throw std::runtime_error("Capture could not form the sliding door");
                 } else if (stage != "corridor-illusion-wrong" && stage != "corridor-illusion-partial" &&
                            stage != "corridor-illusion-aligned") {
-                    settle(state);
-                    settle(state);
+                    settle(state, school::SchoolCorridor::recognitionDuration + school::SchoolCorridor::formationDuration +
+                                      school::SchoolCorridor::openingDuration + .05f);
                     if (!state.room.corridorDoorReady())
                         throw std::runtime_error("Capture could not wait for the sliding door to open");
                     if (stage == "corridor-illusion-through") {
@@ -218,13 +219,12 @@ void stageCapture(Application& state, const std::string& stage) {
                             state.camera.feet.x -= 1.20f;
                         state.camera.face(school::SchoolCorridor::bridgeFocus);
                         if (stage == "corridor-bridge-forming") {
-                            for (int frame = 0; frame < 104; ++frame)
-                                state.room.update(state.camera, {}, 1.0f / 120);
+                            settle(state, .5f + school::SchoolCorridor::formationDuration * .5f);
                             state.camera.feet.x -= .5f;
                             state.camera.face(school::SchoolCorridor::bridgeFocus);
                         }
                         if (stage == "corridor-bridge-complete" || stage.rfind("corridor-stairwell", 0) == 0) {
-                            settle(state);
+                            settle(state, .5f + school::SchoolCorridor::formationDuration + .05f);
                             if (!state.room.corridorBridgeReady())
                                 throw std::runtime_error("Capture could not form the landing grating");
                         }
@@ -327,7 +327,7 @@ void stageCapture(Application& state, const std::string& stage) {
         if (!state.room.projectorAligned())
             throw std::runtime_error("Capture did not accept the approximate projection");
         if (stage == "approximate-complete") {
-            settle(state);
+            settle(state, school::SchoolRoom::recognitionDuration + school::SchoolRoom::formationDuration + .05f);
             if (!state.room.stairsReady())
                 throw std::runtime_error("Capture did not create stairs from the approximate view");
         }
@@ -348,7 +348,7 @@ void stageCapture(Application& state, const std::string& stage) {
             for (int i = 0; i < frames; ++i)
                 state.room.update(state.camera, {}, 1.0f / 120);
         } else if (stage != "aligned")
-            settle(state);
+            settle(state, school::SchoolRoom::recognitionDuration + school::SchoolRoom::formationDuration + .05f);
         if (stage == "overview") {
             state.camera.feet = {5.2f, 0, 7.5f};
             state.camera.face({-0.3f, 1.6f, -2.8f});

@@ -50,7 +50,7 @@ class SchoolCorridor {
     static constexpr glm::vec3 illusionEye{15.30f, 3.45f, -10.70f};
     static constexpr glm::vec3 illusionFocus{20.45f, 3.0f, -9.90f};
     static constexpr float recognitionDuration = .55f;
-    static constexpr float formationDuration = .75f;
+    static constexpr float formationDuration = 1.8f;
     static constexpr float openingDuration = .9f;
     static constexpr glm::vec3 bridgeEye{23.95f, 3.45f, -10.45f};
     static constexpr glm::vec3 bridgeFocus{23.95f, 1.8f, -13.825f};

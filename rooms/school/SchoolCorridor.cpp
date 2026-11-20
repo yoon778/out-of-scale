@@ -625,7 +625,7 @@ void SchoolCorridor::updateBridge(const Camera& camera, float dt) {
         bridgeForming_ = score >= bridgeAlignmentThreshold && bridgeHeld_ >= .5f;
         return;
     }
-    bridgeFormation_ = std::min(1.0f, bridgeFormation_ + dt / .72f);
+    bridgeFormation_ = std::min(1.0f, bridgeFormation_ + dt / formationDuration);
 }
 void SchoolCorridor::drawBridge(Renderer& r) const {
     const float progress = glm::smoothstep(0.f, 1.f, bridgeFormation_);
