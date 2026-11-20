@@ -99,7 +99,9 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <ClCompile Include="..\..\rooms\test\TestRoom.cpp" />
-    <ClCompile Include="..\..\rooms\home\HomeRoom.cpp" />
+    <ClCompile Include="..\..\rooms\home\HomeRoom.cpp">
+      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="..\..\rooms\military\MilitaryRoom.cpp" />
     <ClCompile Include="..\..\rooms\military\ParadeGround.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
@@ -123,6 +125,7 @@
     <ClInclude Include="src\core\PauseMenu.h" />
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\home\HomeRoom.h" />
+    <ClInclude Include="..\..\rooms\home\HomeGeometry.inc" />
     <ClInclude Include="..\..\rooms\military\MilitaryRoom.h" />
     <ClInclude Include="..\..\rooms\military\MilitaryGeometry.inc" />
     <ClInclude Include="..\..\rooms\military\ParadeGround.h" />

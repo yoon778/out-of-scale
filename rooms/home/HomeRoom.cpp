@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <random>
 #include <utility>
 #include <vector>
@@ -26,21 +27,42 @@ constexpr float shelfParkedOffset = -2.50f;
 constexpr float reach = 2.8f;
 constexpr float fittingReach = 10.0f;
 constexpr float miniatureScale = 0.16f;
+constexpr float roomMiniatureScale = 0.10f;
+constexpr glm::vec3 roomMiniatureOrigin{1.99f, 1.04f, 0.77f};
 constexpr float debrisDuration = 1.4f;
 constexpr float projectileSpeed = 12.0f;
 constexpr float impactDuration = 0.20f;
-constexpr glm::vec3 plaster{0.52f, 0.59f, 0.62f};
+constexpr glm::vec3 plaster{0.856f, 0.837f, 0.777f};
 
 constexpr Box desk{{2.90f, 0.50f, 0.80f}, {3.30f, 1.00f, 1.40f}};
 constexpr Box shelf{{0.0f, 1.30f, -5.95f}, {2.05f, 2.60f, 0.60f}};
-constexpr Box miniShelf{{2.04f, 1.22f, 0.56f}, {0.42f, 0.44f, 0.24f}};
+constexpr Box miniShelf{roomMiniatureOrigin + shelf.center * roomMiniatureScale,
+                        shelf.size * roomMiniatureScale + glm::vec3{0.05f, 0.04f, 0.05f}};
 constexpr Box miniRpg{{3.16f, 1.21f, 0.59f}, {0.58f, 0.27f, 0.24f}};
 constexpr Box miniDoor{{4.05f, 1.23f, 0.56f}, {0.31f, 0.48f, 0.18f}};
 constexpr Box wallPanel{{0.0f, 1.30f, wallZ}, {1.80f, 2.60f, 0.31f}};
 constexpr Box door{{0.0f, 1.30f, wallZ}, {1.76f, 2.60f, 0.105f}};
 constexpr Box openDoor{{-0.85f, 1.30f, wallZ + 0.86f}, {0.105f, 2.60f, 1.76f}};
 constexpr glm::vec3 wood{0.53f, 0.32f, 0.20f};
-constexpr glm::vec3 accent{0.78f, 0.60f, 0.30f};
+
+constexpr std::array staticInterior{
+    desk,
+    Box{{-3.75f, 0.38f, 1.80f}, {2.35f, 0.76f, 3.65f}},
+    Box{{-4.85f, 0.37f, -0.55f}, {0.85f, 0.74f, 0.78f}},
+    Box{{4.90f, 0.71f, -3.25f}, {1.20f, 1.42f, 1.50f}},
+    Box{{-3.65f, 0.48f, 4.65f}, {1.25f, 0.96f, 1.05f}},
+};
+
+struct HomeMeshRange {
+    GLint first;
+    GLsizei count;
+};
+
+enum class HomeMesh { Interior, Shell, IntactWall, BrokenWall, MiniWalls, Shelf, Door, Rpg, Rack };
+
+#include "HomeGeometry.inc"
+
+static_assert(std::size(homeMeshes) == 9);
 
 struct WallShard {
     glm::vec3 center;
@@ -141,37 +163,26 @@ bool aimsAt(const glm::vec3& eye, const glm::vec3& direction, const Box& box, fl
     return distance && *distance <= maxDistance;
 }
 
-void drawShelf(const BoxRenderer& renderer, const glm::vec3& center, float scale) {
-    renderer.drawBox(center - glm::vec3{0.0f, 0.0f, 0.25f} * scale,
-                     glm::vec3{2.05f, 2.60f, 0.10f} * scale, wood * 0.67f);
-    for (const float side : {-1.0f, 1.0f}) {
-        renderer.drawBox(center + glm::vec3{side * 0.96f, 0.0f, 0.0f} * scale,
-                         glm::vec3{0.13f, 2.60f, 0.60f} * scale, wood);
-    }
-    for (const float y : {-1.25f, -0.63f, 0.0f, 0.63f, 1.25f}) {
-        renderer.drawBox(center + glm::vec3{0.0f, y, 0.0f} * scale,
-                         glm::vec3{1.83f, 0.10f, 0.60f} * scale, wood);
-    }
-    renderer.drawBox(center + glm::vec3{-0.37f, 0.86f, 0.08f} * scale,
-                     glm::vec3{0.35f, 0.33f, 0.30f} * scale, {0.34f, 0.54f, 0.60f});
-    renderer.drawBox(center + glm::vec3{0.38f, 0.19f, 0.02f} * scale,
-                     glm::vec3{0.46f, 0.31f, 0.38f} * scale, accent);
+void drawHomeMesh(const BoxRenderer& renderer, HomeMesh mesh, const glm::mat4& model,
+                  const glm::vec3& tint = glm::vec3{1.0f}) {
+    const auto& range = homeMeshes[static_cast<std::size_t>(mesh)];
+    const auto first = static_cast<GLint>(fractureMesh().vertices.size()) + range.first;
+    renderer.drawMovableMesh(first, range.count, model, tint);
 }
 
 void drawRpg(const BoxRenderer& renderer, const glm::vec3& center, float scale) {
-    renderer.drawBox(center, glm::vec3{0.47f, 0.085f, 0.11f} * scale, {0.29f, 0.39f, 0.23f});
-    renderer.drawBox(center + glm::vec3{-0.21f, 0.0f, 0.0f} * scale,
-                     glm::vec3{0.15f, 0.13f, 0.15f} * scale, {0.19f, 0.26f, 0.14f});
-    renderer.drawBox(center + glm::vec3{0.08f, -0.064f, 0.0f} * scale,
-                     glm::vec3{0.075f, 0.10f, 0.08f} * scale, wood);
+    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, center), glm::vec3{scale});
+    drawHomeMesh(renderer, HomeMesh::Rpg, model);
 }
 
-void drawDoor(const BoxRenderer& renderer, const Box& box, const glm::vec3& tint, bool opened = false) {
-    renderer.drawBox(box.center, box.size, tint);
-    const glm::vec3 knob = opened ? glm::vec3{0.08f, -0.12f, 0.6f}
-                                 : glm::vec3{0.61f, -0.12f, 0.075f};
-    const float scale = box.size.y / door.size.y;
-    renderer.drawBox(box.center + knob * scale, glm::vec3{0.11f} * scale, accent);
+void drawDoor(const BoxRenderer& renderer, const Box& box, const glm::vec3& tint,
+              bool opened = false, const glm::mat4& parent = glm::mat4{1.0f}) {
+    auto model = glm::translate(parent, box.center);
+    if (opened) {
+        model = glm::rotate(model, glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
+    }
+    model = glm::scale(model, glm::vec3{box.size.y / door.size.y});
+    drawHomeMesh(renderer, HomeMesh::Door, model, tint);
 }
 
 glm::vec3 carrySide(const glm::vec3& direction) {
@@ -181,15 +192,22 @@ glm::vec3 carrySide(const glm::vec3& direction) {
 }  // namespace
 
 bool HomeRoom::initialize() {
-    return renderer_.initialize({}, fractureMesh().vertices);
+    std::vector<MeshVertex> movable = fractureMesh().vertices;
+    movable.insert(movable.end(), std::begin(homeGeometry), std::end(homeGeometry));
+    return renderer_.initialize({}, movable);
 }
 
 float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const {
-    for (const Box& obstacle : {desk, shelfAt(shelfOffset_)}) {
+    for (const Box& obstacle : staticInterior) {
         const auto distance = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * 0.5f);
         if (distance) {
             maxDistance = std::min(maxDistance, *distance);
         }
+    }
+    const auto shelfHit = perspective::rayBoxDistance(
+        eye, direction, shelfAt(shelfOffset_).center, shelf.size * 0.5f);
+    if (shelfHit) {
+        maxDistance = std::min(maxDistance, *shelfHit);
     }
     return maxDistance;
 }
@@ -255,7 +273,9 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
         }
     };
     hit(wallPanel, true);
-    hit(desk);
+    for (const auto& obstacle : staticInterior) {
+        hit(obstacle);
+    }
     hit(shelfAt(shelfOffset_));
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}});
     hit({{0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}});
@@ -380,8 +400,13 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye) {
 glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired) {
     const bool open = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
     const auto blocked = [&](const glm::vec3& position) {
-        if (overlapsPlayer(position, desk) || overlapsPlayer(position, shelfAt(shelfOffset_))) {
+        if (overlapsPlayer(position, shelfAt(shelfOffset_))) {
             return true;
+        }
+        for (const auto& obstacle : staticInterior) {
+            if (overlapsPlayer(position, obstacle)) {
+                return true;
+            }
         }
         if (position.z <= wallZ + wallPanel.size.z * 0.5f + playerRadius) {
             return !open || std::abs(position.x) + playerRadius >= doorwayHalfWidth ||
@@ -409,80 +434,57 @@ HomeRoom::ExitState HomeRoom::exitState() const {
     return exitState_;
 }
 
-void HomeRoom::drawDesk() const {
-    const glm::vec3 deskTop = desk.center + glm::vec3{0.0f, 0.45f, 0.0f};
-    renderer_.drawBox(deskTop, {desk.size.x, 0.10f, desk.size.z}, wood);
-    for (const float x : {-1.48f, 1.48f}) {
-        renderer_.drawBox(desk.center + glm::vec3{x, -0.05f, 0.0f}, {0.16f, 0.90f, 1.15f}, wood * 0.75f);
-    }
+void HomeRoom::drawMiniature() const {
+    renderer_.drawBox({roomMiniatureOrigin.x, 1.0125f, roomMiniatureOrigin.z},
+                      {1.24f, 0.055f, 1.40f}, wood);
+    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin),
+                                  glm::vec3{roomMiniatureScale});
+    drawRoom(model, true);
 
-    renderer_.drawBox({1.99f, 1.035f, 0.68f}, {0.65f, 0.07f, 0.59f}, {0.33f, 0.48f, 0.57f});
-    renderer_.drawBox({1.99f, 1.25f, 0.39f}, {0.65f, 0.43f, 0.05f}, {0.33f, 0.48f, 0.57f});
-    const float shelfMiniOffset = shelfOffset_ * 0.068f;
-    drawShelf(renderer_, miniShelf.center + glm::vec3{shelfMiniOffset, 0.0f, 0.0f}, 0.15f);
-
-    renderer_.drawBox({3.15f, 1.035f, 0.67f}, {0.81f, 0.07f, 0.63f}, {0.38f, 0.46f, 0.29f});
-    renderer_.drawBox({3.15f, 1.27f, 0.39f}, {0.81f, 0.40f, 0.055f}, {0.34f, 0.39f, 0.26f});
-    renderer_.drawBox({3.16f, 1.10f, 0.57f}, {0.65f, 0.14f, 0.23f}, {0.28f, 0.33f, 0.26f});
+    drawHomeMesh(renderer_, HomeMesh::Rack,
+                 glm::translate(glm::mat4{1.0f}, {3.15f, 1.20f, 0.67f}));
     if ((exitState_ == ExitState::Explore || exitState_ == ExitState::WallRevealed) && held_ != HeldItem::Rpg) {
         drawRpg(renderer_, miniRpg.center, 1.0f);
     }
 
     renderer_.drawBox({4.05f, 1.025f, 0.57f}, {0.52f, 0.05f, 0.45f}, {0.56f, 0.48f, 0.35f});
     if (exitState_ <= ExitState::WallBroken && held_ != HeldItem::Door) {
-        drawDoor(renderer_, {miniDoor.center, door.size * miniatureScale}, wood);
+        drawDoor(renderer_, {miniDoor.center, door.size * miniatureScale}, glm::vec3{1.0f});
     }
 }
 
-void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
-    renderer_.begin(viewProjection);
-    const glm::vec3 floor{0.41f, 0.37f, 0.35f};
-    renderer_.drawBox({0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}, floor);
-    renderer_.drawBox({0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}, {0.70f, 0.71f, 0.68f});
-    renderer_.drawBox({0.0f, 1.60f, 6.51f}, {11.7f, 3.20f, 0.34f}, plaster);
+void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
+    drawHomeMesh(renderer_, HomeMesh::Interior, model);
+    drawHomeMesh(renderer_, miniature ? HomeMesh::MiniWalls : HomeMesh::Shell, model);
     const bool wallBroken = exitState_ >= ExitState::WallBroken;
-    if (!wallBroken) {
-        renderer_.drawBox({0.0f, 1.60f, wallZ}, {11.7f, 3.20f, 0.31f}, plaster);
-    }
-    for (const float side : {-1.0f, 1.0f}) {
-        renderer_.drawBox({side * 5.87f, 1.60f, 0.0f}, {0.34f, 3.20f, 13.1f}, plaster);
-        renderer_.drawBox({side * 1.02f, 1.33f, -7.55f}, {0.23f, 2.66f, 2.06f}, {0.48f, 0.43f, 0.35f});
-        if (wallBroken) {
-            renderer_.drawBox({side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}, plaster);
-            renderer_.drawBox({side * 0.88f, 1.30f, wallZ + 0.17f}, {0.08f, 2.60f, 0.13f}, wood);
-        }
-        if (exitState_ == ExitState::WallBroken) {
-            renderer_.drawBox({side * 0.86f, 1.30f, wallZ + 0.245f}, {0.032f, 2.47f, 0.025f}, {0.41f, 0.64f, 0.56f});
-        }
-    }
-    if (wallBroken) {
-        renderer_.drawBox({0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}, plaster);
-        renderer_.drawBox({0.0f, 2.61f, wallZ + 0.17f}, {1.83f, 0.10f, 0.13f}, wood);
-    }
+    drawHomeMesh(renderer_, wallBroken ? HomeMesh::BrokenWall : HomeMesh::IntactWall, model);
+    const auto shelfModel = glm::translate(model, shelfAt(shelfOffset_).center);
+    drawHomeMesh(renderer_, HomeMesh::Shelf, shelfModel);
     const bool exitOpen = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
-    const glm::vec3 corridorFloor = exitOpen ? accent * 0.75f : floor * 0.62f;
-    const glm::vec3 corridorEnd = exitOpen ? glm::vec3{0.95f, 0.80f, 0.48f} : glm::vec3{0.16f, 0.20f, 0.20f};
-    renderer_.drawBox({0.0f, -0.09f, -7.52f}, {1.90f, 0.18f, 2.1f}, corridorFloor);
-    renderer_.drawBox({0.0f, 2.70f, -7.52f}, {1.90f, 0.18f, 2.1f}, corridorFloor);
-    renderer_.drawBox({0.0f, 1.35f, -8.56f}, {1.88f, 2.70f, 0.24f}, corridorEnd);
-
-    drawDesk();
-    drawShelf(renderer_, shelfAt(shelfOffset_).center, 1.0f);
     if (exitState_ == ExitState::DoorPlaced) {
-        drawDoor(renderer_, door, wood);
+        drawDoor(renderer_, door, glm::vec3{1.0f}, false, model);
     } else if (exitOpen) {
-        drawDoor(renderer_, openDoor, wood, true);
+        drawDoor(renderer_, openDoor, glm::vec3{1.0f}, true, model);
+        const auto center = glm::vec3{model * glm::vec4{0.0f, 1.35f, -8.38f, 1.0f}};
+        const float scale = miniature ? roomMiniatureScale : 1.0f;
+        renderer_.drawBox(center, glm::vec3{1.87f, 2.65f, 0.02f} * scale, {0.95f, 0.80f, 0.48f});
     }
 
     if (debrisTime_ > 0.0f) {
         const auto& shapes = fractureMesh().shards;
         for (std::size_t index = 0; index < fragments_.size(); ++index) {
             const auto& piece = fragments_[index];
-            auto model = glm::translate(glm::mat4{1.0f}, piece.center);
-            model = glm::rotate(model, piece.angle, piece.rotationAxis);
-            renderer_.drawMovableMesh(shapes[index].first, shapes[index].count, model, glm::vec3{1.0f});
+            auto fragmentModel = glm::translate(model, piece.center);
+            fragmentModel = glm::rotate(fragmentModel, piece.angle, piece.rotationAxis);
+            renderer_.drawMovableMesh(shapes[index].first, shapes[index].count, fragmentModel, glm::vec3{1.0f});
         }
     }
+}
+
+void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
+    renderer_.begin(viewProjection);
+    drawRoom(glm::mat4{1.0f}, false);
+    drawMiniature();
     if (projectile_) {
         renderer_.drawBox(projectile_->center, {0.10f, 0.10f, 0.10f}, {1.0f, 0.89f, 0.55f});
         const glm::vec3 side = carrySide(projectile_->direction);
@@ -520,11 +522,11 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
         }
     } else if (held_ == HeldItem::Door) {
         if (canFitDoor(eye, direction)) {
-            drawDoor(renderer_, {door.center - direction * 0.04f, door.size}, {0.42f, 0.74f, 0.51f});
+            drawDoor(renderer_, {door.center - direction * 0.04f, door.size}, {0.68f, 1.0f, 0.75f});
         } else {
             const glm::vec3 center = eye + direction * 1.15f + carrySide(direction) * 0.32f - glm::vec3{0.0f, 0.23f, 0.0f};
             const float scale = std::clamp(doorRatio_ * doorWheelScale_ * 1.15f, 0.08f, 0.32f);
-            drawDoor(renderer_, {center, door.size * scale}, wood);
+            drawDoor(renderer_, {center, door.size * scale}, glm::vec3{1.0f});
         }
     }
 }

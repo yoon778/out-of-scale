@@ -51,7 +51,8 @@ private:
 
     float visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const;
     bool canFitDoor(const glm::vec3& eye, const glm::vec3& direction) const;
-    void drawDesk() const;
+    void drawMiniature() const;
+    void drawRoom(const glm::mat4& model, bool miniature) const;
     void impact(const Projectile& projectile);
 
     BoxRenderer renderer_;
