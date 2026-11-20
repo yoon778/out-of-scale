@@ -561,7 +561,7 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
         });
     };
 
-    // Start with the aimed surface. Search backward along the ray if the growing book clips a solid.
+    // Keep the puzzle's receiving stand, then place the growing body along the sight ray.
     constexpr float maxAimReach = 12.f;
     const float range = std::min(maxAimReach, maxNotebookScale / notebookRatio_);
     float depth = maxAimReach;
@@ -583,40 +583,49 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
         if (fits(pose))
             return pose;
     }
-    if (depth > range) {
-        depth = range;
-        aimedSurface = nullptr;
-    }
-    if (aimedSurface) {
+    if (aimedSurface && direction.y < 0) {
         const auto anchor = eye + direction * depth;
-        if (direction.y < 0 && std::abs(anchor.y - aimedSurface->max.y) < .008f) {
-            // A small adjustment on the same surface keeps the book clear of things like chair backs.
-            for (const auto offset : {glm::vec3(0), glm::vec3(0, 0, -.16f), glm::vec3(0, 0, .16f),
-                                      glm::vec3(-.16f, 0, 0), glm::vec3(.16f, 0, 0)}) {
-                const auto point = anchor + offset;
-                if (point.x < aimedSurface->min.x || point.x > aimedSurface->max.x ||
-                    point.z < aimedSurface->min.z || point.z > aimedSurface->max.z)
-                    continue;
-                const float scale =
-                    perspective::scaleAtSupport(eye, direction, point, notebookRatio_, notebookHalfHeight);
-                const perspective::Pose pose{point + glm::vec3(0, notebookHalfHeight * scale, 0), scale};
-                if (fits(pose))
-                    return pose;
-            }
+        if (std::abs(anchor.y - aimedSurface->max.y) < .008f) {
+            // Preserve the apparent size and center even when setting the book on a desk.
+            const auto top = perspective::onFloor(eye, direction, notebookRatio_, notebookHalfHeight,
+                                                  aimedSurface->max.y);
+            if (top && glm::dot(top->center - eye, direction) <= range && fits(*top))
+                return top;
         }
-        depth -= .023f;
     }
-    if (const auto floor = perspective::onFloor(eye, direction, notebookRatio_, notebookHalfHeight)) {
-        const float floorDepth = glm::dot(floor->center - eye, direction);
-        if (floorDepth <= depth && fits(*floor))
-            return floor;
-        depth = std::min(depth, floorDepth);
+    // Like the military carry solver, stop the growing body at its first contact instead of
+    // shrinking its depth in 16% steps. The horizontal envelope covers every mirror-facing yaw.
+    struct DepthRange {
+        float first, last;
+        bool below(float origin, float slope, float limit) {
+            if (slope > 0)
+                last = std::min(last, (limit - origin) / slope);
+            else if (slope < 0)
+                first = std::max(first, (limit - origin) / slope);
+            else if (origin > limit)
+                return false;
+            return first <= last;
+        }
+    };
+    const float horizontalHalf = glm::length(glm::vec2(notebookSize.x, notebookSize.z)) * .5f;
+    const glm::vec3 half{horizontalHalf, notebookHalfHeight, horizontalHalf};
+    const auto lowerSlope = direction - half * notebookRatio_;
+    const auto upperSlope = direction + half * notebookRatio_;
+    constexpr float clearance = .001f;
+    DepthRange free{0, range};
+    free.below(-eye.y, -lowerSlope.y, -clearance);
+    for (const auto& solid : solids) {
+        DepthRange contact{0, free.last};
+        bool hits = true;
+        for (int axis = 0; axis < 3 && hits; ++axis)
+            hits = contact.below(eye[axis], lowerSlope[axis], solid.max[axis] + clearance) &&
+                   contact.below(-eye[axis], -upperSlope[axis], -solid.min[axis] + clearance);
+        if (hits)
+            free.last = std::min(free.last, contact.first);
     }
-    for (int attempt = 0; attempt < 14 && depth * notebookRatio_ >= minNotebookScale; ++attempt, depth *= .84f) {
-        const perspective::Pose pose{eye + direction * depth, notebookRatio_ * depth};
-        if (fits(pose))
-            return pose;
-    }
+    const perspective::Pose aimed{eye + direction * free.last, notebookRatio_ * free.last};
+    if (free.last >= free.first && fits(aimed))
+        return aimed;
 
     // Even a wall or an upward glance leaves the player a nearby way to put the notebook down.
     const glm::vec3 forward{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
