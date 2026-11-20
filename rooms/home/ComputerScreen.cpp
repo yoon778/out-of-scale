@@ -180,7 +180,8 @@ ComputerScreen::~ComputerScreen() {
     if (vertexArray_) glDeleteVertexArrays(1, &vertexArray_);
     if (guide_) glDeleteTextures(1, &guide_);
     if (holdingGuide_) glDeleteTextures(1, &holdingGuide_);
-    for (const GLuint texture : {cubeGuide_, keyGuide_, rejectedGuide_, outsideGuide_}) {
+    for (const GLuint texture : {cubeGuide_, keyGuide_, rejectedGuide_, outsideGuide_,
+                                 completeKeyGuide_, socketGuide_, miniatureGuide_}) {
         if (texture) glDeleteTextures(1, &texture);
     }
 }
@@ -244,7 +245,11 @@ void main() { pixel = texture(image, vec2(uv.x, flip ? 1.0-uv.y : uv.y)); }
     keyGuide_ = guideTexture(L"문제 2 | Q/R 회전으로 흰 열쇠조각과 겹치기    E 확인    Tab 복귀");
     rejectedGuide_ = guideTexture(L"아직 흰 틀과 다름 | 위치·크기 또는 회전을 조정하고 E");
     outsideGuide_ = guideTexture(L"선택한 물건은 방에 있음 | 다른 번호 선택 · 들고 와 모니터에 E 반환");
-    return complete && guide_ && holdingGuide_ && cubeGuide_ && keyGuide_ && rejectedGuide_ && outsideGuide_;
+    completeKeyGuide_ = guideTexture(L"완성된 열쇠 | E 놓기 · 열쇠 구멍을 보고 E 끼우기");
+    socketGuide_ = guideTexture(L"열쇠 구멍 | 장롱을 보고 E 붙이기 · 다른 곳에서 E 놓기");
+    miniatureGuide_ = guideTexture(L"미니어처 | E 놓기 · 휠 회전 · 안의 물건은 내려놓은 뒤 조작");
+    return complete && guide_ && holdingGuide_ && cubeGuide_ && keyGuide_ && rejectedGuide_ &&
+           outsideGuide_ && completeKeyGuide_ && socketGuide_ && miniatureGuide_;
 }
 
 void ComputerScreen::input(float horizontal, float vertical, float turn, float elapsed) {
@@ -365,6 +370,20 @@ void ComputerScreen::drawKeyPiece(const glm::mat4& viewProjection, const glm::ma
     part({.55f, -.1f, 0}, {.13f, .2f, .12f});
 }
 
+void ComputerScreen::drawCompleteKey(const glm::mat4& viewProjection, const glm::mat4& model) const {
+    const GlState state;
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    renderer_.begin(viewProjection);
+    const auto part = [&](GLint first, const glm::vec3& partCenter, const glm::vec3& size) {
+        renderer_.drawMovableMesh(first, 36, glm::scale(glm::translate(model, partCenter), size),
+                                 glm::vec3{1.0f});
+    };
+    part(0, {-.70f, 0, 0}, {.60f, .60f, .24f});
+    part(36, {.25f, .10f, 0}, {1.30f, .20f, .12f});
+    part(36, {.50f, -.10f, 0}, {.13f, .20f, .12f});
+    part(36, {.80f, -.10f, 0}, {.13f, .20f, .12f});
+}
+
 void ComputerScreen::renderTexture() const {
     if (!dirty_) return;
     const GlState state;
@@ -432,6 +451,29 @@ void ComputerScreen::draw(const glm::mat4& viewProjection) const {
 
 void ComputerScreen::drawGuide(bool active, bool holding, bool holdingKey) const {
     if (!active && !holding && !holdingKey) return;
+    GLuint label = holdingGuide_;
+    if (active) {
+        const bool available = selected_ == Item::Cube ? visible_ : keyVisible_;
+        if (!available) label = outsideGuide_;
+        else if (rejected_) label = rejectedGuide_;
+        else if (selected_ == Item::Cube && !cubeSolved_) label = cubeGuide_;
+        else if (selected_ == Item::Key && !keySolved_) label = keyGuide_;
+        else label = guide_;
+    }
+    drawLabel(label);
+}
+
+void ComputerScreen::drawCarryGuide(CarryHint hint) const {
+    switch (hint) {
+    case CarryHint::Common: drawLabel(holdingGuide_); break;
+    case CarryHint::CompleteKey: drawLabel(completeKeyGuide_); break;
+    case CarryHint::Socket: drawLabel(socketGuide_); break;
+    case CarryHint::Miniature: drawLabel(miniatureGuide_); break;
+    case CarryHint::None: break;
+    }
+}
+
+void ComputerScreen::drawLabel(GLuint texture) const {
     const GlState state;
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
@@ -443,14 +485,5 @@ void ComputerScreen::drawGuide(bool active, bool holding, bool holdingKey) const
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_SCISSOR_TEST);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    GLuint label = holdingGuide_;
-    if (active) {
-        const bool available = selected_ == Item::Cube ? visible_ : keyVisible_;
-        if (!available) label = outsideGuide_;
-        else if (rejected_) label = rejectedGuide_;
-        else if (selected_ == Item::Cube && !cubeSolved_) label = cubeGuide_;
-        else if (selected_ == Item::Key && !keySolved_) label = keyGuide_;
-        else label = guide_;
-    }
-    drawTexture(label, model, true);
+    drawTexture(texture, model, true);
 }

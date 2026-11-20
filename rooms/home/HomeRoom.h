@@ -31,7 +31,15 @@ public:
     static constexpr glm::vec3 computerDirection{1.0f, 0.0f, 0.0f};
 
 private:
-    enum class HeldItem { None, Rpg, Door, Cube, Key };
+    enum class HeldItem { None, Rpg, Door, Cube, Key, Portable };
+
+    struct PortableObject {
+        glm::vec3 center{0.0f};
+        float yaw = 0.0f;
+        float verticalSpeed = 0.0f;
+        bool active = true;
+        bool loose = false;
+    };
 
     struct KeyPiece {
         glm::vec3 center{0.0f};
@@ -61,6 +69,7 @@ private:
         bool breaksWall;
         float traveled = 0.0f;
         bool miniature = false;
+        glm::vec3 sourceImpact{0.0f};
     };
 
     struct Particle {
@@ -87,17 +96,41 @@ private:
     bool keyFits(const KeyPiece& key, const glm::vec3& eye) const;
     std::optional<KeyPiece> carriedKey(const glm::vec3& eye, const glm::vec3& direction) const;
     void updateKey(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
-    void updateAlignment(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
+    bool canFuseKey(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool portableFits(int index, const PortableObject& object, const glm::vec3& eye) const;
+    std::optional<PortableObject> carriedPortable(int index, const glm::vec3& eye, const glm::vec3& direction) const;
+    void updatePortables(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
+    bool grabPortable(const glm::vec3& eye, const glm::vec3& direction);
+    void tryOpenCabinet(const glm::vec3& eye);
+    glm::mat4 portableModel(int index) const;
+    glm::mat4 homeModel() const;
+    float homeRay(const glm::vec3& eye, const glm::vec3& direction,
+                  const glm::vec3& center, const glm::vec3& size, float limit) const;
+    float portableVisibility(const glm::vec3& eye, const glm::vec3& direction, float limit, int ignore = -1) const;
+    bool overlapsPortable(const glm::vec3& center, const glm::vec3& size, float yaw, int ignore = -1) const;
 
     BoxRenderer renderer_;
     ComputerScreen computer_;
     std::optional<ComputerCube> computerCube_;
     std::optional<KeyPiece> keyPiece_;
+    std::array<PortableObject, 6> portable_{{
+        {{1.65f,1.085f,1.15f},0.0f},
+        {{0.0f,0.0f,0.0f},0.0f,0.0f,false},
+        {{2.85f,1.52f,5.65f},0.0f},
+        {{2.85f,.62f,5.65f},0.0f},
+        {{4.65f,.62f,5.65f},0.0f},
+        {{4.65f,1.52f,5.65f},1.5707963f},
+    }};
+    int heldPortable_ = -1;
+    bool socketFlat_ = true;
+    bool socketInstalled_ = false;
+    bool completeKeyInserted_ = false;
+    glm::vec3 lastEye_{0.0f,1.65f,5.0f};
+    glm::vec3 lastDirection_{0.0f,0.0f,-1.0f};
     bool computerActive_ = false;
     bool standingOnCube_ = false;
     bool cabinetUnlocked_ = false;
     bool cabinetOpen_ = false;
-    float alignmentTime_ = 0.0f;
     ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
     float shelfOffset_ = 0.0f;

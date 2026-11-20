@@ -6,6 +6,7 @@ class ComputerScreen {
 public:
     enum class Item { Cube, Key };
     enum class Action { None, TakeCube, TakeKey };
+    enum class CarryHint { None, Common, CompleteKey, Socket, Miniature };
     ComputerScreen() = default;
     ComputerScreen(const ComputerScreen&) = delete;
     ComputerScreen& operator=(const ComputerScreen&) = delete;
@@ -29,7 +30,9 @@ public:
     void draw(const glm::mat4& viewProjection) const;
     void drawCube(const glm::mat4& viewProjection, const glm::mat4& model) const;
     void drawKeyPiece(const glm::mat4& viewProjection, const glm::mat4& model) const;
+    void drawCompleteKey(const glm::mat4& viewProjection, const glm::mat4& model) const;
     void drawGuide(bool active, bool holding, bool holdingKey = false) const;
+    void drawCarryGuide(CarryHint hint) const;
 
     static constexpr glm::vec3 center{5.505f, 1.85f, 3.0f};
 
@@ -37,6 +40,7 @@ private:
     void clampPosition();
     void renderTexture() const;
     void drawTexture(GLuint texture, const glm::mat4& transform, bool flip) const;
+    void drawLabel(GLuint texture) const;
 
     BoxRenderer renderer_;
     GLuint framebuffer_ = 0;
@@ -50,6 +54,9 @@ private:
     GLuint keyGuide_ = 0;
     GLuint rejectedGuide_ = 0;
     GLuint outsideGuide_ = 0;
+    GLuint completeKeyGuide_ = 0;
+    GLuint socketGuide_ = 0;
+    GLuint miniatureGuide_ = 0;
     GLint transform_ = -1;
     GLint flip_ = -1;
     glm::vec2 position_{-0.55f, -0.20f};

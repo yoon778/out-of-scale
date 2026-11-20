@@ -13,7 +13,14 @@ GROUP_NAMES = (
     "Interior", "Shell", "IntactWall", "BrokenWall", "MiniWalls",
     "Shelf", "Door", "Rpg", "Rack", "MiniBrokenWall", "LatchMounts", "LatchBolt",
     "CabinetLeftDoor", "CabinetRightDoor", "CabinetMiniatures",
+    "LockSocket", "SchoolDiorama", "MilitaryDiorama", "OfficeDiorama",
+    "HomeDioramaBase",
 )
+DIORAMA_ORIGINS = {
+    "SchoolDiorama": (2.85, 1.52, 5.65),
+    "MilitaryDiorama": (2.85, 0.62, 5.65),
+    "OfficeDiorama": (4.65, 0.62, 5.65),
+}
 RANDOM = random.Random(20261120)
 COLLECTIONS = {}
 MATERIALS = {}
@@ -428,7 +435,7 @@ def add_memory_cabinet():
     box(group, "Memory cabinet crown", (3.75, 2.66, 5.65), (3.60, 0.08, 1.28), "WalnutEdge", 0.014)
     for y in (0.58, 1.4665):
         box(group, "Memory cabinet model shelf", (3.75, y, 5.65), (3.44, 0.08, 1.20), "WalnutEdge", 0.012)
-    box(group, "Memory cabinet school display mat", (2.85, 1.51325, 5.65),
+    box("SchoolDiorama", "Memory cabinet school display mat", (2.85, 1.51325, 5.65),
         (1.50, 0.0135, 1.08), "Oak", 0.002, 1)
     box(group, "Memory cabinet center divider", (3.75, 1.35, 5.65), (0.20, 2.70, 1.28), "Walnut", 0.012)
     box(group, "Memory cabinet plinth", (3.75, 0.28, 5.65), (3.44, 0.52, 1.20), "Walnut", 0.014)
@@ -490,7 +497,7 @@ def add_cabinet_label(text, x, y):
 
 def add_school_representative():
     """The three-by-four desks and three boards follow SchoolRoom's current classroom layout."""
-    group = "CabinetMiniatures"
+    group = "SchoolDiorama"
     origin, scale = Vector((2.85, 1.52, 5.65)), 0.075
 
     def school_box(name, center, size, surface):
@@ -528,7 +535,7 @@ def add_school_representative():
 
 def add_military_representative():
     """Reuse the barracks' authored beds and lockers at a compact, bevel-free display LOD."""
-    group = "CabinetMiniatures"
+    group = "MilitaryDiorama"
     source_path = OUTPUT.parents[1] / "military" / "design" / "군대 방 맵.blend"
     parts = ("frame", "rounded mattress", "blanket", "pillow", "headboard",
              "leg", "leg.001", "leg.002", "leg.003")
@@ -560,7 +567,7 @@ def add_military_representative():
 
 def add_office_representative():
     """A representative four-workstation office awaits the teammate's full map integration."""
-    group = "CabinetMiniatures"
+    group = "OfficeDiorama"
     box(group, "Office model | Floor", (4.65, 0.615, 5.65), (1.30, 0.01, 0.92), "CreamRug")
     for x in (4.34, 4.97):
         for z in (5.43, 5.88):
@@ -580,6 +587,100 @@ def add_office_representative():
     box(group, "Office model | Central low partition", (4.65, 0.76, 5.65), (0.018, 0.28, 0.87), "Linen")
     add_cabinet_label("OFFICE", 4.65, 0.62)
     add_cabinet_label("HOME", 4.65, 1.52)
+
+
+def add_portable_display_boards():
+    for group, origin in DIORAMA_ORIGINS.items():
+        x, y, z = origin
+        if group != "SchoolDiorama":
+            box(group, group + " | Portable timber display board", (x, y - 0.01675, z),
+                (1.50, 0.0135, 1.08), "Oak", 0.003, 1)
+        for side in (-1, 1):
+            box(group, group + " | Long display rim", (x, y, z + side * 0.531),
+                (1.50, 0.020, 0.018), "WalnutEdge", 0.003, 1)
+            box(group, group + " | Short display rim", (x + side * 0.741, y, z),
+                (0.018, 0.020, 1.044), "WalnutEdge", 0.003, 1)
+    group = "HomeDioramaBase"
+    for side in (-1, 1):
+        box(group, "Home portable long display rail", (side * 0.4625, 0.005, 0),
+            (0.075, 0.040, 1.10), "WalnutEdge", 0.003, 1)
+        box(group, "Home portable short display rail", (0, 0.005, side * 0.5125),
+            (0.85, 0.040, 0.075), "WalnutEdge", 0.003, 1)
+
+
+def rebase_portable_dioramas():
+    for group, origin in DIORAMA_ORIGINS.items():
+        offset = Matrix.Translation(-point(origin))
+        for obj in COLLECTIONS[group].objects:
+            if obj.data.users > 1:
+                obj.data = obj.data.copy()
+            obj.data.transform(offset @ obj.matrix_world)
+            obj.data.update()
+            obj.matrix_world = Matrix.Identity(4)
+
+
+def add_lock_socket():
+    """Build an open, extruded keyhole through a chamfered escutcheon without a painted fill."""
+    group = "LockSocket"
+    material("SocketIvory", (0.66, 0.625, 0.48), 0.42, 0.25)
+    outer = [(-0.106, -0.16), (0.106, -0.16), (0.12, -0.146), (0.12, 0.146),
+             (0.106, 0.16), (-0.106, 0.16), (-0.12, 0.146), (-0.12, -0.146)]
+    radius, center_y, half_slot = 0.033, 0.035, 0.015
+    start_angle = -math.acos(half_slot / radius)
+    end_angle = math.pi - start_angle
+    inner = [(math.cos(start_angle + (end_angle - start_angle) * index / 28) * radius,
+              center_y + math.sin(start_angle + (end_angle - start_angle) * index / 28) * radius)
+             for index in range(29)]
+    slot_bottom = inner[0][1] - 0.085
+    inner.extend([(-half_slot, slot_bottom), (half_slot, slot_bottom)])
+    ray_origin = (0.0, 0.015)
+
+    def cross(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    def ray_boundary(direction, boundary):
+        distances = []
+        for a, b in zip(boundary, boundary[1:] + boundary[:1]):
+            edge = (b[0] - a[0], b[1] - a[1])
+            denominator = cross(direction, edge)
+            if abs(denominator) < 1e-10:
+                continue
+            delta = (a[0] - ray_origin[0], a[1] - ray_origin[1])
+            distance = cross(delta, edge) / denominator
+            fraction = cross(delta, direction) / denominator
+            if distance > 0 and -1e-8 <= fraction <= 1 + 1e-8:
+                distances.append(distance)
+        distance = min(distances)
+        return (ray_origin[0] + direction[0] * distance,
+                ray_origin[1] + direction[1] * distance)
+
+    angles = sorted({round(math.atan2(y - ray_origin[1], x - ray_origin[0]), 10)
+                     for x, y in outer + inner})
+    rings = []
+    for angle in angles:
+        direction = (math.cos(angle), math.sin(angle))
+        rings.append((ray_boundary(direction, outer), ray_boundary(direction, inner)))
+    vertices = [(x, y, z) for z in (-0.0125, 0.0125) for ring in rings for x, y in ring]
+    offset = len(rings) * 2
+    faces = []
+    for index in range(len(rings)):
+        a, b = index * 2, ((index + 1) % len(rings)) * 2
+        faces.extend(((a, a + 1, b + 1, b),
+                      (a + offset, b + offset, b + offset + 1, a + offset + 1),
+                      (a, b, b + offset, a + offset),
+                      (a + 1, a + offset + 1, b + offset + 1, b + 1)))
+    obj = mesh(group, "Lock socket | Open keyhole escutcheon", vertices, faces, "MutedGold")
+    obj.data.materials.append(MATERIALS["SocketIvory"])
+    for index, polygon in enumerate(obj.data.polygons):
+        if index % 4 == 0:
+            polygon.material_index = 1
+    for y in (-0.123, 0.123):
+        cylinder(group, "Lock socket | Small brass fixing", (0, y, -0.0125), (0, y, -0.0145),
+                 0.006, "MutedGold", 10)
+    box("Interior", "Lock socket desk tray", (1.65, 1.0325, 1.15),
+        (0.30, 0.065, 0.38), "WalnutEdge", 0.008, 2)
+    box("Interior", "Lock socket tray felt liner", (1.65, 1.06875, 1.15),
+        (0.25, 0.0075, 0.33), "SageLinen", 0.003, 1)
 
 
 def add_window():
@@ -1088,8 +1189,12 @@ def main():
     add_school_representative()
     add_military_representative()
     add_office_representative()
+    add_portable_display_boards()
+    rebase_portable_dioramas()
+    add_lock_socket()
     presentation = bpy.data.collections.new("Presentation | linked instances excluded from game export")
     scene.collection.children.link(presentation)
+    COLLECTIONS["Presentation"] = presentation
     instance("Real bookcase default pose", "Shelf", (0, 1.3, -5.95), collection=presentation)
     base = Vector((4.65, 1.52, 5.65))
     for group in ("Interior", "MiniWalls", "IntactWall"):
@@ -1104,6 +1209,12 @@ def main():
     mini_rack.rotation_euler.z = math.radians(180.0)
     instance("Miniature RPG", "Rpg", (2.85, 0.91, 5.55), 0.8, presentation)
     instance("Cabinet representative rooms", "CabinetMiniatures", (0, 0, 0), 1.0, presentation)
+    for group, origin in DIORAMA_ORIGINS.items():
+        instance("Cabinet portable " + group, group, origin, 1.0, presentation)
+    socket = instance("Loose lock socket on desk tray", "LockSocket", (1.65, 1.085, 1.15), 1.0, presentation)
+    socket.rotation_euler.x = math.radians(90.0)
+    home_base = instance("Cabinet portable home display board", "HomeDioramaBase", base, 1.0, presentation)
+    home_base.rotation_euler.z = math.radians(90.0)
     instance("Cabinet left leaf closed", "CabinetLeftDoor", (1.95, 1.35, 4.99), 1.0, presentation)
     instance("Cabinet right leaf closed", "CabinetRightDoor", (5.55, 1.35, 4.99), 1.0, presentation)
     add_presentation(scene)
