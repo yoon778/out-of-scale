@@ -318,13 +318,42 @@ def add_desk():
         for z in (0.25, 1.35):
             cylinder(group, "Desk tapered leg", (x, 0.02, z), (x, 0.91, z),
                      0.047, "Walnut", 10, 0.064)
-    # Screen and small tools occupy only the right-rear corner, leaving the cutaway model unobstructed.
-    box(group, "Monitor base", (3.75, 1.025, 0.36), (0.45, 0.045, 0.27), "BlackPlastic", 0.014)
-    box(group, "Monitor support", (3.75, 1.25, 0.29), (0.058, 0.43, 0.055), "Metal", 0.006)
-    box(group, "Monitor housing", (3.75, 1.57, 0.30), (1.03, 0.64, 0.06), "BlackPlastic", 0.014, 3)
-    box(group, "Dim monitor glass", (3.75, 1.57, 0.333), (0.96, 0.562, 0.008), "Screen", 0.008)
-    box(group, "Monitor landscape silhouette", (3.75, 1.41, 0.340), (0.94, 0.20, 0.002), "ScreenLight")
-    cylinder(group, "Monitor status LED", (4.16, 1.274, 0.331), (4.16, 1.274, 0.338), 0.006, "WarmLight", 8)
+    # The computer tower stays below the desk while its display mounts on the right wall.
+    box(group, "Computer tower enclosure", (3.85, 0.36, 0.80), (0.38, 0.70, 0.65),
+        "Metal", 0.014, 2)
+    box(group, "Computer tower inset front", (3.85, 0.355, 1.127), (0.32, 0.60, 0.012),
+        "BlackPlastic", 0.010)
+    box(group, "Computer tower smoked side panel", (3.655, 0.375, 0.80), (0.008, 0.49, 0.49),
+        "DarkRecess", 0.012)
+    for y in (0.27, 0.48):
+        cylinder(group, "Computer fan metal surround", (3.85, y, 1.133), (3.85, y, 1.138),
+                 0.076, "Metal", 20)
+        cylinder(group, "Computer fan dark recess", (3.85, y, 1.139), (3.85, y, 1.141),
+                 0.063, "BlackPlastic", 20)
+        for blade in range(5):
+            angle = blade * math.tau / 5
+            vertices = [(3.85, y, 1.143)]
+            for a, radius in ((angle, 0.023), (angle + 0.42, 0.057), (angle + 1.02, 0.052)):
+                vertices.append((3.85 + math.cos(a) * radius, y + math.sin(a) * radius, 1.143))
+            mesh(group, "Computer fan curved blade", vertices, [(0, 1, 2, 3)], "Metal")
+        cylinder(group, "Computer fan central hub", (3.85, y, 1.143), (3.85, y, 1.146),
+                 0.018, "BlackPlastic", 12)
+    cylinder(group, "Computer power button", (3.85, 0.643, 1.134), (3.85, 0.643, 1.139),
+             0.014, "Metal", 12)
+    cylinder(group, "Computer power indicator", (3.85, 0.643, 1.140), (3.85, 0.643, 1.142),
+             0.004, "ScreenLight", 8)
+    for x in (3.75, 3.80):
+        box(group, "Computer front USB socket", (x, 0.643, 1.135), (0.026, 0.011, 0.004), "DarkRecess")
+    for z in (0.62, 0.69, 0.76, 0.83, 0.90, 0.97):
+        box(group, "Computer side ventilation slit", (3.649, 0.60, z),
+            (0.003, 0.045, 0.008), "BlackPlastic")
+    for x in (3.73, 3.97):
+        for z in (0.56, 1.04):
+            box(group, "Computer rubber foot", (x, 0.016, z), (0.058, 0.026, 0.062), "BlackPlastic", 0.005, 1)
+    cable = ((3.97, 0.39, 0.468), (4.06, 0.35, 0.38), (4.08, 0.31, 0.23),
+             (4.02, 0.34, 0.17), (4.01, 0.65, 0.16), (4.01, 0.88, 0.17))
+    for start, end in zip(cable, cable[1:]):
+        cylinder(group, "Computer rear cable bundle", start, end, 0.012, "BlackPlastic", 8)
     box(group, "Keyboard deck", (3.69, 1.027, 0.82), (0.81, 0.035, 0.29), "BlackPlastic", 0.012)
     for row in range(4):
         for column in range(13):
@@ -343,6 +372,22 @@ def add_desk():
     cylinder(group, "Task light upper arm", (4.30, 1.49, 0.28), (4.12, 1.69, 0.42), 0.016, "Metal", 12)
     cylinder(group, "Task shade", (4.12, 1.70, 0.42), (4.10, 1.61, 0.44), 0.073, "Metal", 20, 0.125)
     cylinder(group, "Warm task diffuser", (4.101, 1.609, 0.441), (4.100, 1.604, 0.442), 0.113, "WarmLight", 20)
+
+
+def add_wall_monitor():
+    """Reserve the exact 3.20 by 1.80 aperture for the runtime interactive screen."""
+    group = "Shell"
+    box(group, "Wall monitor mounting plate", (5.696, 1.85, 3.0), (0.048, 0.74, 1.10), "Metal", 0.012)
+    for z in (2.65, 3.35):
+        box(group, "Wall monitor mounting bracket", (5.667, 1.85, z), (0.065, 0.81, 0.065), "Metal", 0.008)
+    box(group, "Wall monitor housing", (5.59, 1.85, 3.0), (0.14, 1.92, 3.32), "BlackPlastic", 0.026, 3)
+    box(group, "Wall monitor display aperture", (5.518, 1.85, 3.0), (0.006, 1.80, 3.20), "Screen")
+    for y in (0.918, 2.782):
+        box(group, "Wall monitor horizontal bezel", (5.520, y, 3.0), (0.012, 0.060, 3.27), "Metal", 0.007)
+    for z in (1.370, 4.630):
+        box(group, "Wall monitor vertical bezel", (5.520, 1.85, z), (0.012, 1.80, 0.060), "Metal", 0.007)
+    cylinder(group, "Wall monitor standby light", (5.512, 0.921, 4.41), (5.508, 0.921, 4.41),
+             0.006, "ScreenLight", 10)
 
 
 def add_window():
@@ -836,6 +881,7 @@ def main():
     add_rug()
     add_storage()
     add_desk()
+    add_wall_monitor()
     add_window()
     add_decor()
     add_small_props()

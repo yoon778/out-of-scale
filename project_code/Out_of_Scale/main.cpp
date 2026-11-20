@@ -119,6 +119,14 @@ void drawFrame(const Player& player, const Room& room, int width, int height) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     const glm::mat4 projection = glm::perspective(
         glm::radians(68.0f), static_cast<float>(width) / static_cast<float>(height), 0.05f, 600.0f);
+    if constexpr (std::is_same_v<Room, HomeRoom>) {
+        if (room.computerActive()) {
+            const auto eye = HomeRoom::computerEye;
+            const auto direction = HomeRoom::computerDirection;
+            room.draw(projection * glm::lookAt(eye, eye + direction, glm::vec3{0, 1, 0}), eye, direction);
+            return;
+        }
+    }
     room.draw(projection * player.view(), player.eyePosition(), player.viewDirection());
     drawAimDot(width, height);
 }
@@ -148,6 +156,11 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
     glfwSetCursorPosCallback(window, [](GLFWwindow* target, double x, double y) {
         auto& scene = sceneFor<Room>(target);
         if (!scene.pause->isPaused()) {
+            if constexpr (std::is_same_v<Room, HomeRoom>) {
+                if (scene.room.computerActive()) {
+                    return;
+                }
+            }
             scene.player.look(x, y);
         }
     });
@@ -171,11 +184,25 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         if (scene.pause->isPaused()) {
             return;
         }
+        if constexpr (std::is_same_v<Room, HomeRoom>) {
+            if (scene.room.computerActive()) {
+                if (key == GLFW_KEY_TAB) {
+                    scene.room.closeComputer();
+                } else if (key == GLFW_KEY_E) {
+                    scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
+                }
+                scene.player.resetMouseSample();
+                return;
+            }
+        }
         if (key == GLFW_KEY_SPACE) {
             scene.player.jump();
         } else if constexpr (!std::is_same_v<Room, MapPreview>) {
             if (key == GLFW_KEY_E) {
                 scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
+                if constexpr (std::is_same_v<Room, HomeRoom>) {
+                    scene.player.resetMouseSample();
+                }
             }
         }
     });
@@ -190,7 +217,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             scene.pause->click(target);
             updatePauseCursor(target, scene, wasPaused);
         } else if constexpr (std::is_same_v<Room, HomeRoom>) {
-            scene.room.shoot(scene.player.eyePosition(), scene.player.viewDirection());
+            if (!scene.room.computerActive()) {
+                scene.room.shoot(scene.player.eyePosition(), scene.player.viewDirection());
+            }
         }
     });
     if constexpr (std::is_same_v<Room, MilitaryRoom> || std::is_same_v<Room, HomeRoom>) {
@@ -213,6 +242,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         }
         // F2 can return from the training ground within the military map.
         if (scene.destination && (*scene.destination != activeMap || *scene.destination == Map::Military)) {
+            if constexpr (std::is_same_v<Room, HomeRoom>) {
+                scene.room.closeComputer();
+            }
             activeMap = *scene.destination;
             break;
         }
@@ -223,7 +255,23 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         previous = now;
         if (!wasPaused && !pause.isPaused()) {
             const glm::vec3 previousEye = scene.player.eyePosition();
-            scene.player.update(window, elapsed, Room::halfSize, std::is_same_v<Room, MilitaryRoom>);
+            bool computerActive = false;
+            if constexpr (std::is_same_v<Room, HomeRoom>) {
+                computerActive = scene.room.computerActive();
+                if (computerActive && glfwGetWindowAttrib(window, GLFW_FOCUSED) == GLFW_TRUE) {
+                    const float horizontal = static_cast<float>(
+                        glfwGetKey(window, GLFW_KEY_RIGHT) - glfwGetKey(window, GLFW_KEY_LEFT));
+                    const float vertical = static_cast<float>(
+                        glfwGetKey(window, GLFW_KEY_UP) - glfwGetKey(window, GLFW_KEY_DOWN));
+                    const float turn = static_cast<float>(
+                        glfwGetKey(window, GLFW_KEY_R) - glfwGetKey(window, GLFW_KEY_Q));
+                    scene.room.computerInput(horizontal, vertical, turn, elapsed);
+                }
+            }
+            if (!computerActive) {
+                scene.player.update(window, elapsed, Room::halfSize,
+                                    std::is_same_v<Room, MilitaryRoom> || std::is_same_v<Room, HomeRoom>);
+            }
             const glm::vec3 desiredEye = scene.player.eyePosition();
             if constexpr (std::is_same_v<Room, MilitaryRoom>) {
                 scene.room.update(elapsed, previousEye);
@@ -232,8 +280,10 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
                                                                      scene.player.viewDirection(), &grounded);
                 scene.player.setRoomPosition(resolved, grounded);
             } else if constexpr (std::is_same_v<Room, HomeRoom>) {
-                scene.room.update(elapsed, previousEye);
-                scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
+                scene.room.update(elapsed, previousEye, scene.player.viewDirection());
+                bool grounded = false;
+                const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye, &grounded);
+                scene.player.setRoomPosition(resolved, grounded);
             } else if constexpr (std::is_same_v<Room, TestRoom>) {
                 scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
             }

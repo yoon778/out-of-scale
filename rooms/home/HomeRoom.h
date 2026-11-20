@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../shared/BoxRenderer.h"
+#include "ComputerScreen.h"
 
 #include <array>
 #include <optional>
@@ -13,17 +14,30 @@ public:
     void interact(const glm::vec3& eye, const glm::vec3& direction);
     void shoot(const glm::vec3& eye, const glm::vec3& direction);
     void scroll(double yOffset);
-    void update(float elapsed, const glm::vec3& eye);
-    glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired);
+    void update(float elapsed, const glm::vec3& eye,
+                const glm::vec3& direction = glm::vec3{0.0f, 0.0f, -1.0f});
+    glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded = nullptr);
+    bool computerActive() const;
+    void closeComputer();
+    void computerInput(float horizontal, float vertical, float turn, float elapsed);
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
     static constexpr float halfSize = 12.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};
     static constexpr float spawnYaw = 0.0f;
+    static constexpr glm::vec3 computerEye{3.25f, 1.85f, 3.0f};
+    static constexpr glm::vec3 computerDirection{1.0f, 0.0f, 0.0f};
 
 private:
-    enum class HeldItem { None, Rpg, Door };
+    enum class HeldItem { None, Rpg, Door, Cube };
+
+    struct ComputerCube {
+        glm::vec3 center{0.0f};
+        float edge = 0.60f;
+        float yaw = 0.35f;
+        float verticalSpeed = 0.0f;
+    };
 
     struct Fragment {
         glm::vec3 center;
@@ -56,8 +70,15 @@ private:
     void drawMiniature() const;
     void drawRoom(const glm::mat4& model, bool miniature) const;
     void impact(const Projectile& projectile);
+    bool aimsAtComputer(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool cubeFits(const ComputerCube& cube, const glm::vec3& eye) const;
+    std::optional<ComputerCube> carriedCube(const glm::vec3& eye, const glm::vec3& direction) const;
+    void updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
 
     BoxRenderer renderer_;
+    ComputerScreen computer_;
+    std::optional<ComputerCube> computerCube_;
+    bool computerActive_ = false;
     ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
     float shelfOffset_ = 0.0f;

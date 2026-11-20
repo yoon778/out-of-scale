@@ -46,6 +46,10 @@ constexpr Box wallPanel{{0.0f, 1.30f, wallZ}, {1.80f, 2.60f, 0.31f}};
 constexpr Box door{{0.0f, 1.30f, wallZ}, {1.76f, 2.60f, 0.105f}};
 constexpr Box openDoor{{-0.85f, 1.30f, wallZ + 0.86f}, {0.105f, 2.60f, 1.76f}};
 constexpr glm::vec3 wood{0.53f, 0.32f, 0.20f};
+constexpr float eyeHeight = 1.65f;
+constexpr float headClearance = 0.15f;
+constexpr Box monitor{{5.505f, 1.85f, 3.0f}, {0.05f, 1.80f, 3.20f}};
+constexpr Box monitorBody{{5.61f, 1.85f, 3.0f}, {0.20f, 2.0f, 3.40f}};
 
 constexpr std::array staticInterior{
     desk,
@@ -172,6 +176,46 @@ bool aimsAt(const glm::vec3& eye, const glm::vec3& direction, const Box& box, fl
     return distance && *distance <= maxDistance;
 }
 
+glm::vec3 cubeLocal(const glm::vec3& delta, float yaw) {
+    const float c = std::cos(yaw);
+    const float s = std::sin(yaw);
+    return {c * delta.x - s * delta.z, delta.y, s * delta.x + c * delta.z};
+}
+
+bool cubeFootprint(const glm::vec3& point, const glm::vec3& center, float edge, float yaw) {
+    const auto local = cubeLocal(point - center, yaw);
+    const float half = edge * 0.5f;
+    const float x = local.x - std::clamp(local.x, -half, half);
+    const float z = local.z - std::clamp(local.z, -half, half);
+    return x * x + z * z < playerRadius * playerRadius;
+}
+
+bool cubeOverlapsBox(const glm::vec3& center, float edge, float yaw, const Box& box) {
+    const float half = edge * 0.5f;
+    if (std::abs(center.y - box.center.y) >= half + box.size.y * 0.5f - 0.001f) return false;
+    const float c = std::abs(std::cos(yaw));
+    const float s = std::abs(std::sin(yaw));
+    const auto delta = center - box.center;
+    const float projected = half * (c + s);
+    if (std::abs(delta.x) >= projected + box.size.x * 0.5f - 0.001f ||
+        std::abs(delta.z) >= projected + box.size.z * 0.5f - 0.001f) return false;
+    const auto local = cubeLocal(delta, yaw);
+    return std::abs(local.x) < half + (box.size.x * c + box.size.z * s) * 0.5f - 0.001f &&
+           std::abs(local.z) < half + (box.size.x * s + box.size.z * c) * 0.5f - 0.001f;
+}
+
+bool cubeOverlapsPlayer(const glm::vec3& center, float edge, float yaw, const glm::vec3& eye) {
+    return eye.y - eyeHeight < center.y + edge * 0.5f - 0.01f &&
+           eye.y + headClearance > center.y - edge * 0.5f + 0.01f &&
+           cubeFootprint(eye, center, edge, yaw);
+}
+
+std::optional<float> cubeRay(const glm::vec3& eye, const glm::vec3& direction,
+                             const glm::vec3& center, float edge, float yaw) {
+    return perspective::rayBoxDistance(cubeLocal(eye - center, yaw), cubeLocal(direction, yaw),
+                                       glm::vec3{0.0f}, glm::vec3{edge * 0.5f});
+}
+
 void drawHomeMesh(const BoxRenderer& renderer, HomeMesh mesh, const glm::mat4& model,
                   const glm::vec3& tint = glm::vec3{1.0f}) {
     const auto& range = homeMeshes[static_cast<std::size_t>(mesh)];
@@ -232,7 +276,66 @@ glm::vec3 carrySide(const glm::vec3& direction) {
 bool HomeRoom::initialize() {
     std::vector<MeshVertex> movable = fractureMesh().vertices;
     movable.insert(movable.end(), std::begin(homeGeometry), std::end(homeGeometry));
-    return renderer_.initialize({}, movable);
+    return renderer_.initialize({}, movable) && computer_.initialize();
+}
+
+bool HomeRoom::computerActive() const { return computerActive_; }
+void HomeRoom::closeComputer() { computerActive_ = false; }
+void HomeRoom::computerInput(float horizontal, float vertical, float turn, float elapsed) {
+    if (computerActive_) computer_.input(horizontal, vertical, turn, elapsed);
+}
+
+bool HomeRoom::aimsAtComputer(const glm::vec3& eye, const glm::vec3& direction) const {
+    return eye.x < monitor.center.x && aimsAt(eye, direction, monitor, visibleRange(eye, direction, reach));
+}
+
+bool HomeRoom::cubeFits(const ComputerCube& cube, const glm::vec3& eye) const {
+    const float half = cube.edge * 0.5f;
+    const float extent = half * (std::abs(std::cos(cube.yaw)) + std::abs(std::sin(cube.yaw)));
+    if (std::abs(cube.center.x) + extent > 5.69f || cube.center.z + extent > 6.33f ||
+        cube.center.z - extent < wallZ + 0.16f || cube.center.y < half - 0.001f ||
+        cube.center.y + half > 3.22f || cubeOverlapsPlayer(cube.center, cube.edge, cube.yaw, eye)) return false;
+    for (const auto& obstacle : staticInterior) {
+        if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
+    }
+    return !cubeOverlapsBox(cube.center, cube.edge, cube.yaw, shelfAt(shelfOffset_)) &&
+           !cubeOverlapsBox(cube.center, cube.edge, cube.yaw, monitorBody);
+}
+
+std::optional<HomeRoom::ComputerCube> HomeRoom::carriedCube(
+    const glm::vec3& eye, const glm::vec3& direction) const {
+    ComputerCube cube = *computerCube_;
+    cube.verticalSpeed = 0.0f;
+    glm::vec3 forward{direction.x, 0.0f, direction.z};
+    forward = glm::length(forward) > 0.01f ? glm::normalize(forward) : glm::vec3{0.0f,0.0f,-1.0f};
+    const float half = cube.edge * 0.5f;
+    const auto reachable = [&] {
+        if (!cubeFits(cube, eye)) return false;
+        const auto offset = cube.center - eye;
+        const float distance = glm::length(offset);
+        return distance > .01f && visibleRange(eye, offset / distance, distance) >= distance - .002f;
+    };
+    const float visible = visibleRange(eye, direction, 2.0f);
+    for (int sample = 0; sample <= 24; ++sample) {
+        const float distance = visible - static_cast<float>(sample) * 0.06f;
+        if (distance < .35f) break;
+        cube.center = eye + direction * distance;
+        cube.center.y = std::clamp(cube.center.y, half, 3.22f - half);
+        if (reachable()) return cube;
+    }
+    const float clearance = half * (std::abs(std::cos(cube.yaw)) + std::abs(std::sin(cube.yaw))) + playerRadius + .08f;
+    for (const float extra : {0.0f, .45f, .90f}) {
+        const float radius = clearance + extra;
+        for (int sample = 0; sample < 16; ++sample) {
+            const float angle = static_cast<float>(sample) * 0.39269908f;
+            const glm::vec3 offset{forward.x * std::cos(angle) + forward.z * std::sin(angle), 0.0f,
+                                   forward.z * std::cos(angle) - forward.x * std::sin(angle)};
+            cube.center = eye + offset * radius;
+            cube.center.y = std::clamp(eye.y - .45f, half, 3.22f - half);
+            if (reachable()) return cube;
+        }
+    }
+    return std::nullopt;
 }
 
 float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const {
@@ -246,6 +349,10 @@ float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, f
         eye, direction, shelfAt(shelfOffset_).center, shelf.size * 0.5f);
     if (shelfHit) {
         maxDistance = std::min(maxDistance, *shelfHit);
+    }
+    if (computerCube_ && held_ != HeldItem::Cube) {
+        const auto hit = cubeRay(eye, direction, computerCube_->center, computerCube_->edge, computerCube_->yaw);
+        if (hit) maxDistance = std::min(maxDistance, *hit);
     }
     return maxDistance;
 }
@@ -276,6 +383,43 @@ bool HomeRoom::canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& dir
 }
 
 void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
+    if (computerActive_) {
+        computerCube_ = ComputerCube{glm::vec3{0.0f}, computer_.edge(), computer_.yaw()};
+        const auto pose = carriedCube(eye, direction);
+        if (pose) {
+            computerCube_ = *pose;
+            held_ = HeldItem::Cube;
+            computerActive_ = false;
+            computer_.setCubeVisible(false);
+        } else {
+            computerCube_.reset();
+        }
+        return;
+    }
+    if (held_ == HeldItem::Cube) {
+        if (aimsAtComputer(eye, direction)) {
+            computer_.setCube(computerCube_->edge, computerCube_->yaw);
+            computerCube_.reset();
+            held_ = HeldItem::None;
+        } else if (const auto pose = carriedCube(eye, direction)) {
+            computerCube_ = *pose;
+            held_ = HeldItem::None;
+        } else if (cubeFits(*computerCube_, eye)) {
+            held_ = HeldItem::None;
+        }
+        return;
+    }
+    if (held_ == HeldItem::None && computerCube_) {
+        const auto hit = cubeRay(eye, direction, computerCube_->center, computerCube_->edge, computerCube_->yaw);
+        if (hit && *hit <= visibleRange(eye, direction, reach)) {
+            held_ = HeldItem::Cube;
+            return;
+        }
+    }
+    if (held_ == HeldItem::None && !computerCube_ && aimsAtComputer(eye, direction)) {
+        computerActive_ = true;
+        return;
+    }
     const float nearby = visibleRange(eye, direction, reach);
     switch (exitState_) {
         case ExitState::Explore:
@@ -361,6 +505,14 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
         hit({{side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}}, false, true);
     }
     hit({{0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}}, false, true);
+    if (computerCube_) {
+        const auto depth = cubeRay(eye, direction, computerCube_->center, computerCube_->edge, computerCube_->yaw);
+        if (depth && *depth < distance) {
+            distance = *depth;
+            breaksWall = false;
+            miniature = false;
+        }
+    }
     const float launchDepth = std::min(distance, 0.45f);
     projectile_ = Projectile{eye + direction * launchDepth, direction, distance - launchDepth, breaksWall,
                              0.0f, miniature};
@@ -411,23 +563,67 @@ void HomeRoom::impact(const Projectile& projectile) {
 }
 
 void HomeRoom::scroll(double yOffset) {
+    if (computerActive_) {
+        computer_.scroll(yOffset);
+        return;
+    }
     if (held_ == HeldItem::Door) {
         const float steps = static_cast<float>(std::clamp(yOffset, -10.0, 10.0));
         doorWheelScale_ = std::clamp(doorWheelScale_ * std::exp(-steps * 0.18f), 0.25f, 6.0f);
     }
 }
 
-void HomeRoom::update(float elapsed, const glm::vec3& eye) {
+void HomeRoom::updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
+    if (!computerCube_) return;
+    if (held_ == HeldItem::Cube) {
+        if (const auto pose = carriedCube(eye, direction)) computerCube_ = *pose;
+        return;
+    }
+    auto& cube = *computerCube_;
+    const int steps = std::clamp(static_cast<int>(std::ceil(elapsed * 90.0f)), 1, 18);
+    const float step = elapsed / static_cast<float>(steps);
+    for (int index = 0; index < steps; ++index) {
+        const float bottom = cube.center.y - cube.edge * .5f;
+        cube.verticalSpeed -= 9.8f * step;
+        const float nextBottom = bottom + cube.verticalSpeed * step;
+        float support = 0.0f;
+        const auto supportedBy = [&](const Box& obstacle) {
+            const float top = obstacle.center.y + obstacle.size.y * .5f;
+            Box verticalProbe = obstacle;
+            verticalProbe.center.y = cube.center.y;
+            verticalProbe.size.y = cube.edge + 2.0f;
+            if (bottom >= top - .005f && cubeOverlapsBox(cube.center, cube.edge, cube.yaw, verticalProbe)) {
+                support = std::max(support, top);
+            }
+        };
+        for (const auto& obstacle : staticInterior) supportedBy(obstacle);
+        supportedBy(shelfAt(shelfOffset_));
+        supportedBy(monitorBody);
+        const float head = eye.y + headClearance;
+        if (bottom >= head - .005f && cubeFootprint(eye, cube.center, cube.edge, cube.yaw)) support = std::max(support, head);
+        if (nextBottom <= support) {
+            cube.center.y = support + cube.edge * .5f;
+            cube.verticalSpeed = 0.0f;
+        } else {
+            cube.center.y += cube.verticalSpeed * step;
+        }
+    }
+}
+
+void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
     if (elapsed <= 0.0f) {
         return;
     }
+    updateCube(elapsed, eye, direction);
     if (latchReleased_) {
         latchTravel_ = std::min(latchOpenTravel, latchTravel_ + elapsed * 0.80f);
     }
     doorRattleTime_ = std::max(0.0f, doorRattleTime_ - elapsed);
     if (shelfMoving_) {
         const float nextOffset = std::max(shelfParkedOffset, shelfOffset_ - elapsed * 2.1f);
-        if (!overlapsPlayer(eye, shelfAt(nextOffset))) {
+        const bool cubeBlocks = computerCube_ && held_ != HeldItem::Cube &&
+            cubeOverlapsBox(computerCube_->center, computerCube_->edge, computerCube_->yaw, shelfAt(nextOffset));
+        if (!cubeBlocks && !overlapsPlayer(eye, shelfAt(nextOffset))) {
             shelfOffset_ = nextOffset;
             if (shelfOffset_ == shelfParkedOffset) {
                 shelfMoving_ = false;
@@ -481,7 +677,7 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye) {
     }
 }
 
-glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired) {
+glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded) {
     const bool open = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
     const auto blocked = [&](const glm::vec3& position) {
         if (overlapsPlayer(position, shelfAt(shelfOffset_))) {
@@ -491,6 +687,13 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
             if (overlapsPlayer(position, obstacle)) {
                 return true;
             }
+        }
+        if (overlapsPlayer(position, monitorBody)) return true;
+        if (computerCube_ && held_ != HeldItem::Cube) {
+            const auto& cube = *computerCube_;
+            const float top = cube.center.y + cube.edge * .5f;
+            if (!(previous.y - eyeHeight >= top - .02f && desired.y <= previous.y) &&
+                cubeOverlapsPlayer(cube.center, cube.edge, cube.yaw, position)) return true;
         }
         if (position.z <= wallZ + wallPanel.size.z * 0.5f + playerRadius) {
             return !open || std::abs(position.x) + playerRadius >= doorwayHalfWidth ||
@@ -508,6 +711,21 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
     if (!blocked(moveZ)) {
         position.z = moveZ.z;
     }
+    float support = 0.0f;
+    if (computerCube_ && held_ != HeldItem::Cube) {
+        const auto& cube = *computerCube_;
+        const float top = cube.center.y + cube.edge * .5f;
+        if (cubeFootprint(position, cube.center, cube.edge, cube.yaw)) {
+            if (desired.y <= previous.y && previous.y - eyeHeight >= top - .025f) support = top;
+            const float bottom = cube.center.y - cube.edge * .5f;
+            if (desired.y > previous.y && previous.y + headClearance <= bottom + .01f &&
+                position.y + headClearance >= bottom) position.y = bottom - headClearance;
+        }
+    }
+    const bool landed = position.y - eyeHeight <= support + .001f;
+    if (landed) position.y = support + eyeHeight;
+    position.y = std::min(position.y, 3.22f - headClearance);
+    if (grounded) *grounded = landed;
     if (exitState_ == ExitState::DoorOpen && position.z < wallZ - 0.55f) {
         exitState_ = ExitState::Escaped;
     }
@@ -631,4 +849,14 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
             drawDoor(renderer_, {center, door.size * scale}, glm::vec3{1.0f});
         }
     }
+    if (computerCube_) {
+        auto model = glm::translate(glm::mat4{1.0f}, computerCube_->center);
+        model = glm::rotate(model, computerCube_->yaw, {0.0f,1.0f,0.0f});
+        model = glm::scale(model, glm::vec3{computerCube_->edge});
+        computer_.drawCube(viewProjection, model);
+        const auto miniature = glm::scale(glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin), glm::vec3{roomMiniatureScale});
+        computer_.drawCube(viewProjection, miniature * model);
+    }
+    computer_.draw(viewProjection);
+    computer_.drawGuide(computerActive_, held_ == HeldItem::Cube);
 }
