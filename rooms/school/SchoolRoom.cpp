@@ -640,7 +640,7 @@ void SchoolRoom::drawProjector(Renderer& r) const {
     const auto inverse = glm::transpose(projectorRotation());
     const float depth = projectorPaper.z - projectorOrigin.z;
     r.beginProjection(projectorOrigin, inverse, slideBounds_, projectorPaper.z, slideMask_, slideResolution,
-                      artworkProjection(), artworkFrame);
+                      artworkProjection(), artworkFrame, 1.0f);
     auto distanceToEdge = [&](glm::vec3 point, int edge) {
         auto q = inverse * (point - projectorOrigin);
         switch (edge) {

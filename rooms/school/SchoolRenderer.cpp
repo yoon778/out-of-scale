@@ -14,6 +14,24 @@
 namespace school {
 namespace {
 constexpr int reflectionSize = 1024;
+
+std::array<glm::vec4, 7> viewPlanes(const glm::mat4& vp, glm::vec4 clipPlane = {0, 0, 0, 1}) {
+    // GLM matrices are column-major. Clip space keeps -w <= x, y, z <= w.
+    const auto rows = glm::transpose(vp);
+    return {rows[3] + rows[0], rows[3] - rows[0], rows[3] + rows[1], rows[3] - rows[1],
+            rows[3] + rows[2], rows[3] - rows[2], clipPlane};
+}
+
+bool intersectsView(const std::array<glm::vec4, 7>& planes, glm::vec3 center, glm::vec3 halfExtents) {
+    // Test the farthest corner from each plane, with a small margin at the screen edges.
+    halfExtents += glm::vec3(.002f);
+    for (glm::vec4 plane : planes) {
+        const auto normal = glm::vec3(plane);
+        if (glm::dot(normal, center) + plane.w + glm::dot(glm::abs(normal), halfExtents) < 0)
+            return false;
+    }
+    return true;
+}
 const char* vertexSource = R"(#version 330 core
 layout(location=0) in vec3 position;
 layout(location=1) in vec3 normal;
@@ -57,7 +75,7 @@ void main() {
         vec2 uv=reflected.xy/reflected.w*0.5+0.5;
         vec3 reflection=texture(image,uv).rgb;
         float edge=min(min(texCoord.x,1-texCoord.x),min(texCoord.y,1-texCoord.y));
-        pixel=vec4(mix(vec3(0.55,0.64,0.61),reflection,smoothstep(0,0.025,edge)*0.94),1);
+        pixel=vec4(mix(vec3(0.55,0.64,0.61),reflection,smoothstep(0,0.018,edge)*0.985),1);
         return;
     }
     if(mode==3) { pixel=vec4(tint,1); return; }
@@ -98,7 +116,7 @@ void main() {
             float photoEdge=smoothstep(0.0,0.02,min(photoMargin.x,photoMargin.y));
             vec3 paper=texture(artwork,vec2(0.99,0.99)).rgb;
             vec3 study=mix(paper,texture(artwork,clamp(photoUV,vec2(0),vec2(1))).rgb,photoEdge)*vec3(1.0,0.99,0.95);
-            pixel=vec4(mix(tint,study,artAlpha/max(alpha,0.001)),alpha); return;
+            pixel=vec4(mix(tint,study,artAlpha/max(alpha,0.001)),alpha*opacity); return;
         }
         float across=abs(texCoord.y-0.5)*2.0;
         float core=1.0-smoothstep(0.20,0.70,across);
@@ -261,6 +279,7 @@ bool Renderer::initialize() {
     return complete && artworkTexture_ != 0;
 }
 void Renderer::begin(const glm::mat4& vp, glm::vec3 eye, glm::vec4 plane) {
+    viewPlanes_ = viewPlanes(vp, plane);
     glUseProgram(program_);
     glBindVertexArray(vertexArray_);
     glUniformMatrix4fv(glGetUniformLocation(program_, "viewProjection"), 1, GL_FALSE, glm::value_ptr(vp));
@@ -270,7 +289,17 @@ void Renderer::begin(const glm::mat4& vp, glm::vec3 eye, glm::vec4 plane) {
     glUniform1i(glGetUniformLocation(program_, "image"), 0);
     glUniform1f(glGetUniformLocation(program_, "opacity"), 1);
 }
+bool Renderer::visible(glm::vec3 center, glm::vec3 halfExtents) const {
+    return intersectsView(viewPlanes_, center, halfExtents);
+}
+bool Renderer::visible(const glm::mat4& viewProjection, glm::vec3 center, glm::vec3 halfExtents) {
+    return intersectsView(viewPlanes(viewProjection), center, halfExtents);
+}
 void Renderer::quad(glm::vec3 c, glm::vec3 r, glm::vec3 u, glm::vec3 color) {
+    if (visible(c, glm::abs(r) + glm::abs(u)))
+        appendQuad(c, r, u, color);
+}
+void Renderer::appendQuad(glm::vec3 c, glm::vec3 r, glm::vec3 u, glm::vec3 color) {
     glm::vec3 n = glm::normalize(glm::cross(r, u));
     const glm::vec3 p[] = {c - r - u, c + r - u, c + r + u, c - r + u};
     const glm::vec2 uv[] = {{0, 0}, {1, 0}, {1, 1}, {0, 1}};
@@ -287,7 +316,7 @@ void Renderer::triangle(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 color) 
 }
 void Renderer::beginProjection(glm::vec3 origin, const glm::mat3& inverseRotation, glm::vec4 bounds,
                                float planeZ, const std::vector<float>& mask, int resolution,
-                               const glm::mat3& artworkInverse, glm::vec4 artworkFrame) {
+                               const glm::mat3& artworkInverse, glm::vec4 artworkFrame, float brightness) {
     flush();
     glActiveTexture(GL_TEXTURE0);
     if (!projectionMask_) {
@@ -314,6 +343,7 @@ void Renderer::beginProjection(glm::vec3 origin, const glm::mat3& inverseRotatio
     glBindTexture(GL_TEXTURE_2D, artworkTexture_);
     glActiveTexture(GL_TEXTURE0);
     glUniform1i(glGetUniformLocation(program_, "mode"), 4);
+    glUniform1f(glGetUniformLocation(program_, "opacity"), brightness);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glDepthMask(GL_FALSE);
@@ -357,12 +387,14 @@ void Renderer::endProjection() {
 void Renderer::box(glm::vec3 c, glm::vec3 size, glm::vec3 color, float yaw) {
     glm::vec3 r = {std::cos(yaw) * size.x / 2, 0, -std::sin(yaw) * size.x / 2};
     glm::vec3 u = {0, size.y / 2, 0}, f = {std::sin(yaw) * size.z / 2, 0, std::cos(yaw) * size.z / 2};
-    quad(c + f, r, u, color);
-    quad(c - f, -r, u, color);
-    quad(c + r, -f, u, color);
-    quad(c - r, f, u, color);
-    quad(c + u, r, -f, color);
-    quad(c - u, r, f, color);
+    if (!visible(c, glm::abs(r) + glm::abs(u) + glm::abs(f)))
+        return;
+    appendQuad(c + f, r, u, color);
+    appendQuad(c - f, -r, u, color);
+    appendQuad(c + r, -f, u, color);
+    appendQuad(c - r, f, u, color);
+    appendQuad(c + u, r, -f, color);
+    appendQuad(c - u, r, f, color);
 }
 void Renderer::line(glm::vec3 a, glm::vec3 b, float width, glm::vec3 color) {
     glm::vec3 d = b - a;
@@ -422,7 +454,8 @@ Renderer::TextTexture& Renderer::textureFor(const std::wstring& text) {
     glGenTextures(1, &texture.id);
     glBindTexture(GL_TEXTURE_2D, texture.id);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -443,14 +476,27 @@ void Renderer::drawTexture(GLuint texture, int mode, glm::vec3 c, glm::vec3 r, g
     glBindTexture(GL_TEXTURE_2D, texture);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    quad(c, r, u, color);
+    appendQuad(c, r, u, color);
     flush();
     glDisable(GL_BLEND);
     glUniform1i(glGetUniformLocation(program_, "mode"), 0);
 }
 void Renderer::label(const std::wstring& text, glm::vec3 c, glm::vec3 r, glm::vec3 u, glm::vec3 color) {
+    if (!visible(c, glm::abs(r) + glm::abs(u)))
+        return;
     auto& texture = textureFor(text);
     drawTexture(texture.id, 1, c, r, u, color, glm::mat4(1));
+}
+void Renderer::sign(const std::wstring& text, glm::vec3 c, glm::vec3 r, glm::vec3 u) {
+    if (!visible(c, glm::abs(r) + glm::abs(u) + glm::vec3(.01f)))
+        return;
+    const auto normal = glm::normalize(glm::cross(r, u));
+    quad(c, r, u, {.36f, .41f, .36f});
+    quad(c + normal * .003f, r * .96f, u * .88f, {.21f, .32f, .28f});
+    const auto textUp = u * .79f;
+    const float textSpan = glm::length(textUp) * textureFor(text).aspect;
+    const auto textRight = r * std::min(.90f, textSpan / glm::length(r));
+    label(text, c + normal * .006f, textRight, textUp, {.97f, .96f, .87f});
 }
 void Renderer::mirror(glm::vec3 c, glm::vec3 r, glm::vec3 u, const glm::mat4& vp) {
     drawTexture(reflectionTexture_, 2, c, r, u, {1, 1, 1}, vp);
@@ -470,8 +516,11 @@ void Renderer::overlay(int w, int h) {
     glDisable(GL_DEPTH_TEST);
     begin(glm::ortho(0.0f, static_cast<float>(w), static_cast<float>(h), 0.0f, -1.0f, 1.0f), {0, 0, 0});
 }
+float Renderer::textWidth(const std::wstring& text, float height) {
+    return textureFor(text).aspect * height;
+}
 void Renderer::text(const std::wstring& t, float x, float y, float h, glm::vec3 color) {
-    float w = textureFor(t).aspect * h;
+    const float w = textWidth(t, h);
     label(t, {x + w / 2, y + h / 2, 0}, {w / 2, 0, 0}, {0, -h / 2, 0}, color);
 }
 void Renderer::panel(float x, float y, float w, float h, glm::vec3 color) {
