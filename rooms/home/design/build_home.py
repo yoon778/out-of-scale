@@ -18,12 +18,12 @@ GROUP_NAMES = (
     "PictureDoor", "Crate",
 )
 DIORAMA_ORIGINS = {
-    "SchoolDiorama": (2.70, 1.52, 9.80),
-    "MilitaryDiorama": (2.70, 0.62, 9.80),
-    "OfficeDiorama": (4.60, 0.62, 9.80),
+    "SchoolDiorama": (0.40, 0.95, 9.30),
+    "MilitaryDiorama": (5.60, 0.95, 9.30),
+    "OfficeDiorama": (0.40, 0.95, 14.20),
 }
-HOME_MODEL_ORIGIN = Vector((4.60, 1.52, 9.80))
-HOME_MODEL_CENTER_Z = 0.875
+HOME_MODEL_ORIGIN = Vector((5.60, 0.95, 14.20))
+HOME_MODEL_CENTER = Vector((0.945, 0, 3.895))
 PICTURE_HINGE = Vector((-5.13, 2.00, -6.26))
 HIDDEN_SOCKET_CENTER = Vector((-4.48, 1.93, -6.30))
 RANDOM = random.Random(20261120)
@@ -34,6 +34,11 @@ MATERIALS = {}
 def point(position):
     x, y, z = position
     return Vector((x, -z, y))
+
+
+def home_model_position(position):
+    local = Vector(position) - HOME_MODEL_CENTER
+    return HOME_MODEL_ORIGIN + Vector((local.z, local.y, -local.x)) * 0.075
 
 
 def material(name, color, roughness=0.65, metallic=0.0, emission=0.0, texture=None):
@@ -228,7 +233,7 @@ def add_shell():
     box(group, "Ceiling", (0, 3.31, 0), (12.0, 0.22, 13.35), "Ceiling")
     box(group, "Right plaster wall", (5.87, 1.60, 0), (0.34, 3.20, 13.1), "Plaster")
     box(group, "Front sage wall left of secret passage", (-1.95, 1.60, 6.51), (7.80, 3.20, 0.34), "SageWall")
-    box(group, "Front sage wall right of secret passage", (5.70, 1.60, 6.51), (0.30, 3.20, 0.34), "SageWall")
+    box(group, "Front sage wall right of secret passage", (6.695, 1.60, 6.51), (2.29, 3.20, 0.34), "SageWall")
     box(group, "Secret passage lintel", (3.75, 2.95, 6.51), (3.60, 0.50, 0.34), "SageWall")
     # A genuine window recess instead of scenery layered across an unbroken wall.
     box(group, "Left wall under window", (-5.87, 0.49, 0), (0.34, 0.98, 13.1), "Plaster")
@@ -265,7 +270,7 @@ def add_shell():
         box(group, "Cutaway side wall", (side * 5.87, 0.30, 0), (0.34, 0.60, 13.1), "Plaster")
         box(group, "Cutaway rear wall", (side * 3.37, 0.30, -6.5), (4.94, 0.60, 0.31), "Plaster")
     box(group, "Cutaway front wall left of passage", (-1.95, 0.30, 6.51), (7.80, 0.60, 0.34), "SageWall")
-    box(group, "Cutaway front wall right of passage", (5.70, 0.30, 6.51), (0.30, 0.60, 0.34), "SageWall")
+    box(group, "Cutaway front wall right of passage", (6.695, 0.30, 6.51), (2.29, 0.60, 0.34), "SageWall")
 
 
 def add_bed():
@@ -465,7 +470,7 @@ def add_memory_cabinet():
 def add_cabinet_label(text, center):
     x, y, z = center
     group = "CabinetMiniatures"
-    box(group, "Cabinet label plate " + text, (x, y - 0.045, z - 0.596),
+    box(group, "Cabinet label plate " + text, (x, y - 0.045, z - 1.181),
         (0.43, 0.058, 0.012), "Metal", 0.005, 1)
     curve = bpy.data.curves.new("Cabinet label " + text, 'FONT')
     curve.body = text
@@ -476,7 +481,7 @@ def add_cabinet_label(text, center):
     curve.extrude = 0
     curve.materials.append(MATERIALS["Paper"])
     source = bpy.data.objects.new("Cabinet label " + text, curve)
-    source.location = point((x, y - 0.045, z - 0.605))
+    source.location = point((x, y - 0.045, z - 1.190))
     source.rotation_euler = (math.pi * 0.5, 0, math.pi)
     bpy.context.scene.collection.objects.link(source)
     bpy.context.view_layer.update()
@@ -597,38 +602,42 @@ def relocate_authored_dioramas():
 
 def add_secret_alcove():
     group = "Interior"
-    box(group, "Secret alcove floor slab", (3.65, -0.10, 8.55), (4.0, 0.20, 4.0), "DarkRecess")
+    box(group, "Secret alcove floor slab", (3.00, -0.10, 11.57), (9.68, 0.20, 10.04), "DarkRecess")
     floor_random = random.Random(20261128)
-    for index in range(15):
-        x = 1.65 + (index + 0.5) * 4.0 / 15
-        box(group, "Secret alcove oak floorboard", (x, -0.009, 8.55),
-            (4.0 / 15 - 0.003, 0.020, 3.997), f"OakFloor{floor_random.randrange(9)}", 0.0015, 1)
+    for index in range(36):
+        x = -1.84 + (index + 0.5) * 9.68 / 36
+        box(group, "Secret alcove oak floorboard", (x, -0.009, 11.57),
+            (9.68 / 36 - 0.003, 0.020, 10.037), f"OakFloor{floor_random.randrange(9)}", 0.0015, 1)
     displays = (
-        ("SCHOOL", 2.70, 1.5065, 1.70), ("MILITARY", 2.70, 0.5965, 1.70),
-        ("OFFICE", 4.60, 0.5965, 1.70), ("HOME", 4.60, 1.5050, 1.75),
+        ("SCHOOL", 0.40, 9.30, 0.9365), ("MILITARY", 5.60, 9.30, 0.9265),
+        ("OFFICE", 0.40, 14.20, 0.9265), ("HOME", 5.60, 14.20, 0.9350),
     )
-    for name, x, top, width in displays:
-        box(group, "Secret display shelf " + name, (x, top - 0.035, 9.80),
-            (width, 0.070, 1.18), "WalnutEdge", 0.010, 2)
-        for side in (-1, 1):
-            box(group, "Secret shelf wall bracket " + name, (x + side * width * 0.32, top - 0.14, 10.34),
-                (0.055, 0.21, 0.065), "Walnut", 0.006, 1)
+    for name, x, z, top in displays:
+        box(group, "Secret display table " + name, (x, top - 0.04, z),
+            (2.65, 0.080, 2.35), "WalnutEdge", 0.012, 2)
+        leg_height = top - 0.08
+        for side_x in (-1, 1):
+            for side_z in (-1, 1):
+                box(group, "Secret display table leg " + name,
+                    (x + side_x * 1.18, leg_height * 0.5, z + side_z * 1.03),
+                    (0.12, leg_height, 0.12), "Walnut", 0.008, 1)
     group = "Shell"
-    box(group, "Secret alcove left wall", (1.65, 1.60, 8.40), (0.18, 3.20, 4.30), "Plaster")
-    box(group, "Secret alcove right wall", (5.65, 1.60, 8.40), (0.18, 3.20, 4.30), "Plaster")
-    box(group, "Secret alcove rear wall", (3.65, 1.60, 10.55), (4.18, 3.20, 0.18), "SageWall")
-    box(group, "Secret alcove ceiling", (3.65, 3.31, 8.55), (4.18, 0.22, 4.0), "Ceiling")
-    for x in (1.755, 5.545):
-        box(group, "Secret alcove side skirting", (x, 0.075, 8.40),
-            (0.035, 0.15, 4.30), "Skirting", 0.006, 1)
-    box(group, "Secret alcove rear skirting", (3.65, 0.075, 10.445),
-        (3.79, 0.15, 0.035), "Skirting", 0.006, 1)
+    box(group, "Secret alcove left wall", (-1.84, 1.60, 11.55), (0.18, 3.20, 10.08), "Plaster")
+    box(group, "Secret alcove right wall", (7.84, 1.60, 11.55), (0.18, 3.20, 10.08), "Plaster")
+    box(group, "Secret alcove rear wall", (3.00, 1.60, 16.59), (9.86, 3.20, 0.18), "SageWall")
+    box(group, "Secret alcove ceiling", (3.00, 3.31, 11.6775), (9.86, 0.22, 10.005), "Ceiling")
+    box(group, "Secret alcove front return ceiling", (6.89, 3.31, 6.5925), (2.08, 0.22, 0.165), "Ceiling")
+    for x in (-1.735, 7.735):
+        box(group, "Secret alcove side skirting", (x, 0.075, 11.55),
+            (0.035, 0.15, 10.08), "Skirting", 0.006, 1)
+    box(group, "Secret alcove rear skirting", (3.00, 0.075, 16.485),
+        (9.47, 0.15, 0.035), "Skirting", 0.006, 1)
     group = "MiniWalls"
-    for x in (1.65, 5.65):
-        box(group, "Cutaway secret alcove side wall", (x, 0.30, 8.40),
-            (0.18, 0.60, 4.30), "Plaster")
-    box(group, "Cutaway secret alcove rear wall", (3.65, 0.30, 10.55),
-        (4.18, 0.60, 0.18), "SageWall")
+    for x in (-1.84, 7.84):
+        box(group, "Cutaway secret alcove side wall", (x, 0.30, 11.55),
+            (0.18, 0.60, 10.08), "Plaster")
+    box(group, "Cutaway secret alcove rear wall", (3.00, 0.30, 16.59),
+        (9.86, 0.60, 0.18), "SageWall")
 
 
 def add_picture_door():
@@ -681,10 +690,10 @@ def add_portable_display_boards():
                 (0.018, 0.020, 1.044), "WalnutEdge", 0.003, 1)
     group = "HomeDioramaBase"
     for side in (-1, 1):
-        box(group, "Home portable long display rail", (side * 0.4625, 0.005, 0),
-            (0.075, 0.040, 1.55), "WalnutEdge", 0.003, 1)
-        box(group, "Home portable short display rail", (0, 0.005, side * 0.7375),
-            (0.85, 0.040, 0.075), "WalnutEdge", 0.003, 1)
+        box(group, "Home portable long display rail", (side * 0.5375, 0.005, 0),
+            (0.075, 0.040, 2.05), "WalnutEdge", 0.003, 1)
+        box(group, "Home portable short display rail", (0, 0.005, side * 0.9875),
+            (1.00, 0.040, 0.075), "WalnutEdge", 0.003, 1)
 
 
 def rebase_portable_dioramas():
@@ -1202,7 +1211,7 @@ def add_presentation(scene):
         light.rotation_euler = (target - light.location).to_track_quat('-Z', 'Y').to_euler()
     cameras = (
         ("01 | Human entry view", (0, 1.65, 5.0), (0, 1.45, -2.0), 21),
-        ("02 | Cabinet miniature collection", (3.65, 2.00, 7.10), (3.65, 1.32, 9.80), 24),
+        ("02 | Cabinet miniature collection", (3.00, 2.90, 7.00), (3.00, 0.95, 11.75), 14),
         ("03 | Room editorial corner", (-1.0, 2.45, 5.5), (-1.2, 1.1, -2.3), 19),
         ("04 | Cabinet and computer", (-0.4, 2.25, 1.4), (3.75, 1.35, 5.65), 24),
     )
@@ -1273,11 +1282,11 @@ def main():
     COLLECTIONS["Presentation"] = presentation
     instance("Real bookcase default pose", "Shelf", (0, 1.3, -5.95), collection=presentation)
     base = HOME_MODEL_ORIGIN
-    content_origin = base + Vector((-HOME_MODEL_CENTER_Z, 0, 0)) * 0.075
+    content_origin = home_model_position((0, 0, 0))
     for group in ("Interior", "MiniWalls", "IntactWall"):
         home_model = instance("Cabinet same-layout " + group, group, content_origin, 0.075, presentation)
         home_model.rotation_euler.z = math.radians(90.0)
-    mini_shelf = instance("Cabinet bookcase same-layout", "Shelf", base + Vector((-5.95 - HOME_MODEL_CENTER_Z, 1.3, 0)) * 0.075,
+    mini_shelf = instance("Cabinet bookcase same-layout", "Shelf", home_model_position((0, 1.3, -5.95)),
                           0.075, presentation)
     mini_shelf.rotation_euler.z = math.radians(90.0)
     stored_door = instance("Detached miniature door", "Door", (5.20, 2.245, -3.25), 0.16, presentation)
@@ -1293,7 +1302,7 @@ def main():
     socket.rotation_euler.z = math.radians(180.0)
     instance("Secret socket picture closed", "PictureDoor", PICTURE_HINGE, 1.0, presentation)
     instance("Movable step crate", "Crate", (2.60, 0.50, -2.0), 1.0, presentation)
-    mini_crate = instance("Room model step crate", "Crate", base + Vector((-2.0 - HOME_MODEL_CENTER_Z, 0.50, -2.60)) * 0.075,
+    mini_crate = instance("Room model step crate", "Crate", home_model_position((2.60, 0.50, -2.0)),
                           0.075, presentation)
     mini_crate.rotation_euler.z = math.radians(90.0)
     home_base = instance("Cabinet portable home display board", "HomeDioramaBase", base, 1.0, presentation)

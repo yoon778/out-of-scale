@@ -27,7 +27,7 @@ public:
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
-    static constexpr float halfSize = 12.0f;
+    static constexpr float halfSize = 20.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};
     static constexpr float spawnYaw = 0.0f;
     static constexpr glm::vec3 computerEye{3.25f, 1.85f, 3.0f};
@@ -121,10 +121,10 @@ private:
     std::array<PortableObject, 6> portable_{{
         {{-4.48f,1.93f,-6.30f},3.14159265f},
         {{0.0f,0.0f,0.0f},0.0f,0.0f,false},
-        {{2.70f,1.52f,9.80f},0.0f},
-        {{2.70f,.62f,9.80f},0.0f},
-        {{4.60f,.62f,9.80f},0.0f},
-        {{4.60f,1.52f,9.80f},1.5707963f},
+        {{0.40f,.95f,9.30f},0.0f},
+        {{5.60f,.95f,9.30f},0.0f},
+        {{0.40f,.95f,14.20f},0.0f},
+        {{5.60f,.95f,14.20f},1.5707963f},
     }};
     int heldPortable_ = -1;
     bool socketFlat_ = false;

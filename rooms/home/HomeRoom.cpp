@@ -19,7 +19,10 @@ struct Box {
 
 constexpr float playerRadius = 0.25f;
 constexpr float sideLimit = 5.55f;
-constexpr float frontLimit = 10.20f;
+constexpr float frontLimit = 16.25f;
+constexpr float secretEntryZ = 6.34f;
+constexpr float secretLeftLimit = -1.50f;
+constexpr float secretRightLimit = 7.50f;
 constexpr float backLimit = -8.25f;
 constexpr float doorwayHalfWidth = 0.90f;
 constexpr float wallZ = -6.50f;
@@ -72,7 +75,7 @@ constexpr std::array socketUprightParts{Box{{0,0,0},{.24f,.32f,.025f}}};
 constexpr std::array schoolParts{Box{{0,.117f,0},{1.50f,.261f,1.08f}}};
 constexpr std::array militaryParts{Box{{0,.20825f,0},{1.50f,.4635f,1.08f}}};
 constexpr std::array officeParts{Box{{0,.13675f,0},{1.50f,.3205f,1.08f}}};
-constexpr std::array homeParts{Box{{0,.1125f,0},{1.00f,.255f,1.55f}}};
+constexpr std::array homeParts{Box{{0,.1125f,0},{1.15f,.255f,2.05f}}};
 
 std::span<const Box> portableParts(int index, bool flatSocket) {
     switch (index) {
@@ -86,19 +89,30 @@ std::span<const Box> portableParts(int index, bool flatSocket) {
 }
 
 Box miniatureBase(int index) {
-    if (index == homeObject) return {{0,.005f,0},{1.0f,.04f,1.55f}};
+    if (index == homeObject) return {{0,.005f,0},{1.15f,.04f,2.05f}};
     if (index == schoolObject) return {{0,-.00175f,0},{1.50f,.0235f,1.08f}};
     return {{0,-.00675f,0},{1.50f,.0335f,1.08f}};
 }
-constexpr std::array cabinetFrame{
-    Box{{1.99f,1.35f,5.685f},{.08f,2.70f,1.35f}},
-    Box{{5.51f,1.35f,5.685f},{.08f,2.70f,1.35f}},
-    Box{{3.75f,2.66f,5.685f},{3.60f,.08f,1.35f}},
-    Box{{2.70f,1.4715f,9.80f},{1.70f,.07f,1.18f}},
-    Box{{2.70f,.5615f,9.80f},{1.70f,.07f,1.18f}},
-    Box{{4.60f,1.47f,9.80f},{1.75f,.07f,1.18f}},
-    Box{{4.60f,.5615f,9.80f},{1.70f,.07f,1.18f}},
+constexpr std::array displayTops{
+    Box{{.40f,.8965f,9.30f},{2.65f,.08f,2.35f}},
+    Box{{5.60f,.8865f,9.30f},{2.65f,.08f,2.35f}},
+    Box{{.40f,.8865f,14.20f},{2.65f,.08f,2.35f}},
+    Box{{5.60f,.8950f,14.20f},{2.65f,.08f,2.35f}},
 };
+const std::array<Box,23> cabinetFrame = [] {
+    std::array<Box,23> boxes{};
+    boxes[0]={{1.99f,1.35f,5.685f},{.08f,2.70f,1.35f}};
+    boxes[1]={{5.51f,1.35f,5.685f},{.08f,2.70f,1.35f}};
+    boxes[2]={{3.75f,2.66f,5.685f},{3.60f,.08f,1.35f}};
+    std::size_t index=3;
+    for (const auto& top : displayTops) {
+        boxes[index++]=top;
+        const float legHeight=top.center.y-top.size.y*.5f;
+        for (const float x : {-1.18f,1.18f}) for (const float z : {-1.03f,1.03f})
+            boxes[index++]={{top.center.x+x,legHeight*.5f,top.center.z+z},{.12f,legHeight,.12f}};
+    }
+    return boxes;
+}();
 
 constexpr std::array staticInterior{
     desk,
@@ -106,13 +120,26 @@ constexpr std::array staticInterior{
     Box{{-4.85f, 0.37f, -0.55f}, {0.85f, 0.74f, 0.78f}},
     Box{{4.90f, 0.71f, -3.25f}, {1.20f, 1.42f, 1.50f}},
     Box{{-3.65f, 0.48f, 4.65f}, {1.25f, 0.96f, 1.05f}},
-    Box{{-1.95f,1.60f,6.51f},{7.80f,3.20f,.18f}},
-    Box{{5.70f,1.60f,6.51f},{.30f,3.20f,.18f}},
-    Box{{3.75f,2.95f,6.51f},{3.60f,.50f,.18f}},
-    Box{{1.65f,1.60f,8.40f},{.18f,3.20f,4.30f}},
-    Box{{5.65f,1.60f,8.40f},{.18f,3.20f,4.30f}},
-    Box{{3.65f,1.60f,10.55f},{4.18f,3.20f,.18f}},
+    Box{{-1.95f,1.60f,6.51f},{7.80f,3.20f,.34f}},
+    Box{{6.695f,1.60f,6.51f},{2.29f,3.20f,.34f}},
+    Box{{3.75f,2.95f,6.51f},{3.60f,.50f,.34f}},
+    Box{{-1.84f,1.60f,11.55f},{.18f,3.20f,10.08f}},
+    Box{{7.84f,1.60f,11.55f},{.18f,3.20f,10.08f}},
+    Box{{3.00f,1.60f,16.59f},{9.86f,3.20f,.18f}},
 };
+
+// Check both room footprints when an object straddles their connecting wall.
+bool withinRoomXZ(const glm::vec3& center,float extentX,float extentZ) {
+    const float minZ=center.z-extentZ,maxZ=center.z+extentZ;
+    if (minZ<wallZ+.16f || maxZ>16.50f) return false;
+    if (minZ<6.68f && (center.x-extentX< -5.69f || center.x+extentX>5.69f)) return false;
+    if (maxZ>6.34f && (center.x-extentX< -1.75f || center.x+extentX>7.75f)) return false;
+    return true;
+}
+
+float roomCeiling(float z,float extentZ=0.0f) {
+    return z+extentZ>6.34f ? 3.20f : 3.22f;
+}
 
 // These match the artist's shelf platform, front lip, side rails and rear rail.
 constexpr std::array doorShelf{
@@ -469,7 +496,7 @@ glm::mat4 HomeRoom::portableModel(int index) const {
 }
 
 glm::mat4 HomeRoom::homeModel() const {
-    return glm::translate(glm::scale(portableModel(homeObject),glm::vec3{roomMiniatureScale}),{0.0f,0.0f,-.875f});
+    return glm::translate(glm::scale(portableModel(homeObject),glm::vec3{roomMiniatureScale}),{-.945f,0.0f,-3.895f});
 }
 
 glm::mat4 HomeRoom::pictureModel() const {
@@ -540,9 +567,8 @@ bool HomeRoom::portableFits(int index, const PortableObject& object, const glm::
         const float c = std::abs(std::cos(object.yaw)), s = std::abs(std::sin(object.yaw));
         const float extentX = (part.size.x*c+part.size.z*s)*.5f;
         const float extentZ = (part.size.x*s+part.size.z*c)*.5f;
-        if (std::abs(world.center.x)+extentX > 5.69f || world.center.z+extentZ > 10.46f ||
-            world.center.z-extentZ < wallZ+.16f || world.center.y-part.size.y*.5f < -.001f ||
-            world.center.y+part.size.y*.5f > 3.22f) return false;
+        if (!withinRoomXZ(world.center,extentX,extentZ) || world.center.y-part.size.y*.5f < -.001f ||
+            world.center.y+part.size.y*.5f > roomCeiling(world.center.z,extentZ)) return false;
         const auto blocked = [&](const Box& obstacle,float yaw = 0.0f) {
             return rotatedBoxesOverlap(world,object.yaw,obstacle,yaw);
         };
@@ -597,14 +623,14 @@ std::optional<HomeRoom::PortableObject> HomeRoom::carriedPortable(
         const float distance = visible-static_cast<float>(sample)*.06f;
         if (distance < .35f) break;
         object.center = eye+direction*distance;
-        object.center.y = std::clamp(object.center.y,-bottom,3.22f-top);
+        object.center.y = std::clamp(object.center.y,-bottom,roomCeiling(object.center.z,radius)-top);
         if (reachable()) return object;
     }
     for (const float extra : {0.0f,.45f,.90f}) {
         for (int sample = 0; sample < 24; ++sample) {
             const float angle = static_cast<float>(sample)*.2617994f;
             object.center = eye+glm::vec3{std::cos(angle),0.0f,std::sin(angle)}*(radius+playerRadius+.08f+extra);
-            object.center.y = std::clamp(eye.y-.45f,-bottom,3.22f-top);
+            object.center.y = std::clamp(eye.y-.45f,-bottom,roomCeiling(object.center.z,radius)-top);
             if (reachable()) return object;
         }
     }
@@ -723,9 +749,8 @@ void HomeRoom::tryOpenCabinet(const glm::vec3& eye) {
 bool HomeRoom::cubeFits(const ComputerCube& cube, const glm::vec3& eye) const {
     const float half = cube.edge * 0.5f;
     const float extent = half * (std::abs(std::cos(cube.yaw)) + std::abs(std::sin(cube.yaw)));
-    if (std::abs(cube.center.x) + extent > 5.69f || cube.center.z + extent > 10.46f ||
-        cube.center.z - extent < wallZ + 0.16f || cube.center.y < half - 0.001f ||
-        cube.center.y + half > 3.22f || cubeOverlapsPlayer(cube.center, cube.edge, cube.yaw, eye) ||
+    if (!withinRoomXZ(cube.center,extent,extent) || cube.center.y < half - 0.001f ||
+        cube.center.y + half > roomCeiling(cube.center.z,extent) || cubeOverlapsPlayer(cube.center, cube.edge, cube.yaw, eye) ||
         overlapsPortable(cube.center,glm::vec3{cube.edge},cube.yaw)) return false;
     for (const auto& obstacle : staticInterior) {
         if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
@@ -767,7 +792,7 @@ std::optional<HomeRoom::ComputerCube> HomeRoom::carriedCube(
         const float distance = visible - static_cast<float>(sample) * 0.06f;
         if (distance < .35f) break;
         cube.center = eye + direction * distance;
-        cube.center.y = std::clamp(cube.center.y, half, 3.22f - half);
+        cube.center.y = std::clamp(cube.center.y, half, roomCeiling(cube.center.z,half*1.415f) - half);
         if (reachable()) return cube;
     }
     const float clearance = half * (std::abs(std::cos(cube.yaw)) + std::abs(std::sin(cube.yaw))) + playerRadius + .08f;
@@ -778,7 +803,7 @@ std::optional<HomeRoom::ComputerCube> HomeRoom::carriedCube(
             const glm::vec3 offset{forward.x * std::cos(angle) + forward.z * std::sin(angle), 0.0f,
                                    forward.z * std::cos(angle) - forward.x * std::sin(angle)};
             cube.center = eye + offset * radius;
-            cube.center.y = std::clamp(eye.y - .45f, half, 3.22f - half);
+            cube.center.y = std::clamp(eye.y - .45f, half, roomCeiling(cube.center.z,half*1.415f) - half);
             if (reachable()) return cube;
         }
     }
@@ -788,10 +813,8 @@ std::optional<HomeRoom::ComputerCube> HomeRoom::carriedCube(
 bool HomeRoom::keyFits(const KeyPiece& key, const glm::vec3& eye) const {
     const float c = std::abs(std::cos(key.yaw));
     const float s = std::abs(std::sin(key.yaw));
-    if (std::abs(key.center.x) + .65f*c + .06f*s > 5.69f ||
-        key.center.z + .65f*s + .06f*c > 10.46f ||
-        key.center.z - .65f*s - .06f*c < wallZ + .16f ||
-        key.center.y < .199f || key.center.y > 3.02f ||
+    if (!withinRoomXZ(key.center,.65f*c+.06f*s,.65f*s+.06f*c) ||
+        key.center.y < .199f || key.center.y > roomCeiling(key.center.z,.65f*s+.06f*c)-.20f ||
         keyOverlapsPlayer(key.center,key.yaw,eye)) return false;
     for (const auto& part : keyParts) {
         const auto world = worldKeyPart(key.center,key.yaw,part);
@@ -822,7 +845,7 @@ std::optional<HomeRoom::KeyPiece> HomeRoom::carriedKey(const glm::vec3& eye, con
         const float distance = visible-static_cast<float>(sample)*.06f;
         if (distance < .35f) break;
         key.center = eye+direction*distance;
-        key.center.y = std::clamp(key.center.y,.20f,3.02f);
+        key.center.y = std::clamp(key.center.y,.20f,roomCeiling(key.center.z,.66f)-.20f);
         if (reachable()) return key;
     }
     const float clearance = .65f+.25f+.08f;
@@ -830,7 +853,7 @@ std::optional<HomeRoom::KeyPiece> HomeRoom::carriedKey(const glm::vec3& eye, con
         for (int sample = 0; sample < 16; ++sample) {
             const float angle = static_cast<float>(sample)*.39269908f;
             key.center = eye+glm::vec3{std::cos(angle),0.0f,std::sin(angle)}*(clearance+extra);
-            key.center.y = std::clamp(eye.y-.45f,.20f,3.02f);
+            key.center.y = std::clamp(eye.y-.45f,.20f,roomCeiling(key.center.z,.66f)-.20f);
             if (reachable()) return key;
         }
     }
@@ -1161,7 +1184,9 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     hit(shelfAt(shelfOffset_));
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}});
     hit({{0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}});
-    hit({{0.0f, 1.60f, 6.51f}, {11.7f, 3.20f, 0.34f}});
+    // The passage is open between the partition pieces in staticInterior.
+    hit({{3.00f, -.10f, 11.55f}, {9.50f, .20f, 10.08f}});
+    hit({{3.00f, 3.31f, 11.55f}, {9.86f, .22f, 10.08f}});
     for (const float side : {-1.0f, 1.0f}) {
         hit({{side * 5.87f, 1.60f, 0.0f}, {0.34f, 3.20f, 13.1f}});
         hit({{side * 3.37f, 1.60f, wallZ}, {4.94f, 3.20f, 0.31f}});
@@ -1176,6 +1201,7 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     for (const auto& obstacle : cabinetFrame) hit(obstacle,false,true);
     hit(shelfAt(shelfOffset_), false, true);
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}}, false, true);
+    hit({{3.00f, -.10f, 11.55f}, {9.50f, .20f, 10.08f}}, false, true);
     hit({{0.0f, 0.30f, 6.51f}, {11.7f, 0.60f, 0.34f}}, false, true);
     for (const float side : {-1.0f, 1.0f}) {
         hit({{side * 5.87f, 0.30f, 0.0f}, {0.34f, 0.60f, 13.1f}}, false, true);
@@ -1411,6 +1437,9 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
 glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded) {
     const bool open = exitState_ == ExitState::DoorOpen || exitState_ == ExitState::Escaped;
     const auto blocked = [&](const glm::vec3& position) {
+        const float left=position.z>secretEntryZ ? secretLeftLimit : -sideLimit;
+        const float right=position.z>secretEntryZ ? secretRightLimit : sideLimit;
+        if (position.x<left || position.x>right) return true;
         if (overlapsPlayer(position, shelfAt(shelfOffset_))) {
             return true;
         }
@@ -1452,7 +1481,9 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
     };
 
     glm::vec3 position{previous.x, desired.y, previous.z};
-    const glm::vec3 moveX{std::clamp(desired.x, -sideLimit, sideLimit), desired.y, position.z};
+    const float left=position.z>secretEntryZ ? secretLeftLimit : -sideLimit;
+    const float right=position.z>secretEntryZ ? secretRightLimit : sideLimit;
+    const glm::vec3 moveX{std::clamp(desired.x,left,right), desired.y, position.z};
     if (!blocked(moveX)) {
         position.x = moveX.x;
     }
@@ -1500,7 +1531,7 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
     }
     const bool landed = position.y - eyeHeight <= support + .001f;
     if (landed) position.y = support + eyeHeight;
-    position.y = std::min(position.y, 3.22f - headClearance);
+    position.y = std::min(position.y,roomCeiling(position.z,playerRadius)-headClearance);
     if (grounded) *grounded = landed;
     standingOnCube_ = landed && support > .01f && computerCube_ && held_ != HeldItem::Cube &&
         std::abs(support - (computerCube_->center.y + computerCube_->edge * .5f)) < .01f;
