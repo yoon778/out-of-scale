@@ -115,7 +115,7 @@ GLuint guideTexture(const wchar_t* text) {
     HBRUSH brush = CreateSolidBrush(RGB(23, 35, 42));
     FillRect(dc, &rect, brush);
     DeleteObject(brush);
-    HFONT font = CreateFontW(-23, 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, HANGEUL_CHARSET,
+    HFONT font = CreateFontW(-20, 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, HANGEUL_CHARSET,
                              OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
                              DEFAULT_PITCH, L"Malgun Gothic");
     HGDIOBJ oldFont = SelectObject(dc, font);
@@ -156,6 +156,20 @@ const std::array<MeshVertex, 36>& cubeMesh() {
     }();
     return vertices;
 }
+
+const std::array<MeshVertex, 72>& computerMeshes() {
+    static const auto vertices = [] {
+        std::array<MeshVertex, 72> result{};
+        constexpr float light[6]{.62f, .95f, .72f, .82f, 1.0f, .55f};
+        for (std::size_t index = 0; index < 36; ++index) {
+            result[index] = cubeMesh()[index];
+            result[36 + index] = {cubeMesh()[index].position,
+                                  glm::vec3{.88f, .66f, .29f} * light[index / 6]};
+        }
+        return result;
+    }();
+    return vertices;
+}
 } // namespace
 
 ComputerScreen::~ComputerScreen() {
@@ -166,12 +180,15 @@ ComputerScreen::~ComputerScreen() {
     if (vertexArray_) glDeleteVertexArrays(1, &vertexArray_);
     if (guide_) glDeleteTextures(1, &guide_);
     if (holdingGuide_) glDeleteTextures(1, &holdingGuide_);
+    for (const GLuint texture : {cubeGuide_, keyGuide_, rejectedGuide_, outsideGuide_}) {
+        if (texture) glDeleteTextures(1, &texture);
+    }
 }
 
 bool ComputerScreen::initialize() {
     const GlState state;
     glActiveTexture(GL_TEXTURE0);
-    if (!renderer_.initialize({}, cubeMesh())) return false;
+    if (!renderer_.initialize({}, computerMeshes())) return false;
     constexpr char vertex[] = R"(#version 330 core
 uniform mat4 transform;
 out vec2 uv;
@@ -221,35 +238,96 @@ void main() { pixel = texture(image, vec2(uv.x, flip ? 1.0-uv.y : uv.y)); }
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, textureWidth, textureHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_);
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-    guide_ = guideTexture(L"방향키 이동     Q / R 회전     휠 크기     E 꺼내기     Tab 돌아가기");
+    guide_ = guideTexture(L"1 큐브 / 2 열쇠조각    방향키 이동 · Q/R 회전 · 휠 크기    E 꺼내기    Tab 복귀");
     holdingGuide_ = guideTexture(L"E 놓기     모니터를 보고 E 화면에 넣기");
-    return complete && guide_ && holdingGuide_;
+    cubeGuide_ = guideTexture(L"문제 1 | 방향키 이동 · 휠 크기로 흰 틀 맞추기    E 확인    Tab 복귀");
+    keyGuide_ = guideTexture(L"문제 2 | Q/R 회전으로 흰 열쇠조각과 겹치기    E 확인    Tab 복귀");
+    rejectedGuide_ = guideTexture(L"아직 흰 틀과 다름 | 위치·크기 또는 회전을 조정하고 E");
+    outsideGuide_ = guideTexture(L"선택한 물건은 방에 있음 | 다른 번호 선택 · 들고 와 모니터에 E 반환");
+    return complete && guide_ && holdingGuide_ && cubeGuide_ && keyGuide_ && rejectedGuide_ && outsideGuide_;
 }
 
 void ComputerScreen::input(float horizontal, float vertical, float turn, float elapsed) {
     if (horizontal == 0.0f && vertical == 0.0f && turn == 0.0f) return;
-    position_ += glm::vec2{horizontal, vertical} * elapsed * .70f;
-    yaw_ = std::remainder(yaw_ + turn * elapsed * 1.6f, 6.2831853f);
-    clampPosition();
+    if (selected_ == Item::Cube) {
+        if (!visible_) return;
+        position_ += glm::vec2{horizontal, vertical} * elapsed * .70f;
+        if (cubeSolved_) yaw_ = std::remainder(yaw_ + turn * elapsed * 1.6f, 6.2831853f);
+        clampPosition();
+    } else {
+        if (!keyVisible_) return;
+        keyYaw_ = std::remainder(keyYaw_ + turn * elapsed * 1.6f, 6.2831853f);
+    }
+    rejected_ = false;
     dirty_ = true;
 }
 
 void ComputerScreen::scroll(double amount) {
+    if (selected_ != Item::Cube || !visible_) return;
     edge_ = std::clamp(edge_ * std::exp(-static_cast<float>(amount) * .12f), .40f, 1.0f);
     clampPosition();
+    rejected_ = false;
     dirty_ = true;
 }
 
-void ComputerScreen::setCubeVisible(bool visible) { visible_ = visible; dirty_ = true; }
+void ComputerScreen::setCubeVisible(bool visible) {
+    visible_ = visible;
+    if (!visible && !keySolved_) selected_ = Item::Key;
+    dirty_ = true;
+}
 void ComputerScreen::setCube(float edge, float yaw) {
     edge_ = edge;
     yaw_ = yaw;
     clampPosition();
     visible_ = true;
+    selected_ = Item::Cube;
+    rejected_ = false;
     dirty_ = true;
 }
 float ComputerScreen::edge() const { return edge_; }
 float ComputerScreen::yaw() const { return yaw_; }
+
+void ComputerScreen::selectItem(int number) {
+    if (number == 1) selected_ = Item::Cube;
+    else if (number == 2 && cubeSolved_) selected_ = Item::Key;
+    rejected_ = false;
+    dirty_ = true;
+}
+
+ComputerScreen::Item ComputerScreen::selection() const { return selected_; }
+bool ComputerScreen::cubeSolved() const { return cubeSolved_; }
+bool ComputerScreen::keySolved() const { return keySolved_; }
+float ComputerScreen::keyYaw() const { return keyYaw_; }
+void ComputerScreen::setKeyVisible(bool visible) { keyVisible_ = visible; dirty_ = true; }
+void ComputerScreen::setKey(float yaw) {
+    keyYaw_ = yaw;
+    keyVisible_ = true;
+    selected_ = Item::Key;
+    rejected_ = false;
+    dirty_ = true;
+}
+
+ComputerScreen::Action ComputerScreen::confirm() {
+    if (selected_ == Item::Cube) {
+        if (!visible_) return Action::None;
+        if (!cubeSolved_ && (glm::length(position_ - glm::vec2{.55f, .10f}) > .10f ||
+                            std::abs(edge_ - .60f) > .035f)) {
+            rejected_ = true;
+            return Action::None;
+        }
+        cubeSolved_ = true;
+        dirty_ = true;
+        return Action::TakeCube;
+    }
+    if (!cubeSolved_ || !keyVisible_) return Action::None;
+    if (!keySolved_ && std::abs(std::remainder(keyYaw_, 6.2831853f)) > .12f) {
+        rejected_ = true;
+        return Action::None;
+    }
+    keySolved_ = true;
+    dirty_ = true;
+    return Action::TakeKey;
+}
 
 void ComputerScreen::clampPosition() {
     const float rotatedExtent = std::abs(std::cos(yaw_)) + std::abs(std::sin(yaw_));
@@ -274,6 +352,19 @@ void ComputerScreen::drawCube(const glm::mat4& viewProjection, const glm::mat4& 
     renderer_.drawMovableMesh(0, 36, model, {.12f,.24f,.29f});
 }
 
+void ComputerScreen::drawKeyPiece(const glm::mat4& viewProjection, const glm::mat4& model) const {
+    const GlState state;
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    renderer_.begin(viewProjection);
+    const auto part = [&](const glm::vec3& partCenter, const glm::vec3& size) {
+        const auto transform = glm::scale(glm::translate(model, partCenter), size);
+        renderer_.drawMovableMesh(36, 36, transform, glm::vec3{1.0f});
+    };
+    part({0, .1f, 0}, {1.3f, .2f, .12f});
+    part({.25f, -.1f, 0}, {.13f, .2f, .12f});
+    part({.55f, -.1f, 0}, {.13f, .2f, .12f});
+}
+
 void ComputerScreen::renderTexture() const {
     if (!dirty_) return;
     const GlState state;
@@ -286,12 +377,33 @@ void ComputerScreen::renderTexture() const {
     glClearColor(.055f,.085f,.11f,1.0f);
     glClearDepth(1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    if (visible_) {
+    const auto view = glm::lookAt(glm::vec3{0.0f,1.0f,4.0f}, glm::vec3{0.0f}, glm::vec3{0.0f,1.0f,0.0f});
+    const auto projection = glm::ortho(-1.6f,1.6f,-.9f,.9f,.1f,10.0f) * view;
+    if (selected_ == Item::Cube && !cubeSolved_) {
+        auto goal = glm::translate(glm::mat4{1.0f}, {.55f, .10f, 0});
+        goal = glm::scale(glm::rotate(goal, .35f, {0,1,0}), glm::vec3{.60f});
+        renderer_.begin(projection);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        renderer_.drawMovableMesh(0, 36, goal, {2.7f, 2.0f, 1.4f});
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    if (selected_ == Item::Key && !keySolved_) {
+        renderer_.begin(projection);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        for (int index = 0; index < 3; ++index) {
+            const glm::vec3 partCenter = index == 0 ? glm::vec3{0,.1f,0} : glm::vec3{index == 1 ? .25f : .55f,-.1f,0};
+            const glm::vec3 size = index == 0 ? glm::vec3{1.3f,.2f,.12f} : glm::vec3{.13f,.2f,.12f};
+            renderer_.drawMovableMesh(36,36,glm::scale(glm::translate(glm::mat4{1},partCenter),size),{4.0f,4.0f,5.0f});
+        }
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    if (selected_ == Item::Cube && visible_) {
         auto model = glm::translate(glm::mat4{1.0f}, {position_.x, position_.y, 0.0f});
         model = glm::rotate(model, yaw_, {0.0f,1.0f,0.0f});
         model = glm::scale(model, glm::vec3{edge_});
-        const auto view = glm::lookAt(glm::vec3{0.0f,1.0f,4.0f}, glm::vec3{0.0f}, glm::vec3{0.0f,1.0f,0.0f});
-        drawCube(glm::ortho(-1.6f,1.6f,-.9f,.9f,.1f,10.0f) * view, model);
+        drawCube(projection, model);
+    } else if (selected_ == Item::Key && keyVisible_) {
+        drawKeyPiece(projection, glm::rotate(glm::mat4{1.0f}, keyYaw_, {0,1,0}));
     }
     dirty_ = false;
 }
@@ -318,8 +430,8 @@ void ComputerScreen::draw(const glm::mat4& viewProjection) const {
     drawTexture(color_, viewProjection * model, false);
 }
 
-void ComputerScreen::drawGuide(bool active, bool holding) const {
-    if (!active && !holding) return;
+void ComputerScreen::drawGuide(bool active, bool holding, bool holdingKey) const {
+    if (!active && !holding && !holdingKey) return;
     const GlState state;
     GLint viewport[4]{};
     glGetIntegerv(GL_VIEWPORT, viewport);
@@ -331,5 +443,14 @@ void ComputerScreen::drawGuide(bool active, bool holding) const {
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_SCISSOR_TEST);
     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    drawTexture(active ? guide_ : holdingGuide_, model, true);
+    GLuint label = holdingGuide_;
+    if (active) {
+        const bool available = selected_ == Item::Cube ? visible_ : keyVisible_;
+        if (!available) label = outsideGuide_;
+        else if (rejected_) label = rejectedGuide_;
+        else if (selected_ == Item::Cube && !cubeSolved_) label = cubeGuide_;
+        else if (selected_ == Item::Key && !keySolved_) label = keyGuide_;
+        else label = guide_;
+    }
+    drawTexture(label, model, true);
 }

@@ -5,13 +5,14 @@ import random
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 OUTPUT = Path(__file__).resolve().parent
 GROUP_NAMES = (
     "Interior", "Shell", "IntactWall", "BrokenWall", "MiniWalls",
     "Shelf", "Door", "Rpg", "Rack", "MiniBrokenWall", "LatchMounts", "LatchBolt",
+    "CabinetLeftDoor", "CabinetRightDoor", "CabinetMiniatures",
 )
 RANDOM = random.Random(20261120)
 COLLECTIONS = {}
@@ -418,6 +419,169 @@ def add_high_door_storage():
                      (5.613, y, z), 0.009, "MutedGold", 8)
 
 
+def add_memory_cabinet():
+    """Keep the closed cabinet frame in the shared room and its leaves in hinge-local ranges."""
+    group = "Interior"
+    for x in (1.99, 5.51):
+        box(group, "Memory cabinet side", (x, 1.35, 5.65), (0.08, 2.70, 1.28), "Walnut", 0.014)
+    box(group, "Memory cabinet recessed back", (3.75, 1.35, 6.25), (3.44, 2.70, 0.08), "Walnut", 0.012)
+    box(group, "Memory cabinet crown", (3.75, 2.66, 5.65), (3.60, 0.08, 1.28), "WalnutEdge", 0.014)
+    for y in (0.58, 1.4665):
+        box(group, "Memory cabinet model shelf", (3.75, y, 5.65), (3.44, 0.08, 1.20), "WalnutEdge", 0.012)
+    box(group, "Memory cabinet school display mat", (2.85, 1.51325, 5.65),
+        (1.50, 0.0135, 1.08), "Oak", 0.002, 1)
+    box(group, "Memory cabinet center divider", (3.75, 1.35, 5.65), (0.20, 2.70, 1.28), "Walnut", 0.012)
+    box(group, "Memory cabinet plinth", (3.75, 0.28, 5.65), (3.44, 0.52, 1.20), "Walnut", 0.014)
+    box(group, "Memory cabinet top fine molding", (3.75, 2.692, 5.63), (3.60, 0.016, 1.28), "Oak", 0.004, 1)
+
+    for group, sign in (("CabinetLeftDoor", 1), ("CabinetRightDoor", -1)):
+        x = sign * 0.85
+        box(group, "Memory cabinet plain door leaf", (x, 0, 0), (1.70, 2.50, 0.07), "WalnutEdge", 0.014)
+        # A broad uninterrupted center leaves the projected key silhouette unobstructed.
+        box(group, "Memory cabinet quiet inset panel", (x, 0, -0.037), (1.50, 2.26, 0.010), "Walnut", 0.012)
+        for edge in (-1, 1):
+            box(group, "Memory cabinet slender door stile", (x + edge * 0.795, 0, -0.040),
+                (0.025, 2.36, 0.015), "WalnutEdge", 0.004, 1)
+        cylinder(group, "Memory cabinet brass handle", (sign * 1.57, 0.33, -0.077),
+                 (sign * 1.57, 0.57, -0.077), 0.013, "MutedGold", 10)
+        for y in (0.33, 0.57):
+            cylinder(group, "Memory cabinet handle mount", (sign * 1.57, y, -0.043),
+                     (sign * 1.57, y, -0.077), 0.011, "MutedGold", 8)
+        for y in (-0.94, 0.94):
+            cylinder(group, "Memory cabinet hinge", (0, y - 0.048, 0.0), (0, y + 0.048, 0.0),
+                     0.021, "MutedGold", 10)
+
+    group = "Interior"
+    for name, center, size, surface in (
+        ("Cube display base", (3.07, 0.035, 4.0), (0.62, 0.07, 0.46), "Walnut"),
+        ("Cube display stem", (3.07, 0.485, 4.0), (0.14, 0.83, 0.14), "Walnut"),
+        ("Cube display seat", (3.07, 0.925, 4.0), (0.34, 0.05, 0.22), "SageLinen"),
+        ("Key display base", (4.03, 0.035, 4.55), (0.60, 0.07, 0.35), "Walnut"),
+        ("Key display stem", (4.03, 0.635, 4.55), (0.14, 1.13, 0.14), "Walnut"),
+        ("Key display seat", (4.03, 1.225, 4.55), (0.30, 0.05, 0.18), "SageLinen"),
+    ):
+        box(group, name, center, size, surface, 0.008, 2)
+
+
+def add_cabinet_label(text, x, y):
+    group = "CabinetMiniatures"
+    box(group, "Cabinet label plate " + text, (x, y - 0.045, 5.022),
+        (0.43, 0.058, 0.012), "Metal", 0.005, 1)
+    curve = bpy.data.curves.new("Cabinet label " + text, 'FONT')
+    curve.body = text
+    curve.size = 0.033
+    curve.align_x = 'CENTER'
+    curve.align_y = 'CENTER'
+    curve.resolution_u = 1
+    curve.extrude = 0
+    curve.materials.append(MATERIALS["Paper"])
+    source = bpy.data.objects.new("Cabinet label " + text, curve)
+    source.location = point((x, y - 0.045, 5.013))
+    source.rotation_euler = (math.pi * 0.5, 0, math.pi)
+    bpy.context.scene.collection.objects.link(source)
+    bpy.context.view_layer.update()
+    data = bpy.data.meshes.new_from_object(source.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    obj = bpy.data.objects.new("Cabinet engraved label " + text, data)
+    obj.matrix_world = source.matrix_world.copy()
+    obj["home_group"] = group
+    COLLECTIONS[group].objects.link(obj)
+    bpy.data.objects.remove(source, do_unlink=True)
+
+
+def add_school_representative():
+    """The three-by-four desks and three boards follow SchoolRoom's current classroom layout."""
+    group = "CabinetMiniatures"
+    origin, scale = Vector((2.85, 1.52, 5.65)), 0.075
+
+    def school_box(name, center, size, surface):
+        local = Vector(center) - Vector((0.8, 0, 1.0))
+        local.x = -local.x
+        local.z = -local.z
+        return box(group, "School model | " + name, tuple(origin + local * scale),
+                   tuple(Vector(size) * scale), surface)
+
+    school_box("Cutaway board wall", (0.8, 1.65, -5.1), (12.0, 3.3, 0.12), "Plaster")
+    for x in (-2.80, -0.85, 1.10):
+        school_box("Three panel chalkboard frame", (x, 2.22, -4.83), (1.85, 2.02, 0.09), "Walnut")
+        school_box("Sage chalkboard", (x, 2.22, -4.775), (1.74, 1.91, 0.018), "DarkLinen")
+        school_box("Chalk ledge", (x, 1.22, -4.70), (1.8, 0.06, 0.16), "Oak")
+    for row, z in enumerate((0.65, 2.55, 4.45, 6.35)):
+        for column, x in enumerate((-3.05, -0.95, 1.15)):
+            school_box("Student desk", (x, 0.74, z), (1.06, 0.08, 0.66), "Oak")
+            school_box("Desk storage", (x, 0.58, z), (0.85, 0.20, 0.46), "Walnut")
+            for dx in (-0.42, 0.42):
+                for dz in (-0.23, 0.23):
+                    school_box("Desk leg", (x + dx, 0.32, z + dz), (0.045, 0.64, 0.045), "Metal")
+            school_box("Student chair seat", (x, 0.43, z + 0.69), (0.48, 0.07, 0.48), "WalnutEdge")
+            school_box("Student chair back", (x, 0.75, z + 0.88), (0.48, 0.30, 0.055), "WalnutEdge")
+            for dx in (-0.18, 0.18):
+                school_box("Chair frame", (x + dx, 0.22, z + 0.69), (0.038, 0.44, 0.38), "Metal")
+            school_box("Closed lesson book", (x - 0.13, 0.80, z - 0.07), (0.32, 0.045, 0.24),
+                       ("BlueBook", "RedBook", "GreenBook")[(row + column) % 3])
+    school_box("Teacher lectern", (1.0, 0.48, -3.25), (1.0, 0.96, 0.62), "Walnut")
+    school_box("Teacher worktop", (1.0, 1.0, -3.25), (1.1, 0.08, 0.70), "Oak")
+    school_box("Materials gallery", (4.30, 0.90, -4.43), (4.40, 1.80, 1.20), "WalnutEdge")
+    for x in (2.65, 3.75, 4.85, 5.95):
+        school_box("Gallery door", (x, 0.87, -3.812), (1.04, 1.64, 0.025), "Linen")
+    add_cabinet_label("SCHOOL", 2.85, 1.52)
+
+
+def add_military_representative():
+    """Reuse the barracks' authored beds and lockers at a compact, bevel-free display LOD."""
+    group = "CabinetMiniatures"
+    source_path = OUTPUT.parents[1] / "military" / "design" / "군대 방 맵.blend"
+    parts = ("frame", "rounded mattress", "blanket", "pillow", "headboard",
+             "leg", "leg.001", "leg.002", "leg.003")
+    wanted = [f"Barracks ref | {side} bed {index} {part}"
+              for side in ("North", "South") for index in range(1, 6) for part in parts]
+    wanted += [f"Barracks steel | {side} locker {index}"
+               for side in ("North", "South") for index in range(1, 6)]
+    with bpy.data.libraries.load(str(source_path), link=False) as (source, target):
+        target.objects = [name for name in wanted if name in source.objects]
+    transform = Matrix.Translation(point((2.2275, 0.62, 6.04))) @ Matrix.Scale(0.075, 4)
+    for obj in target.objects:
+        obj.name = "Military model | " + obj.name
+        obj["home_group"] = group
+        # Appended objects have their authored TRS before an evaluated world matrix exists.
+        obj.matrix_world = transform @ obj.matrix_basis
+        obj.modifiers.clear()
+        obj.hide_render = False
+        COLLECTIONS[group].objects.link(obj)
+    box(group, "Military model | Barracks floor", (2.85, 0.615, 5.65),
+        (1.245, 0.01, 0.78), "Linen")
+    for z in (5.257, 6.043):
+        box(group, "Military model | Low cutaway side wall", (2.85, 0.65, z),
+            (1.26, 0.06, 0.012), "Plaster")
+    box(group, "Military model | End wall", (3.479, 0.74, 5.65), (0.012, 0.24, 0.79), "Plaster")
+    for z in (5.51, 5.79):
+        box(group, "Military model | Daylight window", (3.471, 0.77, z), (0.003, 0.11, 0.18), "Sky")
+    add_cabinet_label("MILITARY", 2.85, 0.62)
+
+
+def add_office_representative():
+    """A representative four-workstation office awaits the teammate's full map integration."""
+    group = "CabinetMiniatures"
+    box(group, "Office model | Floor", (4.65, 0.615, 5.65), (1.30, 0.01, 0.92), "CreamRug")
+    for x in (4.34, 4.97):
+        for z in (5.43, 5.88):
+            box(group, "Office model | Worktop", (x, 0.728, z), (0.48, 0.018, 0.28), "Oak")
+            for dx in (-0.195, 0.195):
+                box(group, "Office model | Desk frame", (x + dx, 0.67, z), (0.015, 0.10, 0.23), "Metal")
+            box(group, "Office model | Screen support", (x, 0.773, z + 0.055), (0.018, 0.08, 0.018), "Metal")
+            box(group, "Office model | Display housing", (x, 0.823, z + 0.055), (0.24, 0.15, 0.018), "BlackPlastic")
+            box(group, "Office model | Display screen", (x, 0.823, z + 0.044), (0.218, 0.126, 0.003), "Screen")
+            box(group, "Office model | Keyboard", (x, 0.743, z - 0.055), (0.17, 0.008, 0.065), "Metal")
+            box(group, "Office model | Chair seat", (x, 0.686, z - 0.20), (0.17, 0.027, 0.16), "DarkLinen")
+            box(group, "Office model | Chair back", (x, 0.763, z - 0.266), (0.17, 0.145, 0.02), "DarkLinen")
+            cylinder(group, "Office model | Chair post", (x, 0.625, z - 0.20), (x, 0.68, z - 0.20), 0.014, "Metal", 8)
+            box(group, "Office model | Chair foot", (x, 0.63, z - 0.20), (0.19, 0.012, 0.15), "Metal")
+    for x in (4.34, 4.97):
+        box(group, "Office model | Felt desk divider", (x, 0.797, 5.65), (0.50, 0.24, 0.015), "SageLinen")
+    box(group, "Office model | Central low partition", (4.65, 0.76, 5.65), (0.018, 0.28, 0.87), "Linen")
+    add_cabinet_label("OFFICE", 4.65, 0.62)
+    add_cabinet_label("HOME", 4.65, 1.52)
+
+
 def add_window():
     group = "Shell"
     box(group, "Window view sky", (-5.975, 1.84, -2.1), (0.02, 1.75, 3.22), "Sky")
@@ -586,13 +750,13 @@ def add_rpg_and_rack():
 def add_miniature_broken_wall():
     """Retain the true opening while exposing the reverse face above a low corridor."""
     for original in list(COLLECTIONS["BrokenWall"].objects):
-        if original.name.startswith("Exit corridor ceiling"):
+        if original.name.startswith(("Exit corridor ceiling", "Back wall side")):
             continue
         duplicate = original.copy()
         duplicate.data = original.data.copy()
         duplicate.name = "Mini cutaway | " + original.name
         duplicate["home_group"] = "MiniBrokenWall"
-        if original.name.startswith(("Exit corridor wall", "Exit warm end")):
+        if original.name.startswith(("Exit corridor wall", "Exit warm end", "Recessed door jamb")):
             for vertex in duplicate.data.vertices:
                 vertex.co.z = min(vertex.co.z, 0.60)
             duplicate.data.update()
@@ -865,8 +1029,9 @@ def add_presentation(scene):
         light.rotation_euler = (target - light.location).to_track_quat('-Z', 'Y').to_euler()
     cameras = (
         ("01 | Human entry view", (0, 1.65, 5.0), (0, 1.45, -2.0), 21),
-        ("02 | Desk and matching miniature", (0.6, 2.10, 2.70), (2.2, 1.05, 0.58), 30),
+        ("02 | Cabinet miniature collection", (3.75, 2.15, 3.0), (3.75, 1.35, 5.65), 23),
         ("03 | Room editorial corner", (-1.0, 2.45, 5.5), (-1.2, 1.1, -2.3), 19),
+        ("04 | Cabinet and computer", (-0.4, 2.25, 1.4), (3.75, 1.35, 5.65), 24),
     )
     for name, eye, target, lens in cameras:
         data = bpy.data.cameras.new(name)
@@ -919,18 +1084,28 @@ def main():
     add_reverse_door_latch()
     add_lived_in_decor()
     add_high_door_storage()
+    add_memory_cabinet()
+    add_school_representative()
+    add_military_representative()
+    add_office_representative()
     presentation = bpy.data.collections.new("Presentation | linked instances excluded from game export")
     scene.collection.children.link(presentation)
     instance("Real bookcase default pose", "Shelf", (0, 1.3, -5.95), collection=presentation)
-    base = Vector((1.99, 1.04, 0.77))
+    base = Vector((4.65, 1.52, 5.65))
     for group in ("Interior", "MiniWalls", "IntactWall"):
-        instance("Tabletop same-layout " + group, group, base, 0.10, presentation)
-    instance("Tabletop bookcase same-layout", "Shelf", base + Vector((0, 1.3, -5.95)) * 0.10,
-             0.10, presentation)
+        home_model = instance("Cabinet same-layout " + group, group, base, 0.075, presentation)
+        home_model.rotation_euler.z = math.radians(90.0)
+    mini_shelf = instance("Cabinet bookcase same-layout", "Shelf", base + Vector((-5.95, 1.3, 0)) * 0.075,
+                          0.075, presentation)
+    mini_shelf.rotation_euler.z = math.radians(90.0)
     stored_door = instance("Detached miniature door", "Door", (5.20, 2.245, -3.25), 0.16, presentation)
     stored_door.rotation_euler.x = math.radians(-90.0)
-    instance("Miniature equipment rack", "Rack", (3.15, 1.20, 0.67), 1.0, presentation)
-    instance("Miniature RPG", "Rpg", (3.16, 1.21, 0.59), 1.0, presentation)
+    mini_rack = instance("Miniature equipment rack", "Rack", (2.85, 0.90, 5.65), 0.8, presentation)
+    mini_rack.rotation_euler.z = math.radians(180.0)
+    instance("Miniature RPG", "Rpg", (2.85, 0.91, 5.55), 0.8, presentation)
+    instance("Cabinet representative rooms", "CabinetMiniatures", (0, 0, 0), 1.0, presentation)
+    instance("Cabinet left leaf closed", "CabinetLeftDoor", (1.95, 1.35, 4.99), 1.0, presentation)
+    instance("Cabinet right leaf closed", "CabinetRightDoor", (5.55, 1.35, 4.99), 1.0, presentation)
     add_presentation(scene)
     for name, collection in COLLECTIONS.items():
         collection.use_fake_user = True

@@ -4,6 +4,8 @@
 
 class ComputerScreen {
 public:
+    enum class Item { Cube, Key };
+    enum class Action { None, TakeCube, TakeKey };
     ComputerScreen() = default;
     ComputerScreen(const ComputerScreen&) = delete;
     ComputerScreen& operator=(const ComputerScreen&) = delete;
@@ -14,11 +16,20 @@ public:
     void scroll(double amount);
     void setCubeVisible(bool visible);
     void setCube(float edge, float yaw);
+    void selectItem(int number);
+    Item selection() const;
+    Action confirm();
+    bool cubeSolved() const;
+    bool keySolved() const;
+    float keyYaw() const;
+    void setKeyVisible(bool visible);
+    void setKey(float yaw);
     float edge() const;
     float yaw() const;
     void draw(const glm::mat4& viewProjection) const;
     void drawCube(const glm::mat4& viewProjection, const glm::mat4& model) const;
-    void drawGuide(bool active, bool holding) const;
+    void drawKeyPiece(const glm::mat4& viewProjection, const glm::mat4& model) const;
+    void drawGuide(bool active, bool holding, bool holdingKey = false) const;
 
     static constexpr glm::vec3 center{5.505f, 1.85f, 3.0f};
 
@@ -35,11 +46,21 @@ private:
     GLuint vertexArray_ = 0;
     GLuint guide_ = 0;
     GLuint holdingGuide_ = 0;
+    GLuint cubeGuide_ = 0;
+    GLuint keyGuide_ = 0;
+    GLuint rejectedGuide_ = 0;
+    GLuint outsideGuide_ = 0;
     GLint transform_ = -1;
     GLint flip_ = -1;
-    glm::vec2 position_{0.0f};
-    float edge_ = 0.60f;
+    glm::vec2 position_{-0.55f, -0.20f};
+    float edge_ = 0.40f;
     float yaw_ = 0.35f;
     bool visible_ = true;
+    Item selected_ = Item::Cube;
+    bool cubeSolved_ = false;
+    bool keySolved_ = false;
+    bool keyVisible_ = true;
+    float keyYaw_ = 1.35f;
+    bool rejected_ = false;
     mutable bool dirty_ = true;
 };

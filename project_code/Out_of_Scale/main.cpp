@@ -190,6 +190,8 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
                     scene.room.closeComputer();
                 } else if (key == GLFW_KEY_E) {
                     scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
+                } else if (key == GLFW_KEY_1 || key == GLFW_KEY_2) {
+                    scene.room.computerSelect(key == GLFW_KEY_1 ? 1 : 2);
                 }
                 scene.player.resetMouseSample();
                 return;

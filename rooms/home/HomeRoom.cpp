@@ -27,8 +27,8 @@ constexpr float shelfParkedOffset = -2.50f;
 constexpr float reach = 2.8f;
 constexpr float fittingReach = 10.0f;
 constexpr float miniatureScale = 0.16f;
-constexpr float roomMiniatureScale = 0.10f;
-constexpr glm::vec3 roomMiniatureOrigin{1.99f, 1.04f, 0.77f};
+constexpr float roomMiniatureScale = 0.075f;
+constexpr glm::vec3 roomMiniatureOrigin{4.65f, 1.52f, 5.65f};
 constexpr float debrisDuration = 1.4f;
 constexpr float projectileSpeed = 12.0f;
 constexpr float impactDuration = 0.20f;
@@ -38,9 +38,8 @@ constexpr glm::vec3 plaster{0.856f, 0.837f, 0.777f};
 
 constexpr Box desk{{2.90f, 0.50f, 0.80f}, {3.30f, 1.00f, 1.40f}};
 constexpr Box shelf{{0.0f, 1.30f, -5.95f}, {2.05f, 2.60f, 0.60f}};
-constexpr Box miniShelf{roomMiniatureOrigin + shelf.center * roomMiniatureScale,
-                        shelf.size * roomMiniatureScale + glm::vec3{0.05f, 0.04f, 0.05f}};
-constexpr Box miniRpg{{3.16f, 1.21f, 0.59f}, {0.58f, 0.27f, 0.24f}};
+constexpr Box miniShelf{{4.20375f, 1.6175f, 5.65f}, {0.095f, 0.235f, 0.20375f}};
+constexpr Box miniRpg{{2.85f, 0.91f, 5.55f}, {0.47f, 0.24f, 0.21f}};
 constexpr Box shelvedDoor{{5.20f, 2.245f, -3.25f}, {0.31f, 0.09f, 0.48f}};
 constexpr Box wallPanel{{0.0f, 1.30f, wallZ}, {1.80f, 2.60f, 0.31f}};
 constexpr Box door{{0.0f, 1.30f, wallZ}, {1.76f, 2.60f, 0.105f}};
@@ -50,6 +49,28 @@ constexpr float eyeHeight = 1.65f;
 constexpr float headClearance = 0.15f;
 constexpr Box monitor{{5.505f, 1.85f, 3.0f}, {0.05f, 1.80f, 3.20f}};
 constexpr Box monitorBody{{5.61f, 1.85f, 3.0f}, {0.20f, 2.0f, 3.40f}};
+constexpr Box cabinetBody{{3.75f, 1.35f, 5.65f}, {3.60f, 2.70f, 1.28f}};
+constexpr Box cabinetFront{{3.75f, 1.35f, 4.99f}, {3.60f, 2.50f, 0.08f}};
+constexpr glm::vec3 leftHinge{1.95f, 1.35f, 4.99f};
+constexpr glm::vec3 rightHinge{5.55f, 1.35f, 4.99f};
+constexpr glm::vec3 observationEye{3.80f, 1.65f, 2.0f};
+constexpr glm::vec3 goalCube{3.07f, 1.25f, 4.0f};
+constexpr glm::vec3 goalKey{4.03f, 1.25f, 4.55f};
+constexpr float guidePlane = 4.94f;
+constexpr std::array keyParts{
+    Box{{0.0f, .10f, 0.0f}, {1.30f, .20f, .12f}},
+    Box{{.25f, -.10f, 0.0f}, {.13f, .20f, .12f}},
+    Box{{.55f, -.10f, 0.0f}, {.13f, .20f, .12f}},
+};
+constexpr std::array cabinetFrame{
+    Box{{1.99f,1.35f,5.65f},{.08f,2.70f,1.28f}},
+    Box{{5.51f,1.35f,5.65f},{.08f,2.70f,1.28f}},
+    Box{{3.75f,1.35f,6.25f},{3.44f,2.70f,.08f}},
+    Box{{3.75f,2.66f,5.65f},{3.60f,.08f,1.28f}},
+    Box{{3.75f,1.4665f,5.65f},{3.44f,.08f,1.20f}},
+    Box{{3.75f,.58f,5.65f},{3.44f,.08f,1.20f}},
+    Box{{3.75f,1.35f,5.65f},{.20f,2.70f,1.28f}},
+};
 
 constexpr std::array staticInterior{
     desk,
@@ -57,6 +78,12 @@ constexpr std::array staticInterior{
     Box{{-4.85f, 0.37f, -0.55f}, {0.85f, 0.74f, 0.78f}},
     Box{{4.90f, 0.71f, -3.25f}, {1.20f, 1.42f, 1.50f}},
     Box{{-3.65f, 0.48f, 4.65f}, {1.25f, 0.96f, 1.05f}},
+    Box{{3.07f,.035f,4.0f},{.62f,.07f,.46f}},
+    Box{{3.07f,.485f,4.0f},{.14f,.83f,.14f}},
+    Box{{3.07f,.925f,4.0f},{.34f,.05f,.22f}},
+    Box{{4.03f,.035f,4.55f},{.60f,.07f,.35f}},
+    Box{{4.03f,.635f,4.55f},{.14f,1.13f,.14f}},
+    Box{{4.03f,1.225f,4.55f},{.30f,.05f,.18f}},
 };
 
 // These match the artist's shelf platform, front lip, side rails and rear rail.
@@ -75,12 +102,12 @@ struct HomeMeshRange {
 
 enum class HomeMesh {
     Interior, Shell, IntactWall, BrokenWall, MiniWalls, Shelf, Door, Rpg, Rack,
-    MiniBrokenWall, LatchMounts, LatchBolt
+    MiniBrokenWall, LatchMounts, LatchBolt, CabinetLeftDoor, CabinetRightDoor, CabinetMiniatures
 };
 
 #include "HomeGeometry.inc"
 
-static_assert(std::size(homeMeshes) == 12);
+static_assert(std::size(homeMeshes) == 15);
 
 struct WallShard {
     glm::vec3 center;
@@ -172,7 +199,22 @@ Box shelfAt(float offset) {
 }
 
 Box miniatureBox(const Box& box) {
-    return {roomMiniatureOrigin + box.center * roomMiniatureScale, box.size * roomMiniatureScale};
+    const glm::vec3 center{box.center.z, box.center.y, -box.center.x};
+    const glm::vec3 size{box.size.z, box.size.y, box.size.x};
+    return {roomMiniatureOrigin + center * roomMiniatureScale, size * roomMiniatureScale};
+}
+
+glm::mat4 miniatureModel() {
+    auto model = glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin);
+    model = glm::rotate(model, glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
+    return glm::scale(model, glm::vec3{roomMiniatureScale});
+}
+
+std::array<Box, 2> cabinetDoors(bool open) {
+    if (open) return {Box{{1.95f,1.35f,4.14f},{.08f,2.50f,1.70f}},
+                      Box{{5.55f,1.35f,4.14f},{.08f,2.50f,1.70f}}};
+    return {Box{{2.80f,1.35f,4.99f},{1.70f,2.50f,.08f}},
+            Box{{4.70f,1.35f,4.99f},{1.70f,2.50f,.08f}}};
 }
 
 bool overlapsPlayer(const glm::vec3& position, const Box& box) {
@@ -223,6 +265,136 @@ std::optional<float> cubeRay(const glm::vec3& eye, const glm::vec3& direction,
                              const glm::vec3& center, float edge, float yaw) {
     return perspective::rayBoxDistance(cubeLocal(eye - center, yaw), cubeLocal(direction, yaw),
                                        glm::vec3{0.0f}, glm::vec3{edge * 0.5f});
+}
+
+bool rotatedBoxesOverlap(const Box& a, float yawA, const Box& b, float yawB = 0.0f) {
+    if (std::abs(a.center.y - b.center.y) >= (a.size.y + b.size.y) * .5f - .001f) return false;
+    const glm::vec2 xA{std::cos(yawA), -std::sin(yawA)};
+    const glm::vec2 zA{std::sin(yawA), std::cos(yawA)};
+    const glm::vec2 xB{std::cos(yawB), -std::sin(yawB)};
+    const glm::vec2 zB{std::sin(yawB), std::cos(yawB)};
+    const glm::vec2 delta{a.center.x - b.center.x, a.center.z - b.center.z};
+    for (const auto axis : {xA, zA, xB, zB}) {
+        const float radiusA = (a.size.x * std::abs(glm::dot(axis, xA)) + a.size.z * std::abs(glm::dot(axis, zA))) * .5f;
+        const float radiusB = (b.size.x * std::abs(glm::dot(axis, xB)) + b.size.z * std::abs(glm::dot(axis, zB))) * .5f;
+        if (std::abs(glm::dot(delta, axis)) >= radiusA + radiusB - .001f) return false;
+    }
+    return true;
+}
+
+Box worldKeyPart(const glm::vec3& center, float yaw, const Box& part) {
+    return {center + cubeLocal(part.center, -yaw), part.size};
+}
+
+bool keyOverlapsPlayer(const glm::vec3& center, float yaw, const glm::vec3& eye) {
+    const auto local = cubeLocal(eye - center, yaw);
+    for (const auto& part : keyParts) {
+        if (local.y - eyeHeight >= part.center.y + part.size.y * .5f - .01f ||
+            local.y + headClearance <= part.center.y - part.size.y * .5f + .01f) continue;
+        const float x = local.x - std::clamp(local.x, part.center.x - part.size.x * .5f, part.center.x + part.size.x * .5f);
+        const float z = local.z - std::clamp(local.z, part.center.z - part.size.z * .5f, part.center.z + part.size.z * .5f);
+        if (x * x + z * z < playerRadius * playerRadius) return true;
+    }
+    return false;
+}
+
+std::optional<float> keyRay(const glm::vec3& eye, const glm::vec3& direction,
+                            const glm::vec3& center, float yaw) {
+    std::optional<float> nearest;
+    for (const auto& part : keyParts) {
+        const auto hit = perspective::rayBoxDistance(cubeLocal(eye - center, yaw), cubeLocal(direction, yaw),
+                                                      part.center, part.size * .5f);
+        if (hit && (!nearest || *hit < *nearest)) nearest = hit;
+    }
+    return nearest;
+}
+
+std::array<glm::vec3, 8> cubePoints(const glm::vec3& center, float edge, float yaw) {
+    std::array<glm::vec3, 8> result{};
+    int index = 0;
+    for (const float x : {-edge * .5f, edge * .5f}) {
+        for (const float y : {-edge * .5f, edge * .5f}) {
+            for (const float z : {-edge * .5f, edge * .5f}) result[index++] = center + cubeLocal({x,y,z}, -yaw);
+        }
+    }
+    return result;
+}
+
+std::array<glm::vec3, 12> keyPoints(const glm::vec3& center, float yaw) {
+    constexpr std::array<glm::vec3, 12> outline{{
+        {-.65f,0,-.06f},{-.65f,.20f,-.06f},{.65f,.20f,-.06f},{.65f,0,-.06f},
+        {.615f,0,-.06f},{.615f,-.20f,-.06f},{.485f,-.20f,-.06f},{.485f,0,-.06f},
+        {.315f,0,-.06f},{.315f,-.20f,-.06f},{.185f,-.20f,-.06f},{.185f,0,-.06f}}};
+    std::array<glm::vec3, 12> result{};
+    for (std::size_t index = 0; index < result.size(); ++index) result[index] = center + cubeLocal(outline[index], -yaw);
+    return result;
+}
+
+glm::vec3 guidePoint(const glm::vec3& point) {
+    return observationEye + (point - observationEye) * ((guidePlane - observationEye.z) / (point.z - observationEye.z));
+}
+
+template<std::size_t Count>
+std::array<glm::vec3, Count> projectedPoints(const std::array<glm::vec3, Count>& points) {
+    auto result = points;
+    for (auto& point : result) point = guidePoint(point);
+    return result;
+}
+
+const std::vector<MeshVertex>& alignmentGuideMesh() {
+    static const auto mesh = [] {
+        const auto cube = projectedPoints(cubePoints(goalCube, .60f, .35f));
+        std::vector<glm::vec3> points{cube.begin(), cube.end()};
+        std::sort(points.begin(), points.end(), [](const auto& a, const auto& b) {
+            return a.x < b.x || (a.x == b.x && a.y < b.y);
+        });
+        const auto turn = [](const auto& a, const auto& b, const auto& c) {
+            return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+        };
+        std::vector<glm::vec3> hull;
+        for (const auto& point : points) {
+            while (hull.size() >= 2 && turn(hull[hull.size()-2], hull.back(), point) <= 0.0f) hull.pop_back();
+            hull.push_back(point);
+        }
+        const auto lower = hull.size();
+        for (int index = static_cast<int>(points.size()) - 2; index >= 0; --index) {
+            while (hull.size() > lower && turn(hull[hull.size()-2], hull.back(), points[index]) <= 0.0f) hull.pop_back();
+            hull.push_back(points[index]);
+        }
+        hull.pop_back();
+        std::vector<MeshVertex> result;
+        const auto stroke = [&](const auto& a, const auto& b) {
+            const auto delta = b - a;
+            const glm::vec3 side = glm::normalize(glm::vec3{-delta.y, delta.x, 0.0f}) * .009f;
+            constexpr glm::vec3 color{.87f,.71f,.39f};
+            result.insert(result.end(), {{a-side,color},{b-side,color},{b+side,color},
+                                          {a-side,color},{b+side,color},{a+side,color}});
+        };
+        for (std::size_t index = 0; index < hull.size(); ++index) stroke(hull[index], hull[(index+1)%hull.size()]);
+        const auto key = projectedPoints(keyPoints(goalKey, 0.0f));
+        for (std::size_t index = 0; index < key.size(); ++index) stroke(key[index], key[(index+1)%key.size()]);
+        return result;
+    }();
+    return mesh;
+}
+
+bool matchingRays(std::span<const glm::vec3> actual, std::span<const glm::vec3> guide,
+                  const glm::vec3& eye) {
+    const auto matches = [&](auto from, auto to) {
+        for (const auto& point : from) {
+            const auto ray = glm::normalize(point - eye);
+            bool found = false;
+            for (const auto& target : to) {
+                if (glm::dot(ray, glm::normalize(target - eye)) >= std::cos(.035f)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
+    };
+    return matches(actual, guide) && matches(guide, actual);
 }
 
 void drawHomeMesh(const BoxRenderer& renderer, HomeMesh mesh, const glm::mat4& model,
@@ -285,6 +457,8 @@ glm::vec3 carrySide(const glm::vec3& direction) {
 bool HomeRoom::initialize() {
     std::vector<MeshVertex> movable = fractureMesh().vertices;
     movable.insert(movable.end(), std::begin(homeGeometry), std::end(homeGeometry));
+    const auto& guide = alignmentGuideMesh();
+    movable.insert(movable.end(), guide.begin(), guide.end());
     return renderer_.initialize({}, movable) && computer_.initialize();
 }
 
@@ -292,6 +466,9 @@ bool HomeRoom::computerActive() const { return computerActive_; }
 void HomeRoom::closeComputer() { computerActive_ = false; }
 void HomeRoom::computerInput(float horizontal, float vertical, float turn, float elapsed) {
     if (computerActive_) computer_.input(horizontal, vertical, turn, elapsed);
+}
+void HomeRoom::computerSelect(int number) {
+    if (computerActive_) computer_.selectItem(number);
 }
 
 bool HomeRoom::aimsAtComputer(const glm::vec3& eye, const glm::vec3& direction) const {
@@ -309,6 +486,18 @@ bool HomeRoom::cubeFits(const ComputerCube& cube, const glm::vec3& eye) const {
     }
     for (const auto& obstacle : doorShelf) {
         if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
+    }
+    for (const auto& obstacle : cabinetFrame) {
+        if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
+    }
+    for (const auto& obstacle : cabinetDoors(cabinetOpen_)) {
+        if (cubeOverlapsBox(cube.center, cube.edge, cube.yaw, obstacle)) return false;
+    }
+    if (keyPiece_ && held_ != HeldItem::Key) {
+        for (const auto& part : keyParts) {
+            if (rotatedBoxesOverlap({cube.center,glm::vec3{cube.edge}},cube.yaw,
+                                     worldKeyPart(keyPiece_->center,keyPiece_->yaw,part),keyPiece_->yaw)) return false;
+        }
     }
     return !cubeOverlapsBox(cube.center, cube.edge, cube.yaw, shelfAt(shelfOffset_)) &&
            !cubeOverlapsBox(cube.center, cube.edge, cube.yaw, monitorBody);
@@ -350,6 +539,116 @@ std::optional<HomeRoom::ComputerCube> HomeRoom::carriedCube(
     return std::nullopt;
 }
 
+bool HomeRoom::keyFits(const KeyPiece& key, const glm::vec3& eye) const {
+    const float c = std::abs(std::cos(key.yaw));
+    const float s = std::abs(std::sin(key.yaw));
+    if (std::abs(key.center.x) + .65f*c + .06f*s > 5.69f ||
+        key.center.z + .65f*s + .06f*c > 6.33f ||
+        key.center.z - .65f*s - .06f*c < wallZ + .16f ||
+        key.center.y < .199f || key.center.y > 3.02f ||
+        keyOverlapsPlayer(key.center,key.yaw,eye)) return false;
+    for (const auto& part : keyParts) {
+        const auto world = worldKeyPart(key.center,key.yaw,part);
+        const auto blockedBy = [&](const Box& obstacle) { return rotatedBoxesOverlap(world,key.yaw,obstacle); };
+        for (const auto& obstacle : staticInterior) if (blockedBy(obstacle)) return false;
+        for (const auto& obstacle : doorShelf) if (blockedBy(obstacle)) return false;
+        for (const auto& obstacle : cabinetFrame) if (blockedBy(obstacle)) return false;
+        for (const auto& obstacle : cabinetDoors(cabinetOpen_)) if (blockedBy(obstacle)) return false;
+        if (blockedBy(shelfAt(shelfOffset_)) || blockedBy(monitorBody)) return false;
+        if (computerCube_ && held_ != HeldItem::Cube &&
+            rotatedBoxesOverlap(world,key.yaw,{computerCube_->center,glm::vec3{computerCube_->edge}},computerCube_->yaw)) return false;
+    }
+    return true;
+}
+
+std::optional<HomeRoom::KeyPiece> HomeRoom::carriedKey(const glm::vec3& eye, const glm::vec3& direction) const {
+    KeyPiece key = *keyPiece_;
+    key.verticalSpeed = 0.0f;
+    const auto reachable = [&] {
+        if (!keyFits(key,eye)) return false;
+        const auto delta = key.center-eye;
+        const float distance = glm::length(delta);
+        return distance > .01f && visibleRange(eye,delta/distance,distance) >= distance-.002f;
+    };
+    const float visible = visibleRange(eye,direction,2.0f);
+    for (int sample = 0; sample <= 24; ++sample) {
+        const float distance = visible-static_cast<float>(sample)*.06f;
+        if (distance < .35f) break;
+        key.center = eye+direction*distance;
+        key.center.y = std::clamp(key.center.y,.20f,3.02f);
+        if (reachable()) return key;
+    }
+    const float clearance = .65f+.25f+.08f;
+    for (const float extra : {0.0f,.45f,.90f}) {
+        for (int sample = 0; sample < 16; ++sample) {
+            const float angle = static_cast<float>(sample)*.39269908f;
+            key.center = eye+glm::vec3{std::cos(angle),0.0f,std::sin(angle)}*(clearance+extra);
+            key.center.y = std::clamp(eye.y-.45f,.20f,3.02f);
+            if (reachable()) return key;
+        }
+    }
+    return std::nullopt;
+}
+
+void HomeRoom::updateKey(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
+    if (!keyPiece_) return;
+    if (held_ == HeldItem::Key) {
+        if (const auto pose = carriedKey(eye,direction)) keyPiece_ = *pose;
+        return;
+    }
+    auto& key = *keyPiece_;
+    const int steps = std::clamp(static_cast<int>(std::ceil(elapsed*90.0f)),1,18);
+    const float step = elapsed/static_cast<float>(steps);
+    for (int index = 0; index < steps; ++index) {
+        key.verticalSpeed -= 9.8f*step;
+        const float next = key.center.y+key.verticalSpeed*step;
+        float supportCenter = .20f;
+        const auto supportedBy = [&](const Box& obstacle, float yaw = 0.0f) {
+            const float top = obstacle.center.y+obstacle.size.y*.5f;
+            for (const auto& part : keyParts) {
+                auto world = worldKeyPart(key.center,key.yaw,part);
+                const float bottom = world.center.y-world.size.y*.5f;
+                world.center.y = obstacle.center.y;
+                world.size.y = obstacle.size.y+1.0f;
+                if (bottom >= top-.005f && rotatedBoxesOverlap(world,key.yaw,obstacle,yaw))
+                    supportCenter = std::max(supportCenter,top-part.center.y+part.size.y*.5f);
+            }
+        };
+        for (const auto& obstacle : staticInterior) supportedBy(obstacle);
+        for (const auto& obstacle : doorShelf) supportedBy(obstacle);
+        for (const auto& obstacle : cabinetFrame) supportedBy(obstacle);
+        for (const auto& obstacle : cabinetDoors(cabinetOpen_)) supportedBy(obstacle);
+        supportedBy(shelfAt(shelfOffset_));
+        supportedBy(monitorBody);
+        supportedBy({{eye.x,eye.y+headClearance-.005f,eye.z},{playerRadius*2.0f,.01f,playerRadius*2.0f}});
+        if (computerCube_ && held_ != HeldItem::Cube)
+            supportedBy({computerCube_->center,glm::vec3{computerCube_->edge}},computerCube_->yaw);
+        if (next <= supportCenter) {
+            key.center.y = supportCenter;
+            key.verticalSpeed = 0.0f;
+        } else key.center.y = next;
+    }
+}
+
+void HomeRoom::updateAlignment(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
+    if (cabinetUnlocked_) return;
+    bool aligned = computer_.cubeSolved() && computer_.keySolved() && computerCube_ && keyPiece_ &&
+                   held_ != HeldItem::Cube && held_ != HeldItem::Key &&
+                   eye.z < guidePlane && direction.z > 0.0f;
+    if (aligned) {
+        const auto cube = cubePoints(computerCube_->center,computerCube_->edge,computerCube_->yaw);
+        const auto key = keyPoints(keyPiece_->center,keyPiece_->yaw);
+        const auto cubeGuide = projectedPoints(cubePoints(goalCube,.60f,.35f));
+        const auto keyGuide = projectedPoints(keyPoints(goalKey,0.0f));
+        const auto center = (guidePoint(goalCube)+guidePoint(goalKey))*.5f;
+        aligned = std::abs(computerCube_->verticalSpeed) < .04f && std::abs(keyPiece_->verticalSpeed) < .04f &&
+                  glm::dot(direction,glm::normalize(center-eye)) > std::cos(.30f) &&
+                  matchingRays(cube,cubeGuide,eye) && matchingRays(key,keyGuide,eye);
+    }
+    alignmentTime_ = aligned ? alignmentTime_+elapsed : 0.0f;
+    if (alignmentTime_ >= .60f) cabinetUnlocked_ = true;
+}
+
 float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const {
     for (const Box& obstacle : staticInterior) {
         const auto distance = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * 0.5f);
@@ -361,6 +660,14 @@ float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, f
         const auto distance = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * 0.5f);
         if (distance) maxDistance = std::min(maxDistance, *distance);
     }
+    for (const auto& obstacle : cabinetFrame) {
+        const auto hit = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * .5f);
+        if (hit) maxDistance = std::min(maxDistance, *hit);
+    }
+    for (const auto& obstacle : cabinetDoors(cabinetOpen_)) {
+        const auto hit = perspective::rayBoxDistance(eye, direction, obstacle.center, obstacle.size * .5f);
+        if (hit) maxDistance = std::min(maxDistance, *hit);
+    }
     const auto shelfHit = perspective::rayBoxDistance(
         eye, direction, shelfAt(shelfOffset_).center, shelf.size * 0.5f);
     if (shelfHit) {
@@ -369,6 +676,10 @@ float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, f
     if (computerCube_ && held_ != HeldItem::Cube) {
         const auto hit = cubeRay(eye, direction, computerCube_->center, computerCube_->edge, computerCube_->yaw);
         if (hit) maxDistance = std::min(maxDistance, *hit);
+    }
+    if (keyPiece_ && held_ != HeldItem::Key) {
+        const auto hit = keyRay(eye,direction,keyPiece_->center,keyPiece_->yaw);
+        if (hit) maxDistance = std::min(maxDistance,*hit);
     }
     return maxDistance;
 }
@@ -383,7 +694,7 @@ bool HomeRoom::canFitDoor(const glm::vec3& eye, const glm::vec3& direction) cons
 }
 
 bool HomeRoom::canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const {
-    if (!computerCube_ || held_ != HeldItem::None || !standingOnCube_) return false;
+    if (!cabinetOpen_ || !computerCube_ || held_ != HeldItem::None || !standingOnCube_) return false;
     const auto& cube = *computerCube_;
     const float cubeTop = cube.center.y + cube.edge * .5f;
     const float visible = visibleRange(eye, direction, reach);
@@ -400,11 +711,11 @@ bool HomeRoom::canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& directi
 bool HomeRoom::canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const {
     const Box latch = miniatureBox({latchCenter, {0.50f, 0.35f, 0.28f}});
     float visible = visibleRange(eye, direction, 2.3f);
-    if (eye.z >= latch.center.z - 0.02f || !aimsAt(eye, direction, latch, visible)) {
+    if (!cabinetOpen_ || eye.x >= latch.center.x - 0.02f || !aimsAt(eye, direction, latch, visible)) {
         return false;
     }
-    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin),
-                                  glm::vec3{roomMiniatureScale});
+    const auto model = miniatureModel();
+    visible = visibleMeshRange(HomeMesh::Interior,model,eye,direction,visible);
     visible = visibleMeshRange(HomeMesh::MiniWalls, model, eye, direction, visible);
     visible = visibleMeshRange(HomeMesh::MiniBrokenWall, model, eye, direction, visible);
     visible = visibleMeshRange(HomeMesh::Door, glm::translate(model, door.center), eye, direction, visible);
@@ -413,17 +724,47 @@ bool HomeRoom::canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& dir
     return aimsAt(eye, direction, latch, visible);
 }
 
+bool HomeRoom::canReachMiniatureShelf(const glm::vec3& eye, const glm::vec3& direction) const {
+    if (!cabinetOpen_ || !aimsAt(eye,direction,miniShelf,visibleRange(eye,direction,reach))) return false;
+    const auto model = miniatureModel();
+    float visible = visibleRange(eye,direction,reach);
+    visible = visibleMeshRange(HomeMesh::Interior,model,eye,direction,visible);
+    visible = visibleMeshRange(HomeMesh::MiniWalls,model,eye,direction,visible);
+    visible = visibleMeshRange(HomeMesh::IntactWall,model,eye,direction,visible);
+    const auto shelfModel = glm::translate(model,shelfAt(shelfOffset_).center);
+    return visibleMeshRange(HomeMesh::Shelf,shelfModel,eye,direction,reach+.01f) <= visible;
+}
+
+bool HomeRoom::canTakeMiniatureRpg(const glm::vec3& eye, const glm::vec3& direction) const {
+    if (!cabinetOpen_ || !aimsAt(eye,direction,miniRpg,visibleRange(eye,direction,reach))) return false;
+    auto rack = glm::translate(glm::mat4{1.0f},{2.85f,.90f,5.65f});
+    rack = glm::rotate(rack,glm::radians(180.0f),{0.0f,1.0f,0.0f});
+    rack = glm::scale(rack,glm::vec3{.8f});
+    float visible = visibleMeshRange(HomeMesh::Rack,rack,eye,direction,visibleRange(eye,direction,reach));
+    visible = visibleMeshRange(HomeMesh::CabinetMiniatures,glm::mat4{1.0f},eye,direction,visible);
+    const auto model = glm::scale(glm::translate(glm::mat4{1.0f},miniRpg.center),glm::vec3{.8f});
+    return visibleMeshRange(HomeMesh::Rpg,model,eye,direction,reach+.01f) <= visible;
+}
+
 void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
     if (computerActive_) {
-        computerCube_ = ComputerCube{glm::vec3{0.0f}, computer_.edge(), computer_.yaw()};
-        const auto pose = carriedCube(eye, direction);
-        if (pose) {
-            computerCube_ = *pose;
-            held_ = HeldItem::Cube;
-            computerActive_ = false;
-            computer_.setCubeVisible(false);
-        } else {
-            computerCube_.reset();
+        const auto action = computer_.confirm();
+        if (action == ComputerScreen::Action::TakeCube && !computerCube_) {
+            computerCube_ = ComputerCube{glm::vec3{0.0f}, computer_.edge(), computer_.yaw()};
+            if (const auto pose = carriedCube(eye, direction)) {
+                computerCube_ = *pose;
+                held_ = HeldItem::Cube;
+                computerActive_ = false;
+                computer_.setCubeVisible(false);
+            } else computerCube_.reset();
+        } else if (action == ComputerScreen::Action::TakeKey && !keyPiece_) {
+            keyPiece_ = KeyPiece{glm::vec3{0.0f},computer_.keyYaw()};
+            if (const auto pose = carriedKey(eye,direction)) {
+                keyPiece_ = *pose;
+                held_ = HeldItem::Key;
+                computerActive_ = false;
+                computer_.setKeyVisible(false);
+            } else keyPiece_.reset();
         }
         return;
     }
@@ -440,6 +781,17 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         }
         return;
     }
+    if (held_ == HeldItem::Key) {
+        if (aimsAtComputer(eye,direction)) {
+            computer_.setKey(keyPiece_->yaw);
+            keyPiece_.reset();
+            held_ = HeldItem::None;
+        } else if (const auto pose = carriedKey(eye,direction)) {
+            keyPiece_ = *pose;
+            held_ = HeldItem::None;
+        } else if (keyFits(*keyPiece_,eye)) held_ = HeldItem::None;
+        return;
+    }
     if (held_ == HeldItem::None && computerCube_) {
         const auto hit = cubeRay(eye, direction, computerCube_->center, computerCube_->edge, computerCube_->yaw);
         if (hit && *hit <= visibleRange(eye, direction, reach)) {
@@ -447,19 +799,40 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
             return;
         }
     }
-    if (held_ == HeldItem::None && !computerCube_ && aimsAtComputer(eye, direction)) {
+    if (held_ == HeldItem::None && keyPiece_) {
+        const auto hit = keyRay(eye,direction,keyPiece_->center,keyPiece_->yaw);
+        if (hit && *hit <= visibleRange(eye,direction,reach)) {
+            held_ = HeldItem::Key;
+            return;
+        }
+    }
+    if (held_ == HeldItem::None && aimsAtComputer(eye, direction)) {
         computerActive_ = true;
         return;
     }
     const float nearby = visibleRange(eye, direction, reach);
+    if (held_ == HeldItem::None && cabinetUnlocked_ && !cabinetOpen_ &&
+        aimsAt(eye,direction,cabinetFront,nearby)) {
+        for (const auto& leaf : cabinetDoors(true)) {
+            if (overlapsPlayer(eye,leaf)) return;
+            if (computerCube_ && cubeOverlapsBox(computerCube_->center,computerCube_->edge,computerCube_->yaw,leaf)) return;
+            if (keyPiece_) {
+                for (const auto& part : keyParts) {
+                    if (rotatedBoxesOverlap(worldKeyPart(keyPiece_->center,keyPiece_->yaw,part),keyPiece_->yaw,leaf)) return;
+                }
+            }
+        }
+        cabinetOpen_ = true;
+        return;
+    }
     switch (exitState_) {
         case ExitState::Explore:
-            if (aimsAt(eye, direction, miniShelf, nearby)) {
+            if (canReachMiniatureShelf(eye,direction)) {
                 shelfMoving_ = true;
             }
             break;
         case ExitState::WallRevealed:
-            if (aimsAt(eye, direction, miniRpg, nearby)) {
+            if (canTakeMiniatureRpg(eye,direction)) {
                 held_ = held_ == HeldItem::Rpg ? HeldItem::None : HeldItem::Rpg;
             }
             break;
@@ -493,7 +866,7 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
 }
 
 void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
-    if (held_ != HeldItem::Rpg || exitState_ != ExitState::WallRevealed || projectile_) {
+    if (!cabinetOpen_ || held_ != HeldItem::Rpg || exitState_ != ExitState::WallRevealed || projectile_) {
         return;
     }
     shotFlashTime_ = 0.14f;
@@ -515,6 +888,8 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
         hit(obstacle);
     }
     for (const auto& obstacle : doorShelf) hit(obstacle);
+    for (const auto& obstacle : cabinetFrame) hit(obstacle);
+    for (const auto& obstacle : cabinetDoors(cabinetOpen_)) hit(obstacle);
     hit(shelfAt(shelfOffset_));
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}});
     hit({{0.0f, 3.32f, 0.0f}, {11.7f, 0.20f, 13.1f}});
@@ -530,6 +905,7 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
         hit(obstacle, false, true);
     }
     for (const auto& obstacle : doorShelf) hit(obstacle, false, true);
+    for (const auto& obstacle : cabinetFrame) hit(obstacle,false,true);
     hit(shelfAt(shelfOffset_), false, true);
     hit({{0.0f, -0.09f, 0.0f}, {11.7f, 0.18f, 13.1f}}, false, true);
     hit({{0.0f, 0.30f, 6.51f}, {11.7f, 0.60f, 0.34f}}, false, true);
@@ -540,6 +916,14 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     hit({{0.0f, 2.90f, wallZ}, {1.80f, 0.60f, 0.31f}}, false, true);
     if (computerCube_) {
         const auto depth = cubeRay(eye, direction, computerCube_->center, computerCube_->edge, computerCube_->yaw);
+        if (depth && *depth < distance) {
+            distance = *depth;
+            breaksWall = false;
+            miniature = false;
+        }
+    }
+    if (keyPiece_) {
+        const auto depth = keyRay(eye,direction,keyPiece_->center,keyPiece_->yaw);
         if (depth && *depth < distance) {
             distance = *depth;
             breaksWall = false;
@@ -577,8 +961,9 @@ void HomeRoom::impact(const Projectile& projectile) {
         std::mt19937 random{0xB019u};
         std::uniform_real_distribution<float> jitter{-1.0f, 1.0f};
         const auto& shapes = fractureMesh().shards;
+        const auto smallImpact = (projectile.center-roomMiniatureOrigin)/roomMiniatureScale;
         const glm::vec3 realImpact = projectile.miniature
-            ? (projectile.center - roomMiniatureOrigin) / roomMiniatureScale : projectile.center;
+            ? glm::vec3{-smallImpact.z,smallImpact.y,smallImpact.x} : projectile.center;
         for (std::size_t index = 0; index < fragments_.size(); ++index) {
             const glm::vec3 center = wallPanel.center + shapes[index].center;
             const glm::vec3 outward = center - realImpact;
@@ -631,8 +1016,20 @@ void HomeRoom::updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& 
         };
         for (const auto& obstacle : staticInterior) supportedBy(obstacle);
         for (const auto& obstacle : doorShelf) supportedBy(obstacle);
+        for (const auto& obstacle : cabinetFrame) supportedBy(obstacle);
+        for (const auto& obstacle : cabinetDoors(cabinetOpen_)) supportedBy(obstacle);
         supportedBy(shelfAt(shelfOffset_));
         supportedBy(monitorBody);
+        if (keyPiece_ && held_ != HeldItem::Key) {
+            for (const auto& part : keyParts) {
+                auto world = worldKeyPart(keyPiece_->center,keyPiece_->yaw,part);
+                const float top = world.center.y+world.size.y*.5f;
+                world.center.y = cube.center.y;
+                world.size.y = cube.edge+1.0f;
+                if (bottom >= top-.005f && rotatedBoxesOverlap({cube.center,glm::vec3{cube.edge}},cube.yaw,world,keyPiece_->yaw))
+                    support = std::max(support,top);
+            }
+        }
         const float head = eye.y + headClearance;
         if (bottom >= head - .005f && cubeFootprint(eye, cube.center, cube.edge, cube.yaw)) support = std::max(support, head);
         if (nextBottom <= support) {
@@ -649,6 +1046,8 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
         return;
     }
     updateCube(elapsed, eye, direction);
+    updateKey(elapsed,eye,direction);
+    updateAlignment(elapsed,eye,direction);
     if (latchReleased_) {
         latchTravel_ = std::min(latchOpenTravel, latchTravel_ + elapsed * 0.80f);
     }
@@ -657,7 +1056,12 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
         const float nextOffset = std::max(shelfParkedOffset, shelfOffset_ - elapsed * 2.1f);
         const bool cubeBlocks = computerCube_ && held_ != HeldItem::Cube &&
             cubeOverlapsBox(computerCube_->center, computerCube_->edge, computerCube_->yaw, shelfAt(nextOffset));
-        if (!cubeBlocks && !overlapsPlayer(eye, shelfAt(nextOffset))) {
+        bool keyBlocks = false;
+        if (keyPiece_ && held_ != HeldItem::Key) {
+            for (const auto& part : keyParts)
+                keyBlocks = keyBlocks || rotatedBoxesOverlap(worldKeyPart(keyPiece_->center,keyPiece_->yaw,part),keyPiece_->yaw,shelfAt(nextOffset));
+        }
+        if (!cubeBlocks && !keyBlocks && !overlapsPlayer(eye, shelfAt(nextOffset))) {
             shelfOffset_ = nextOffset;
             if (shelfOffset_ == shelfParkedOffset) {
                 shelfMoving_ = false;
@@ -723,6 +1127,13 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
             }
         }
         if (overlapsPlayer(position, monitorBody)) return true;
+        if (overlapsPlayer(position,cabinetBody)) return true;
+        for (const auto& leaf : cabinetDoors(cabinetOpen_)) if (overlapsPlayer(position,leaf)) return true;
+        if (keyPiece_ && held_ != HeldItem::Key) {
+            const float top = keyPiece_->center.y+.20f;
+            if (!(previous.y-eyeHeight >= top-.02f && desired.y <= previous.y) &&
+                keyOverlapsPlayer(keyPiece_->center,keyPiece_->yaw,position)) return true;
+        }
         if (computerCube_ && held_ != HeldItem::Cube) {
             const auto& cube = *computerCube_;
             const float top = cube.center.y + cube.edge * .5f;
@@ -756,6 +1167,19 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
                 position.y + headClearance >= bottom) position.y = bottom - headClearance;
         }
     }
+    if (keyPiece_ && held_ != HeldItem::Key) {
+        const auto local = cubeLocal(position-keyPiece_->center,keyPiece_->yaw);
+        for (const auto& part : keyParts) {
+            const float x = local.x-std::clamp(local.x,part.center.x-part.size.x*.5f,part.center.x+part.size.x*.5f);
+            const float z = local.z-std::clamp(local.z,part.center.z-part.size.z*.5f,part.center.z+part.size.z*.5f);
+            if (x*x+z*z >= playerRadius*playerRadius) continue;
+            const float top = keyPiece_->center.y+part.center.y+part.size.y*.5f;
+            if (desired.y <= previous.y && previous.y-eyeHeight >= top-.025f) support = std::max(support,top);
+            const float bottom = keyPiece_->center.y+part.center.y-part.size.y*.5f;
+            if (desired.y > previous.y && previous.y+headClearance <= bottom+.01f &&
+                position.y+headClearance >= bottom) position.y = bottom-headClearance;
+        }
+    }
     const bool landed = position.y - eyeHeight <= support + .001f;
     if (landed) position.y = support + eyeHeight;
     position.y = std::min(position.y, 3.22f - headClearance);
@@ -773,18 +1197,15 @@ HomeRoom::ExitState HomeRoom::exitState() const {
 }
 
 void HomeRoom::drawMiniature() const {
-    renderer_.drawBox({roomMiniatureOrigin.x, 1.0125f, roomMiniatureOrigin.z},
-                      {1.24f, 0.055f, 1.40f}, wood);
-    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin),
-                                  glm::vec3{roomMiniatureScale});
-    drawRoom(model, true);
-
-    drawHomeMesh(renderer_, HomeMesh::Rack,
-                 glm::translate(glm::mat4{1.0f}, {3.15f, 1.20f, 0.67f}));
+    if (!cabinetOpen_) return;
+    drawRoom(miniatureModel(), true);
+    auto rack = glm::translate(glm::mat4{1.0f},{2.85f,.90f,5.65f});
+    rack = glm::rotate(rack,glm::radians(180.0f),{0.0f,1.0f,0.0f});
+    rack = glm::scale(rack,glm::vec3{.8f});
+    drawHomeMesh(renderer_,HomeMesh::Rack,rack);
     if ((exitState_ == ExitState::Explore || exitState_ == ExitState::WallRevealed) && held_ != HeldItem::Rpg) {
-        drawRpg(renderer_, miniRpg.center, 1.0f);
+        drawRpg(renderer_, miniRpg.center, .8f);
     }
-
 }
 
 void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
@@ -794,6 +1215,22 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
     const HomeMesh rearWall = wallBroken
         ? (miniature ? HomeMesh::MiniBrokenWall : HomeMesh::BrokenWall) : HomeMesh::IntactWall;
     drawHomeMesh(renderer_, rearWall, model);
+    if (!miniature) {
+        auto left = glm::translate(model,leftHinge);
+        auto right = glm::translate(model,rightHinge);
+        if (cabinetOpen_) {
+            left = glm::rotate(left,glm::radians(90.0f),{0.0f,1.0f,0.0f});
+            right = glm::rotate(right,glm::radians(-90.0f),{0.0f,1.0f,0.0f});
+            drawHomeMesh(renderer_,HomeMesh::CabinetMiniatures,model);
+        }
+        drawHomeMesh(renderer_,HomeMesh::CabinetLeftDoor,left);
+        drawHomeMesh(renderer_,HomeMesh::CabinetRightDoor,right);
+        if (!cabinetOpen_) {
+            const auto first = static_cast<GLint>(fractureMesh().vertices.size()+std::size(homeGeometry));
+            renderer_.drawMovableMesh(first,static_cast<GLsizei>(alignmentGuideMesh().size()),model,
+                                      cabinetUnlocked_ ? glm::vec3{.60f,1.0f,.72f} : glm::vec3{1.0f});
+        }
+    }
     const auto shelfModel = glm::translate(model, shelfAt(shelfOffset_).center);
     drawHomeMesh(renderer_, HomeMesh::Shelf, shelfModel);
     if (exitState_ <= ExitState::WallBroken && held_ != HeldItem::Door) {
@@ -823,7 +1260,9 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
             latchModel = glm::rotate(latchModel, glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
         }
         latchModel = glm::translate(latchModel, latchCenter - door.center);
-        drawHomeMesh(renderer_, HomeMesh::LatchMounts, latchModel);
+        drawHomeMesh(renderer_, HomeMesh::LatchMounts, latchModel,
+                     latchReleased_ && latchTravel_ >= latchOpenTravel
+                         ? glm::vec3{0.45f, 1.30f, 0.70f} : glm::vec3{1.0f});
         latchModel = glm::translate(latchModel, {-latchTravel_, 0.0f, 0.0f});
         drawHomeMesh(renderer_, HomeMesh::LatchBolt, latchModel);
     }
@@ -892,9 +1331,14 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
         model = glm::rotate(model, computerCube_->yaw, {0.0f,1.0f,0.0f});
         model = glm::scale(model, glm::vec3{computerCube_->edge});
         computer_.drawCube(viewProjection, model);
-        const auto miniature = glm::scale(glm::translate(glm::mat4{1.0f}, roomMiniatureOrigin), glm::vec3{roomMiniatureScale});
-        computer_.drawCube(viewProjection, miniature * model);
+        if (cabinetOpen_) computer_.drawCube(viewProjection, miniatureModel() * model);
+    }
+    if (keyPiece_) {
+        auto model = glm::translate(glm::mat4{1.0f},keyPiece_->center);
+        model = glm::rotate(model,keyPiece_->yaw,{0.0f,1.0f,0.0f});
+        computer_.drawKeyPiece(viewProjection,model);
+        if (cabinetOpen_) computer_.drawKeyPiece(viewProjection,miniatureModel()*model);
     }
     computer_.draw(viewProjection);
-    computer_.drawGuide(computerActive_, held_ == HeldItem::Cube);
+    computer_.drawGuide(computerActive_, held_ == HeldItem::Cube, held_ == HeldItem::Key);
 }

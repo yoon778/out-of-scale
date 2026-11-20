@@ -100,7 +100,7 @@
     </ClCompile>
     <ClCompile Include="..\..\rooms\test\TestRoom.cpp" />
     <ClCompile Include="..\..\rooms\home\HomeRoom.cpp">
-      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/bigobj /utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <ClCompile Include="..\..\rooms\home\ComputerScreen.cpp">
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>

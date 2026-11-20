@@ -20,6 +20,7 @@ public:
     bool computerActive() const;
     void closeComputer();
     void computerInput(float horizontal, float vertical, float turn, float elapsed);
+    void computerSelect(int number);
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
@@ -30,7 +31,13 @@ public:
     static constexpr glm::vec3 computerDirection{1.0f, 0.0f, 0.0f};
 
 private:
-    enum class HeldItem { None, Rpg, Door, Cube };
+    enum class HeldItem { None, Rpg, Door, Cube, Key };
+
+    struct KeyPiece {
+        glm::vec3 center{0.0f};
+        float yaw = 0.0f;
+        float verticalSpeed = 0.0f;
+    };
 
     struct ComputerCube {
         glm::vec3 center{0.0f};
@@ -68,6 +75,8 @@ private:
     bool canFitDoor(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool canReachMiniatureShelf(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool canTakeMiniatureRpg(const glm::vec3& eye, const glm::vec3& direction) const;
     void drawMiniature() const;
     void drawRoom(const glm::mat4& model, bool miniature) const;
     void impact(const Projectile& projectile);
@@ -75,12 +84,20 @@ private:
     bool cubeFits(const ComputerCube& cube, const glm::vec3& eye) const;
     std::optional<ComputerCube> carriedCube(const glm::vec3& eye, const glm::vec3& direction) const;
     void updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
+    bool keyFits(const KeyPiece& key, const glm::vec3& eye) const;
+    std::optional<KeyPiece> carriedKey(const glm::vec3& eye, const glm::vec3& direction) const;
+    void updateKey(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
+    void updateAlignment(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
 
     BoxRenderer renderer_;
     ComputerScreen computer_;
     std::optional<ComputerCube> computerCube_;
+    std::optional<KeyPiece> keyPiece_;
     bool computerActive_ = false;
     bool standingOnCube_ = false;
+    bool cabinetUnlocked_ = false;
+    bool cabinetOpen_ = false;
+    float alignmentTime_ = 0.0f;
     ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
     float shelfOffset_ = 0.0f;
