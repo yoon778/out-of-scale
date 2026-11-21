@@ -164,6 +164,9 @@ void stageCapture(Application& state, const std::string& stage) {
         } else if (stage == "corridor-window-b") {
             state.camera.feet = {16.5f, 1.8f, -12.4f};
             state.camera.face({18.1f, 2.8f, -10.85f});
+        } else if (stage == "corridor-cupboard-context") {
+            state.camera.feet = {15.7f, 1.8f, -9.4f};
+            state.camera.face({18.65f, 2.95f, -11.48f});
         } else if (stage == "corridor-door-closed") {
             state.camera.feet = {18.7f, 1.8f, -10.1f};
             state.camera.face(school::SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
@@ -199,6 +202,10 @@ void stageCapture(Application& state, const std::string& stage) {
                     state.camera.feet.z += 1.1f;
                 else if (stage == "corridor-illusion-partial")
                     state.camera.feet.z += .45f;
+                else if (stage == "corridor-illusion-at-handle")
+                    state.camera.feet = {17.0f, 1.8f, -10.9f};
+                else if (stage == "corridor-illusion-return")
+                    state.camera.feet += glm::vec3(.8f, 0, .3f);
                 state.camera.face(school::SchoolCorridor::illusionFocus);
                 if (stage == "corridor-illusion-forming") {
                     settle(state, school::SchoolCorridor::recognitionDuration + school::SchoolCorridor::formationDuration * .5f);
@@ -210,7 +217,8 @@ void stageCapture(Application& state, const std::string& stage) {
                     if (state.room.corridorDoorFormation() < 1)
                         throw std::runtime_error("Capture could not form the sliding door");
                 } else if (stage != "corridor-illusion-wrong" && stage != "corridor-illusion-partial" &&
-                           stage != "corridor-illusion-aligned") {
+                           stage != "corridor-illusion-aligned" && stage != "corridor-illusion-at-handle" &&
+                           stage != "corridor-illusion-return") {
                     settle(state, school::SchoolCorridor::recognitionDuration + school::SchoolCorridor::formationDuration +
                                       school::SchoolCorridor::openingDuration + .05f);
                     if (!state.room.corridorDoorReady())
@@ -527,6 +535,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-window-b",
                                         "corridor-door-open",
                                         "corridor-door-closed",
+                                        "corridor-cupboard-context",
+                                        "corridor-illusion-at-handle",
+                                        "corridor-illusion-return",
                                         "corridor-stairwell",
                                         "corridor-illusion-wrong",
                                         "corridor-illusion-partial",

@@ -750,7 +750,8 @@ int runTests() {
     check(clearSweep, "door sweep clears furniture, partition, walls and cupboard body");
     check(room.cupboardAngle() > 1.56f && !room.corridorDoorForming(),
           "opening the cupboard alone does not unlock a remote door");
-    check(walkTo(room, camera, {15.3f, -10.7f}), "step back to connect the near and far fragments");
+    check(walkTo(room, camera, {SchoolCorridor::illusionEye.x, SchoolCorridor::illusionEye.z}),
+          "walk back to the classroom entrance to connect the everyday fittings");
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::illusionFocus);
     check(room.corridorAlignment(camera) >= .80f, "normal walking can reach a visually aligned door");
@@ -894,6 +895,24 @@ int runTests() {
     prepareCorridor();
     check(room.corridorAlignment(camera) > .999f,
           "reference eye gives matching rays on both receiving planes");
+    bool forgivingView = true;
+    for (float x : {-.20f, 0.f, .20f})
+        for (float z : {-.12f, 0.f, .12f}) {
+            Camera nearby = camera;
+            nearby.feet += glm::vec3(x, 0, z);
+            nearby.face(SchoolCorridor::illusionFocus);
+            const auto feedback = room.corridor_.alignmentFeedback(nearby);
+            forgivingView = forgivingView && feedback && feedback->threshold == .80f && feedback->aligned;
+        }
+    check(forgivingView, "the classroom return view retains a forgiving 40 by 24 cm recognition region");
+    for (const auto feet : {glm::vec3(17.0f, 1.8f, -10.9f), glm::vec3(17.55f, 1.8f, -10.9f)}) {
+        Camera closeView = camera;
+        closeView.feet = feet;
+        closeView.face(SchoolCorridor::illusionFocus);
+        tick(room, closeView, {}, 150);
+        check(room.corridorAlignment(closeView) < .80f && !room.corridorDoorForming(),
+              "opening the cupboard and waiting at its handle cannot replace the distant observation");
+    }
     camera.feet.z += 1.1f;
     camera.face(SchoolCorridor::illusionFocus);
     tick(room, camera, {}, 150);

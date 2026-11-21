@@ -47,7 +47,7 @@ class SchoolCorridor {
     static constexpr glm::vec3 classroomRearDoor{11.675f, 2.951f, -11.73f};
     static constexpr glm::vec3 hinge{18.10f, floorHeight, -11.48f};
     static constexpr float doorWidth = 1.20f;
-    static constexpr glm::vec3 illusionEye{15.30f, 3.45f, -10.70f};
+    static constexpr glm::vec3 illusionEye{14.50f, 3.45f, -10.95f};
     static constexpr glm::vec3 illusionFocus{20.45f, 3.0f, -9.90f};
     static constexpr float recognitionDuration = .55f;
     static constexpr float formationDuration = 1.8f;
@@ -66,10 +66,12 @@ class SchoolCorridor {
     struct Window {
         float start, end;
     };
+    enum class DoorMaterial { infill, timber, paper, ruling };
     struct InkPatch {
         std::array<glm::vec3, 4> target, receiver;
         glm::vec3 color;
         bool onLeaf, frame;
+        DoorMaterial material = DoorMaterial::infill;
     };
     void build();
     void buildDrawing();
@@ -77,6 +79,7 @@ class SchoolCorridor {
     std::optional<float> bridgeViewAlignment(const Camera& camera) const;
     void updateIllusion(const Camera& camera, float dt);
     void drawIllusion(Renderer& renderer) const;
+    void drawCupboardNotices(Renderer& renderer) const;
     void buildBridgeDrawing();
     void drawFalseHall(Renderer& renderer) const;
     void drawClassroomLock(Renderer& renderer) const;

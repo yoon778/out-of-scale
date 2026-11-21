@@ -208,13 +208,17 @@ void SchoolCorridor::build() {
     deskStack(10.40f, -10.94f);
     deskStack(12.3f, -8.88f);
     deskStack(15.0f, -8.88f);
-    // The cupboard leaf carries the near half of an anamorphic school doorway.
+    // A normal cupboard and the far wall supply separate everyday edges for the doorway.
     solid({18.70f, 2.85f, -11.94f}, {1.35f, 2.1f, .66f}, paint, false);
     detail({18.70f, 2.85f, -12.25f}, {1.35f, 2.1f, .08f}, paint);
     for (float x : {18.04f, 19.36f})
         detail({x, 2.85f, -11.94f}, {.08f, 2.1f, .66f}, paint);
     for (float y : {1.85f, 3.9f})
         detail({18.70f, y, -11.94f}, {1.35f, .08f, .66f}, paint);
+    // A classroom notice ledge belongs to the return route, away from the cupboard handle.
+    solid({14.95f, 2.74f, -11.40f}, {1.12f, .055f, .23f}, wood);
+    detail({14.83f, 2.795f, -11.40f}, {.33f, .045f, .19f}, plaster);
+    detail({15.19f, 2.80f, -11.40f}, {.25f, .055f, .16f}, paint * .8f);
     // A real partition, with a doorway-sized section that only becomes a passage on materialization.
     for (float z : {-11.1f, -8.7f}) {
         solid({20.60f, 3.45f, z}, {.20f, 3.3f, .80f}, plaster);
@@ -287,9 +291,11 @@ void SchoolCorridor::buildDrawing() {
         float y0, y1, z0, z1;
         glm::vec3 color;
         bool frame;
+        DoorMaterial material;
     };
     std::vector<Rectangle> rectangles;
-    auto rectangle = [&](float y0, float y1, float z0, float z1, glm::vec3 color, bool frame = false) {
+    auto rectangle = [&](float y0, float y1, float z0, float z1, glm::vec3 color, bool frame = false,
+                         DoorMaterial material = DoorMaterial::infill) {
         // Subtract overpainted regions before triangulation. Coplanar ink must not fight for depth.
         std::vector<Rectangle> uncovered;
         for (const auto& old : rectangles) {
@@ -301,7 +307,7 @@ void SchoolCorridor::buildDrawing() {
             }
             auto part = [&](float a, float b, float c, float d) {
                 if (b > a && d > c)
-                    uncovered.push_back({a, b, c, d, old.color, old.frame});
+                    uncovered.push_back({a, b, c, d, old.color, old.frame, old.material});
             };
             part(old.y0, ya, old.z0, old.z1);
             part(yb, old.y1, old.z0, old.z1);
@@ -309,28 +315,30 @@ void SchoolCorridor::buildDrawing() {
             part(ya, yb, zb, old.z1);
         }
         rectangles = std::move(uncovered);
-        rectangles.push_back({y0, y1, z0, z1, color, frame});
+        rectangles.push_back({y0, y1, z0, z1, color, frame, material});
     };
     const glm::vec3 frame{.43f, .32f, .22f}, timber{.62f, .47f, .30f}, glass{.53f, .66f, .63f};
-    rectangle(1.82f, 4.2f, -10.75f, -10.65f, frame, true);
-    rectangle(1.82f, 4.2f, -9.15f, -9.05f, frame, true);
-    rectangle(4.10f, 4.2f, -10.65f, -9.15f, frame, true);
-    rectangle(1.82f, 1.87f, -10.65f, -9.15f, frame, true);
+    const float nearX = hinge.x - .042f, farX = 20.478f, x = illusionFocus.x;
+    const float nearScale = (nearX - illusionEye.x) / (x - illusionEye.x);
+    const float split = illusionEye.z + (hinge.z + doorWidth - illusionEye.z) / nearScale;
+    rectangle(1.82f, 4.2f, -10.75f, -10.65f, frame, true, DoorMaterial::timber);
+    rectangle(1.82f, 4.2f, -9.15f, -9.05f, frame, true, DoorMaterial::timber);
+    rectangle(4.10f, 4.2f, -10.65f, -9.15f, frame, true, DoorMaterial::timber);
+    rectangle(1.82f, 1.87f, -10.65f, -9.15f, frame, true, DoorMaterial::timber);
     rectangle(1.87f, 4.10f, -10.65f, -9.15f, timber);
-    rectangle(2.81f, 4.01f, -10.55f, -9.25f, frame);
-    rectangle(2.86f, 3.96f, -10.50f, -9.30f, glass);
-    // Wired frosted glass and a recessed lower panel are ordinary school fittings, not symbols.
-    for (float z = -10.40f; z < -9.30f; z += .16f)
-        rectangle(2.86f, 3.96f, z, z + .006f, glass * .90f);
-    for (float y = 2.94f; y < 3.96f; y += .16f)
-        rectangle(y, y + .006f, -10.50f, -9.30f, glass * .90f);
+    rectangle(2.81f, 4.01f, -10.55f, -9.25f, frame, false, DoorMaterial::timber);
+    rectangle(2.86f, 3.96f, -10.50f, -9.30f, glass, false, DoorMaterial::paper);
+    // Cleaning/check sheets read as ordinary notices nearby. Their rows become wired glass on formation.
+    for (float z = -10.30f; z < -9.30f; z += .20f)
+        rectangle(2.86f, 3.72f, z, z + .006f, glass * .90f, false, DoorMaterial::ruling);
+    for (float y = 3.04f; y < 3.73f; y += .18f)
+        rectangle(y, y + .006f, -10.50f, -9.30f, glass * .90f, false, DoorMaterial::ruling);
+    // Close both sheets locally: neither should look like half of a missing drawing.
+    rectangle(2.81f, 4.01f, split - .025f, split + .025f, frame, false, DoorMaterial::timber);
     rectangle(2.03f, 2.72f, -10.55f, -9.25f, frame * 1.2f);
     rectangle(2.07f, 2.68f, -10.51f, -9.29f, timber * .91f);
     rectangle(2.51f, 2.77f, -9.39f, -9.30f, {.23f, .29f, .28f});
     rectangle(2.55f, 2.73f, -9.37f, -9.32f, {.70f, .74f, .71f});
-    const float nearX = hinge.x - .042f, farX = 20.478f, x = illusionFocus.x;
-    const float nearScale = (nearX - illusionEye.x) / (x - illusionEye.x);
-    const float split = illusionEye.z + (hinge.z + doorWidth - illusionEye.z) / nearScale;
     for (const auto& rect : rectangles)
         for (bool leaf : {true, false}) {
             const float a = leaf ? rect.z0 : std::max(rect.z0, split);
@@ -341,7 +349,8 @@ void SchoolCorridor::buildDrawing() {
                            {},
                            rect.color,
                            leaf,
-                           rect.frame};
+                           rect.frame,
+                           rect.material};
             const float scale = ((leaf ? nearX : farX) - illusionEye.x) / (x - illusionEye.x);
             for (int i = 0; i < 4; ++i)
                 patch.receiver[i] = illusionEye + (patch.target[i] - illusionEye) * scale;
@@ -676,6 +685,8 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
         r.box({20.44f, 4.26f, -10.70f}, {.14f, .065f, 3.30f}, metal);
     }
     for (const auto& patch : drawing_) {
+        if (patch.material == DoorMaterial::infill && !forming_)
+            continue;
         std::array<glm::vec3, 4> p;
         for (int i = 0; i < 4; ++i) {
             // From the aligned view each vertex travels along its original projection ray.
@@ -684,10 +695,91 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
             if (!patch.frame)
                 p[i].z -= slide;
         }
-        r.triangle(p[0], p[1], p[2], patch.color);
-        r.triangle(p[0], p[2], p[3], patch.color);
+        auto color = patch.color;
+        if (patch.material != DoorMaterial::infill) {
+            const auto ordinary = patch.material == DoorMaterial::timber ? wood * .85f :
+                                  patch.material == DoorMaterial::paper ? plaster * 1.04f : paint * .70f;
+            color = glm::mix(ordinary, patch.color, formed);
+        } else if (formed < 1) {
+            // A complete painted door is not exposed before recognition. Its panels fill in as it forms.
+            r.opacity(formed);
+        }
+        r.triangle(p[0], p[1], p[2], color);
+        r.triangle(p[0], p[2], p[3], color);
+        if (patch.material == DoorMaterial::infill && formed < 1)
+            r.opacity(1);
+        if (patch.material == DoorMaterial::timber && formed < 1) {
+            const auto normal = patch.onLeaf && !forming_ ? glm::vec3(-std::sin(angle_), 0, std::cos(angle_))
+                                                          : glm::vec3(-1, 0, 0);
+            const auto lip = normal * (.012f * (1 - formed));
+            for (int edge = 0; edge < 4; ++edge) {
+                const auto a = p[edge], b = p[(edge + 1) % 4];
+                r.triangle(a, b, b + lip, color * .82f);
+                r.triangle(a, b + lip, a + lip, color * .82f);
+            }
+            r.triangle(p[0] + lip, p[1] + lip, p[2] + lip, color);
+            r.triangle(p[0] + lip, p[2] + lip, p[3] + lip, color);
+        }
     }
+    drawCupboardNotices(r);
     r.sign(L"계단실", {20.485f, 4.55f, -9.9f}, {0, 0, .55f}, {0, .18f, 0});
+}
+void SchoolCorridor::drawCupboardNotices(Renderer& r) const {
+    const float nearX = hinge.x - .042f, farX = 20.478f;
+    const float nearScale = (nearX - illusionEye.x) / (illusionFocus.x - illusionEye.x);
+    const float split = illusionEye.z + (hinge.z + doorWidth - illusionEye.z) / nearScale;
+    for (bool leaf : {true, false}) {
+        const float low = leaf ? -10.50f : split, high = leaf ? split : -9.30f;
+        const float scale = ((leaf ? nearX : farX) - illusionEye.x) / (illusionFocus.x - illusionEye.x);
+        const glm::vec3 right = leaf ? glm::vec3(std::cos(angle_), 0, std::sin(angle_)) : glm::vec3(0, 0, 1);
+        const auto normal = glm::cross(right, glm::vec3(0, 1, 0));
+        auto at = [&](float y, float z) {
+            InkPatch point{};
+            point.onLeaf = leaf;
+            point.receiver[0] = illusionEye + (glm::vec3(illusionFocus.x, y, z) - illusionEye) * scale;
+            return paintedPoint(point, 0) + normal * .004f;
+        };
+        if (leaf) {
+            // Extend the puzzle edges into complete, practical cupboard bracing.
+            const float hingeZ = illusionEye.z + (hinge.z + .075f - illusionEye.z) / scale;
+            const float bottomY = illusionEye.y + (floorHeight + .10f - illusionEye.y) / scale;
+            auto strip = [&](float y0, float y1, float z0, float z1) {
+                r.quad(at((y0 + y1) * .5f, (z0 + z1) * .5f), right * ((z1 - z0) * scale * .5f),
+                       {0, (y1 - y0) * scale * .5f, 0}, wood * .85f);
+            };
+            strip(4.10f, 4.20f, hingeZ, -10.75f);
+            strip(1.82f, 1.87f, hingeZ, -10.75f);
+            strip(bottomY, 4.20f, hingeZ, hingeZ + .08f);
+            strip(bottomY, 1.82f, -10.75f, -10.65f);
+            strip(bottomY, bottomY + .08f, hingeZ, -10.65f);
+        } else {
+            // The distant horizontal edges belong to wall trim, not an isolated half-door.
+            for (const auto span : {glm::vec2(-11.46f, -8.35f)}) {
+                r.quad(at(4.15f, (span.x + span.y) * .5f), right * ((span.y - span.x) * scale * .5f),
+                       {0, .05f * scale, 0}, wood * .85f);
+                r.quad(at(1.845f, (span.x + span.y) * .5f), right * ((span.y - span.x) * scale * .5f),
+                       {0, .025f * scale, 0}, wood * .85f);
+            }
+            // Continue the notice into the real wall beside the future opening.
+            r.quad(at(3.01f, -8.39f), right * (.04f * scale), {0, 1.19f * scale, 0}, wood * .85f);
+            r.quad(at(3.18f, -8.72f), right * (.25f * scale), {0, .48f * scale, 0}, plaster * 1.04f);
+            r.label(L"관리 일지", at(3.50f, -8.72f) + normal * .003f,
+                    right * (.22f * scale), {0, .045f * scale, 0}, metal);
+            for (int row = 0; row < 5; ++row)
+                r.line(at(3.35f - row * .13f, -8.91f) + normal * .003f,
+                       at(3.35f - row * .13f, -8.53f) + normal * .003f, .008f, paint);
+        }
+        if (forming_)
+            continue;
+        r.label(leaf ? L"청소 당번" : L"시설 점검", at(3.83f, (low + high) * .5f),
+                right * ((high - low) * scale * .42f), {0, .042f * scale, 0}, metal);
+        for (int row = 0; row < 4; ++row) {
+            const float y = 3.66f - row * .18f;
+            const float z = low + (high - low) * (.24f + .12f * (row % 2));
+            r.line(at(y, z), at(y - .035f, z + .028f), .008f * scale, metal);
+            r.line(at(y - .035f, z + .028f), at(y + .035f, z + .09f), .008f * scale, metal);
+        }
+    }
 }
 std::vector<Box> SchoolCorridor::doorBoxes(float angle) const {
     std::vector<Box> result;
@@ -881,8 +973,8 @@ void SchoolCorridor::draw(Renderer& r) const {
     const auto handle = hinge + along * (doorWidth * .45f) + glm::vec3(0, 1.05f, 0);
     for (float sign : {-1.f, 1.f}) {
         r.box(handle + front * (sign * .065f), {.06f, .20f, .05f}, metal, -angle_);
-        r.label(L"청소도구함", center + front * (sign * .041f) + glm::vec3(0, -.68f, 0),
-                along * (sign * .36f), {0, .10f, 0}, plaster);
+        r.label(L"청소도구함", hinge + along * .32f + glm::vec3(0, .52f, 0) + front * (sign * .041f),
+                along * (sign * .23f), {0, .045f, 0}, plaster);
     }
     drawIllusion(r);
     drawFalseHall(r);
