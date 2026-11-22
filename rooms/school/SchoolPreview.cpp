@@ -278,7 +278,9 @@ void stageCapture(Application& state, const std::string& stage) {
         state.camera.yaw = glm::radians(stage == "notebook-blocked-wall" ? -90.f : -180.f);
         state.camera.pitch = 0;
         state.room.update(state.camera, {}, 1.f / 120);
-    } else if (stage == "notebook-ceiling-aim" || stage == "notebook-ceiling-drop") {
+    } else if (stage == "notebook-ceiling-aim" || stage == "notebook-ceiling-drop" ||
+               stage == "notebook-ceiling-steep-aim" || stage == "notebook-ceiling-steep-release" ||
+               stage == "notebook-ceiling-recovered") {
         state.camera.feet = {-4.83f, 0, 3.8f};
         state.camera.face(state.room.notebookCenter());
         if (!state.room.toggleNotebook(state.camera))
@@ -286,6 +288,21 @@ void stageCapture(Application& state, const std::string& stage) {
         state.camera.feet = {4.8f, 0, 2.4f};
         state.camera.yaw = 0;
         state.camera.pitch = .65f;
+        if (stage == "notebook-ceiling-steep-aim" || stage == "notebook-ceiling-steep-release" ||
+            stage == "notebook-ceiling-recovered") {
+            state.camera.feet.x = 3.8f;
+            state.camera.pitch = 1.45f;
+            if (stage != "notebook-ceiling-steep-aim") {
+                state.room.toggleNotebook(state.camera);
+                settle(state, .25f);
+            }
+            if (stage == "notebook-ceiling-recovered") {
+                state.camera.face({3.8f, 0, 1.1f});
+                state.room.toggleNotebook(state.camera);
+                settle(state);
+                state.camera.face(state.room.notebookCenter());
+            }
+        }
         if (stage == "notebook-ceiling-drop") {
             state.room.toggleNotebook(state.camera);
             settle(state);
@@ -501,6 +518,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "notebook-blocked-rear",
                                         "notebook-ceiling-aim",
                                         "notebook-ceiling-drop",
+                                        "notebook-ceiling-steep-aim",
+                                        "notebook-ceiling-steep-release",
+                                        "notebook-ceiling-recovered",
                                         "notebook-on-desk",
                                         "pause-controls",
                                         "notebook-at-stand",

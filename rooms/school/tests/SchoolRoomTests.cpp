@@ -352,9 +352,11 @@ int runTests() {
           "the aimed tabletop supports the notebook");
     check(grabForDrop(), "pick up the notebook for an upward drop");
     carrier.feet = {3.8f, 0, 2.4f};
-    carrier.pitch = 1.48f;
+    carrier.yaw = 0;
+    carrier.pitch = 1.1f;
     const auto overheadDrop = dropRoom.notebookPlacement(carrier);
-    check(overheadDrop && dropRoom.notebookBounds(*overheadDrop).max.y <= 4.5f &&
+    check(overheadDrop && overheadDrop->center.y > carrier.eye().y &&
+              dropRoom.notebookBounds(*overheadDrop).max.y <= 4.5f &&
               dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0,
           "an upward drop stays below the classroom ceiling");
     check(grabForDrop(), "pick up the notebook for corridor placement");
@@ -1354,6 +1356,42 @@ int runTests() {
               std::abs(tablePose->scale / tableDepth - room.notebookRatio_) < .0001f &&
               std::abs(room.notebookBounds(*tablePose).min.y - .78f) < .004f,
           "table placement keeps the same apparent size without shifting the book sideways or upward");
+    // A steep upward aim must not send the book to an unseen fallback on the floor.
+    for (float fps : {10.f, 30.f, 144.f}) {
+        for (float pitch : {1.3f, 1.45f, 1.54f}) {
+            room.reset();
+            camera = Camera();
+            camera.feet = {-4.83f, 0, 3.8f};
+            camera.face(room.notebookCenter());
+            check(room.toggleNotebook(camera), "pick up the original notebook for a steep upward release");
+            const float carryRatio = room.notebookRatio_;
+            const auto original = room.notebook_;
+            camera.feet = {3.8f, 0, 2.4f};
+            camera.yaw = 0;
+            camera.pitch = pitch;
+            const auto placement = room.notebookPlacement(camera);
+            const auto shown = placement.value_or(room.heldNotebookPose(camera));
+            check(!placement && glm::dot(glm::normalize(shown.center - camera.eye()), camera.direction()) > .9f &&
+                      room.notebookBounds(shown).max.y < 4.5f,
+                  "a blocked ceiling aim keeps a visible notebook below the roof instead of showing an unseen floor drop");
+            room.toggleNotebook(camera);
+            for (int frame = 0; frame < static_cast<int>(fps); ++frame)
+                room.update(camera, {}, 1.f / fps);
+            check(room.notebookRatio_ == carryRatio && !room.notebookFalling_ &&
+                      room.notebook_.center == original.center && room.notebook_.scale == original.scale,
+                  "pressing release at the blocked ceiling preserves the held book at low and high frame rates");
+            camera.face({3.8f, 0, 1.1f});
+            const auto floorPlacement = room.notebookPlacement(camera);
+            check(floorPlacement && room.toggleNotebook(camera) && room.notebookRatio_ == 0,
+                  "lowering the view after a blocked ceiling release permits a normal floor placement");
+            for (int frame = 0; frame < static_cast<int>(fps * 2); ++frame)
+                room.update(camera, {}, 1.f / fps);
+            camera.face(room.notebookCenter());
+            check(!room.notebookFalling_ && room.notebookBounds(room.notebook_).min.y >= -.003f &&
+                      room.toggleNotebook(camera) && room.notebookRatio_ > 0,
+                  "the notebook remains in the room and can be picked up again after lowering the view");
+        }
+    }
     room.reset();
     const auto sealedSolids = room.collisionBoxes(true, false);
     auto nearestSolid = [&](glm::vec3 origin, glm::vec3 ray) {

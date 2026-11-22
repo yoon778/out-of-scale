@@ -627,7 +627,12 @@ std::optional<perspective::Pose> SchoolRoom::notebookPlacement(const Camera& cam
     if (free.last >= free.first && fits(aimed))
         return aimed;
 
-    // Even a wall or an upward glance leaves the player a nearby way to put the notebook down.
+    // A blocked upward aim must stay in hand. A floor fallback would jump out of view,
+    // shrink the notebook, and let E release it where the player cannot see it.
+    if (direction.y > 0)
+        return std::nullopt;
+
+    // Looking level or down still permits a safe nearby placement around a blocked wall.
     const glm::vec3 forward{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
     const glm::vec3 right{-forward.z, 0, forward.x};
     constexpr float diagonal = .70710678f;
@@ -1901,7 +1906,8 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
             r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
     if (notebookRatio_ > 0 && !placement) {
-        const wchar_t* status = L"놓을 공간이 없어요 · 조금 물러나 주세요";
+        const wchar_t* status = camera.direction().y > 0 ? L"놓을 공간이 없어요 · 시선을 내려 주세요"
+                                                       : L"놓을 공간이 없어요 · 조금 물러나 주세요";
         const float textWidth = r.textWidth(status, 23 * scale);
         const float x = (width - textWidth) * .5f;
         r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale,
