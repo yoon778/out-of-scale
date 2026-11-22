@@ -548,14 +548,29 @@ void SchoolCorridor::drawClassroomLock(Renderer& r) const {
     r.box(lock + glm::vec3(0, .015f, .010f), {.073f, .085f, .033f}, brass * .84f);
     const float turn = halfPi * glm::smoothstep(keyInsertDuration, keyTurnEnd, classroomUnlockTime_);
     const glm::vec3 keyRight{-std::cos(turn), std::sin(turn), 0}, keyUp{std::sin(turn), std::cos(turn), 0};
+    // A small metal collar makes the keyhole read as part of the lock, rather than a painted mark.
+    for (int i = 0; i < 12; ++i) {
+        const float a = i * halfPi / 3, b = (i + 1) * halfPi / 3;
+        r.line(lock + glm::vec3(std::cos(a) * .014f, std::sin(a) * .014f, -.009f),
+               lock + glm::vec3(std::cos(b) * .014f, std::sin(b) * .014f, -.009f), .003f, brass * 1.15f);
+    }
     r.quad(lock - glm::vec3(0, 0, .009f), keyRight * .006f, keyUp * .010f, {.10f, .12f, .10f});
     // The shackle lifts after the key turns. One leg stays inside the body; the other clears it.
     const float lift = .028f * glm::smoothstep(keyTurnEnd, lockReleaseEnd, classroomUnlockTime_);
     const auto shackle = lock + glm::vec3(0, lift, -.008f);
     const glm::vec3 steel{.61f, .64f, .59f};
-    r.line(shackle + glm::vec3(-.024f, .018f, 0), shackle + glm::vec3(-.024f, .090f, 0), .006f, steel);
-    r.line(shackle + glm::vec3(-.024f, .090f, 0), shackle + glm::vec3(.024f, .090f, 0), .006f, steel);
-    r.line(shackle + glm::vec3(.024f, .090f, 0), shackle + glm::vec3(.024f, .045f, 0), .006f, steel);
+    const float swing = .40f * glm::smoothstep(lockReleaseEnd, .82f, classroomUnlockTime_);
+    auto shacklePoint = [&](float x, float y) {
+        return shackle + glm::vec3(-.024f + (x + .024f) * std::cos(swing), y,
+                                   -(x + .024f) * std::sin(swing));
+    };
+    r.line(shacklePoint(-.024f, .058f - lift), shacklePoint(-.024f, .074f), .006f, steel);
+    for (int i = 0; i < 8; ++i) {
+        const float a = i * halfPi / 4, b = (i + 1) * halfPi / 4;
+        r.line(shacklePoint(std::cos(a) * .024f, .074f + std::sin(a) * .024f),
+               shacklePoint(std::cos(b) * .024f, .074f + std::sin(b) * .024f), .006f, steel);
+    }
+    r.line(shacklePoint(.024f, .074f), shacklePoint(.024f, std::max(.058f - lift, .045f)), .006f, steel);
     if (classroomDoorUnlocked_) {
         const float insertion = glm::smoothstep(0.f, keyInsertDuration, classroomUnlockTime_);
         const auto pivot = lock + glm::vec3(0, 0, glm::mix(-.075f, -.019f, insertion));
@@ -762,6 +777,8 @@ const wchar_t* SchoolCorridor::classroomKeyStatus(const Camera& camera, const st
     const bool atLock = keyAtLock(camera, world).has_value();
     if (atLock && keyFits(key_.scale))
         return L"자물쇠에 맞는 크기예요";
+    if (keyFits(key_.scale))
+        return L"맞는 크기의 열쇠를 들고 있어요 · 자물쇠에 사용해 보세요";
     if (const auto placement = keyPlacement(camera, world)) {
         if (keyFits(placement->scale))
             return L"놓으면 맞는 크기예요 · 놓고 다시 집으세요";
