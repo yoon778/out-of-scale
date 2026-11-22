@@ -361,7 +361,7 @@ void stageCapture(Application& state, const std::string& stage) {
             throw std::runtime_error("Capture could not adjust the approximate projection");
         state.room.rotateProjector(glm::radians(2.f), glm::radians(1.f));
         state.room.toggleProjector(state.camera);
-        state.camera.feet = {4.7f, 0, 4.f};
+        state.camera.feet = {4.25f, 0, 2.8f};
         state.camera.face(school::SchoolRoom::alignmentFocus);
         state.room.update(state.camera, {}, 1.f / 120);
         if (!state.room.projectorAligned())

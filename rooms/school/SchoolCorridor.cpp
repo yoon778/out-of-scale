@@ -8,8 +8,8 @@
 namespace school {
 namespace {
 constexpr float halfPi = 1.570796327f;
-// Retain 80% of the former angular-error allowance in each materialization puzzle.
-constexpr float doorAlignmentThreshold = .84f, bridgeAlignmentThreshold = .80f;
+// Require a closer silhouette match while keeping a small, continuous viewing region.
+constexpr float doorAlignmentThreshold = .88f, bridgeAlignmentThreshold = .85f;
 constexpr float cupboardAngleTolerance = .025f;
 constexpr float falseHallWallX = 9.65f;
 constexpr glm::vec3 classroomDoorSize{1.25f, 2.286f, .072f};

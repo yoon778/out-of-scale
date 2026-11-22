@@ -46,3 +46,14 @@
 - 최종 증거: `build/sightlines-20261122/alignment-release.log`, `alignment-debug.log`, `alignment-release-tests.log`, `alignment-debug-tests.log`, `final-captures.log`, `final-captures/`. `alignment-probe-*`는 중간 검사 위치 진단 로그이며 최종 결과가 아니다.
 - 문서 UTF-8·로컬 링크와 `git diff --check` 확인. 기획서·README의 이전 넉넉한 판정 설명을 사용자 최신 요청에 맞춰 갱신했다.
 - 미검증: 팀 실행 파일의 학교→군대 전환 검사는 이번 학교 내부 조정에서 반복하지 않았다. 공용 API·방 연결·빌드 설정 변경 없음. 사람의 새 난이도 평가와 다른 GPU 미확인.
+
+
+## 추가 난이도 조정 — 2026-11-22
+
+- 사용자 요청: 세 실물화 판정을 더 어렵게 조정. 열쇠 보유 표시·원근 축소 퍼즐은 별도 SCHOOL-012로 진행한다.
+- 기준: 계단 `.88 → .91`, 문 `.84 → .88`, 발판 `.80 → .85`. 직전 기하 오차 허용량을 다시 25% 축소(최초 조정 전 대비 총 40% 축소). 시간과 시선 방향 조건은 유지한다.
+- 검사·캡처: 기존 넓은 계단 관찰 위치는 새 기준 밖이므로 근거리 표본과 대략 조준 캡처를 `(4.25,0,2.8)`로 조정. 앞뒤 근접 표본은 Z=2.2·2.8로 조정했다. 옛 허용 가장자리의 실패와 긴 대기 시 실패 검사는 최신 기준으로 유지한다. 발판의 가림 없는 여유 표본은 18×8cm, 문 40×24cm를 확인한다.
+- 실제 수정: SchoolRoom.h, SchoolCorridor.cpp, SchoolPreview.cpp, tests/SchoolRoomTests.cpp, README.md, 공식 기획서, 이 기록.
+- 검증: Debug·Release 빌드 및 각각 547개 검사 통과. 숨김 OpenGL 73장면 생성 성공, 오류 없음. 기본 Debug·Release 실행 파일에 적용.
+- 증거: `build/key-scale-20261122/alignment-*`. 새 최종 파일의 코드·동선만 검증하며 사람의 난이도 평가는 미확인.
+- 공유: 커밋 전 fetch 후 origin/main a1c53a3·origin/yoon778 f9611e4와 관련 MD 변경 없음 확인. 사용자 상시 요청에 따른 로컬 커밋, 푸시·main 통합 미수행.

@@ -101,7 +101,7 @@ class SchoolRoom {
 
   private:
     friend int runTests();
-    static constexpr float stairAlignmentThreshold = .88f;
+    static constexpr float stairAlignmentThreshold = .91f;
     static constexpr float projectorAimToleranceDegrees = 4.f;
     struct Chalk {
         glm::vec3 projectedA, projectedB, originalA, originalB;
