@@ -81,17 +81,17 @@ constexpr float maxNotebookScale = 5.5f;
 constexpr float minNotebookScale = .30f;
 constexpr float notebookHalfHeight = notebookSize.y * .5f;
 constexpr const wchar_t* notebookClues[]{
-    L"숫자 1~4를 하나씩",
-    L"둘째는 4, 셋째는 1",
-    L"넷째는 첫째보다 크게",
-    L"위쪽 숫자를 보고 맞춰요",
+    L"칠판 위 숫자를 맞춰요",
+    L"높이 대신 숫자를 봐요",
+    L"다 맞춘 뒤 프로젝터를",
+    L"바닥 종이 쪽으로 돌려요",
 };
-constexpr const wchar_t* notebookPanelLabels[]{L"?", L"4", L"1", L"?"};
+constexpr const wchar_t* notebookPanelLabels[]{L"2", L"4", L"1", L"3"};
 constexpr const wchar_t* notebookControls[]{
-    L"누른 판의 숫자 +1",
-    L"오른쪽 판의 숫자 +2",
-    L"끝판 다음은 첫째 판",
-    L"4 다음은 다시 1",
+    L"누른 판은 한 칸 (+1)",
+    L"오른쪽 판은 두 칸 (+2)",
+    L"4 다음 숫자는 다시 1",
+    L"끝판을 누르면 첫 판도 +2",
 };
 constexpr float mirrorStartYaw = .10f;
 constexpr float mirrorMaxYaw = 1.32f;
@@ -1381,7 +1381,7 @@ void SchoolRoom::drawNotebook(Renderer& r, const Camera& camera,
         return;
     }
     const auto ink = mint * .35f;
-    r.label(L"숫자 맞추기", at(.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
+    r.label(L"칠판 위 숫자", at(.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
     r.label(L"E로 밀기", at(-.104f, .123f, .049f), right * (-.082f * scale), up * (.014f * scale), ink);
     // Logical left-to-right is reversed on the paper, then restored by the mirror.
     for (int i = 0; i < 4; ++i) {
@@ -1837,7 +1837,7 @@ void SchoolRoom::drawNotebookPages(Renderer& r, int width, int height, float sca
         for (int line = 0; line < 4; ++line)
             r.panel(page - 6 * scale, y + (315 + line * 38) * scale, 398 * scale, scale, rule);
     }
-    r.text(L"칠판 숫자 맞추기", left, y + 24 * scale, 34 * scale, ink);
+    r.text(L"칠판 위 숫자", left, y + 24 * scale, 34 * scale, ink);
     r.text(L"E로 칠판 밀기", right, y + 24 * scale, 34 * scale, ink);
     r.text(L"칠판을 바라보고, 왼쪽부터", left, y + 70 * scale, 22 * scale, ink);
     r.text(L"한 번 누르면 두 판이 움직여요", right, y + 70 * scale, 22 * scale, ink);
@@ -1846,10 +1846,10 @@ void SchoolRoom::drawNotebookPages(Renderer& r, int width, int height, float sca
         const float panelX = left + (8 + i * 96) * scale;
         r.panel(panelX, y + 142 * scale, 74 * scale, 74 * scale, timber);
         r.panel(panelX + 4 * scale, y + 146 * scale, 66 * scale, 66 * scale, mint * .65f);
-        r.panel(panelX + 16 * scale, y + 103 * scale, 42 * scale, 32 * scale, rule);
-        const float numberWidth = r.textWidth(notebookPanelLabels[i], 27 * scale);
+        r.panel(panelX + 7 * scale, y + 96 * scale, 60 * scale, 45 * scale, rule);
+        const float numberWidth = r.textWidth(notebookPanelLabels[i], 38 * scale);
         r.text(notebookPanelLabels[i], panelX + (74 * scale - numberWidth) * .5f,
-               y + 103 * scale, 27 * scale, ink);
+               y + 96 * scale, 38 * scale, ink);
         const float labelWidth = r.textWidth(order[i], 20 * scale);
         r.text(order[i], panelX + (74 * scale - labelWidth) * .5f, y + 237 * scale, 20 * scale, ink);
     }
@@ -1863,10 +1863,11 @@ void SchoolRoom::drawNotebookPages(Renderer& r, int width, int height, float sca
         const auto amount = i == 0 ? L"+1" : L"+2";
         const float amountWidth = r.textWidth(amount, 44 * scale);
         r.text(amount, panelX + (156 * scale - amountWidth) * .5f, y + 149 * scale, 44 * scale);
+        const auto example = i == 0 ? L"예: 1 → 2" : L"예: 1 → 3";
+        const float exampleWidth = r.textWidth(example, 24 * scale);
+        r.text(example, panelX + (156 * scale - exampleWidth) * .5f, y + 230 * scale, 24 * scale, ink);
     }
     r.text(L"→", right + 166 * scale, y + 155 * scale, 28 * scale, ink);
-    r.panel(right + 68 * scale, y + 228 * scale, 36 * scale, 29 * scale, ink);
-    r.text(L"E", right + 79 * scale, y + 229 * scale, 23 * scale);
     for (int i = 0; i < 4; ++i) {
         const float lineY = y + (282 + i * 38) * scale;
         r.text(notebookClues[i], left, lineY, 30 * scale, ink);
