@@ -206,7 +206,7 @@ void stageCapture(Application& state, const std::string& stage) {
                 } else if (stage == "corridor-key-fit" || stage == "corridor-class-unlocked" ||
                            stage == "corridor-key-small" || stage.rfind("corridor-key-drop", 0) == 0 ||
                            stage == "corridor-key-falling" || stage == "corridor-key-enlarged") {
-                    state.camera.feet = {12.05f, 1.8f, stage == "corridor-key-small" ? -12.10f : -12.28f};
+                    state.camera.feet = {12.05f, 1.8f, -12.28f};
                     state.camera.face(school::SchoolCorridor::classroomLock);
                     if (stage == "corridor-key-enlarged") {
                         state.camera.feet = {11.5f, 1.8f, -12.5f};
@@ -217,10 +217,23 @@ void stageCapture(Application& state, const std::string& stage) {
                         if (!state.room.interactCorridor(state.camera))
                             throw std::runtime_error("Capture could not release the key");
                         settle(state, stage == "corridor-key-falling" ? .20f : 1.f);
+                        if (stage == "corridor-key-small") {
+                            state.camera.feet = {11.5f, 1.8f, -15.6f};
+                            state.camera.face(state.room.classroomKeyCenter());
+                            if (!state.room.interactCorridor(state.camera))
+                                throw std::runtime_error("Capture could not recover the key for further shrinking");
+                            state.camera.pitch = glm::radians(-85.f);
+                            if (!state.room.interactCorridor(state.camera))
+                                throw std::runtime_error("Capture could not release the undersized key");
+                            state.camera.resetMotion();
+                            settle(state, 1.f);
+                        }
                         state.camera.face(state.room.classroomKeyCenter());
                         if (stage == "corridor-key-fit" || stage == "corridor-key-small" || stage == "corridor-class-unlocked") {
                             if (!state.room.interactCorridor(state.camera))
                                 throw std::runtime_error("Capture could not recover the released key");
+                            if (stage == "corridor-key-small")
+                                state.camera.feet = {12.05f, 1.8f, -12.28f};
                             state.camera.face(school::SchoolCorridor::classroomLock);
                         }
                     }

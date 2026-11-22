@@ -14,7 +14,7 @@ constexpr float cupboardAngleTolerance = .025f;
 constexpr float falseHallWallX = 9.65f;
 constexpr glm::vec3 classroomDoorSize{1.25f, 2.286f, .072f};
 constexpr glm::vec3 brass{.67f, .53f, .30f};
-constexpr float fittedKeyScale = .45f, keyScaleTolerance = .06f;
+constexpr float minFittedKeyScale = .25f, maxFittedKeyScale = .75f;
 constexpr glm::vec3 keyHalfSize{.025f, .006f, .048f};
 constexpr float minKeyScale = .20f, maxKeyScale = 5.5f, keyRestClearance = .006f;
 constexpr float looseKeyReach = 8.f;
@@ -33,7 +33,7 @@ Box box(glm::vec3 center, glm::vec3 size) {
     return {center - size * .5f, center + size * .5f};
 }
 bool keyFits(float scale) {
-    return std::abs(scale - fittedKeyScale) <= keyScaleTolerance;
+    return scale >= minFittedKeyScale && scale <= maxFittedKeyScale;
 }
 Box keyBounds(const perspective::Pose& pose) {
     return {pose.center - keyHalfSize * pose.scale, pose.center + keyHalfSize * pose.scale};
@@ -567,14 +567,15 @@ std::optional<perspective::Pose> SchoolCorridor::keyAtLock(const Camera& camera,
     if (!holdingClassroomKey() || camera.eye().z >= classroomLock.z - .04f)
         return std::nullopt;
     const auto eye = camera.eye(), direction = camera.direction();
-    const float aimed = SchoolRoom::rayBox(eye, direction, box(classroomLock, {.18f, .22f, .08f}));
-    if (aimed < 0 || aimed > 1.65f)
+    const float aimed = SchoolRoom::rayBox(eye, direction, box(classroomLock, {.50f, .60f, .16f}));
+    if (aimed < 0 || aimed > 2.4f)
         return std::nullopt;
-    const auto toward = classroomLock - eye;
+    // Trace to the visible keyhole face, so the lock's own body does not hide it at an angle.
+    const auto toward = classroomLock + glm::vec3(0, 0, -.010f) - eye;
     const float distance = glm::length(toward);
     for (const auto& solid : world) {
         const float hit = SchoolRoom::rayBox(eye, toward / distance, solid);
-        if (hit >= 0 && hit < distance - .02f)
+        if (hit >= 0 && hit < distance - .002f)
             return std::nullopt;
     }
     // Lock fit uses the size committed on release. Approaching the lock cannot resize the key.
@@ -751,11 +752,11 @@ const wchar_t* SchoolCorridor::classroomKeyStatus(const Camera& camera, const st
     if (const auto placement = keyPlacement(camera, world)) {
         if (keyFits(placement->scale))
             return L"놓으면 맞는 크기예요 · 놓고 다시 집으세요";
-        if (placement->scale > fittedKeyScale + keyScaleTolerance)
+        if (placement->scale > maxFittedKeyScale)
             return L"놓을 열쇠가 커요 · 가까운 곳에 놓거나 멀리서 다시 집으세요";
         return L"놓을 열쇠가 작아요 · 더 먼 곳을 겨누세요";
     }
-    if (atLock && key_.scale < fittedKeyScale - keyScaleTolerance)
+    if (atLock && key_.scale < minFittedKeyScale)
         return L"열쇠가 작아요 · 더 먼 곳에 놓고 다시 집으세요";
     return L"열쇠를 들고 있어요 · 조금 물러나 놓을 곳을 바라보세요";
 }

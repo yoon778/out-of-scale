@@ -1770,7 +1770,7 @@ int runTests() {
     // Enlarge, shrink too far, recover, and test releases against the real walls and ceiling.
     for (int fps : {30, 144}) {
         for (const auto aim : {glm::vec4(11.5f, 1.8f, -12.5f, 0.f),
-                                glm::vec4(12.05f, 1.8f, -12.10f, 1.f),
+                                glm::vec4(12.05f, 1.8f, -12.06f, 1.f),
                                 glm::vec4(8.f, 1.8f, -13.f, 2.f),
                                 glm::vec4(9.8f, 1.8f, -11.86f, 3.f)}) {
             SchoolRoom keyRoom;
@@ -1823,7 +1823,7 @@ int runTests() {
             if (aim.w == 0)
                 check(key.key_.scale > 2.f, "a distant release enlarges the key without a wheel or lock interaction");
             if (aim.w == 1) {
-                check(key.key_.scale < .39f, "a closer release can make the key too small");
+                check(key.key_.scale < .25f, "a closer release can still make the key too small");
                 keyCamera.face(key.key_.center);
                 check(keyRoom.interactCorridor(keyCamera), "recover the undersized key from the floor");
                 keyCamera.face(SchoolCorridor::classroomLock);
@@ -1832,6 +1832,31 @@ int runTests() {
                       "a recovered undersized key is still rejected by the lock");
             }
         }
+    }
+
+    // A visibly reduced key should work with ordinary imprecise aiming and an oblique approach.
+    for (float scale : {.25f, .30f, .70f, .75f, .20f, .80f, 1.f}) {
+        SchoolRoom keyRoom;
+        Camera keyCamera;
+        auto& key = keyRoom.corridor_;
+        keyCamera.feet = {8.78f, 1.8f, -10.65f};
+        keyCamera.face(SchoolCorridor::classroomKeySpot);
+        keyRoom.interactCorridor(keyCamera);
+        key.key_.scale = scale; // Isolate lock tolerance from the separately tested release solver.
+        const auto world = keyRoom.collisionBoxes();
+        const bool fits = scale >= .25f && scale <= .75f;
+        for (const auto feet : {glm::vec3(12.05f, 1.8f, -14.f), glm::vec3(11.1f, 1.8f, -12.3f)}) {
+            keyCamera.feet = feet;
+            keyCamera.face(SchoolCorridor::classroomLock + glm::vec3(-.18f, -.20f, 0));
+            check(key.keyAtLock(keyCamera, world) &&
+                      (key.classroomAction(keyCamera, world) == SchoolCorridor::ClassroomAction::unlockDoor) == fits,
+                  "wide lock aim and side approach accept reduced keys but reject original and extreme sizes");
+        }
+        keyCamera.face(SchoolCorridor::classroomLock + glm::vec3(-.8f, 0, 0));
+        check(!key.keyAtLock(keyCamera, world), "looking well away from the lock cannot unlock it");
+        keyCamera.feet = {12.8f, 1.8f, -12.5f};
+        keyCamera.face(SchoolCorridor::classroomLock);
+        check(!key.keyAtLock(keyCamera, world), "wider lock targeting still respects the adjacent wall");
     }
 
     room.reset();
