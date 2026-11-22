@@ -697,7 +697,7 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
         }
         auto color = patch.color;
         if (patch.material != DoorMaterial::infill) {
-            const auto ordinary = patch.material == DoorMaterial::timber ? wood * .85f :
+            const auto ordinary = patch.material == DoorMaterial::timber ? paint * .82f :
                                   patch.material == DoorMaterial::paper ? plaster * 1.04f : paint * .70f;
             color = glm::mix(ordinary, patch.color, formed);
         } else if (formed < 1) {
@@ -711,7 +711,7 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
         if (patch.material == DoorMaterial::timber && formed < 1) {
             const auto normal = patch.onLeaf && !forming_ ? glm::vec3(-std::sin(angle_), 0, std::cos(angle_))
                                                           : glm::vec3(-1, 0, 0);
-            const auto lip = normal * (.012f * (1 - formed));
+            const auto lip = normal * (.006f * (1 - formed));
             for (int edge = 0; edge < 4; ++edge) {
                 const auto a = p[edge], b = p[(edge + 1) % 4];
                 r.triangle(a, b, b + lip, color * .82f);
@@ -740,29 +740,72 @@ void SchoolCorridor::drawCupboardNotices(Renderer& r) const {
             return paintedPoint(point, 0) + normal * .004f;
         };
         if (leaf) {
-            // Extend the puzzle edges into complete, practical cupboard bracing.
+            // Shallow, matching paint reads as pressed cabinet panels instead of applied wooden strips.
             const float hingeZ = illusionEye.z + (hinge.z + .075f - illusionEye.z) / scale;
             const float bottomY = illusionEye.y + (floorHeight + .10f - illusionEye.y) / scale;
             auto strip = [&](float y0, float y1, float z0, float z1) {
                 r.quad(at((y0 + y1) * .5f, (z0 + z1) * .5f), right * ((z1 - z0) * scale * .5f),
-                       {0, (y1 - y0) * scale * .5f, 0}, wood * .85f);
+                       {0, (y1 - y0) * scale * .5f, 0}, paint * .82f);
             };
             strip(4.10f, 4.20f, hingeZ, -10.75f);
             strip(1.82f, 1.87f, hingeZ, -10.75f);
             strip(bottomY, 4.20f, hingeZ, hingeZ + .08f);
             strip(bottomY, 1.82f, -10.75f, -10.65f);
             strip(bottomY, bottomY + .08f, hingeZ, -10.65f);
+            for (float y : {1.72f, 1.78f, 1.84f})
+                r.quad(hinge + right * .32f + glm::vec3(0, y, 0) + normal * .043f,
+                       right * .16f, {0, .006f, 0}, paint * .66f);
         } else {
-            // The distant horizontal edges belong to wall trim, not an isolated half-door.
-            for (const auto span : {glm::vec2(-11.46f, -8.35f)}) {
-                r.quad(at(4.15f, (span.x + span.y) * .5f), right * ((span.y - span.x) * scale * .5f),
-                       {0, .05f * scale, 0}, wood * .85f);
-                r.quad(at(1.845f, (span.x + span.y) * .5f), right * ((span.y - span.x) * scale * .5f),
-                       {0, .025f * scale, 0}, wood * .85f);
+            // A complete school notice rack gives the distant edges a purpose before the cupboard opens.
+            const float remaining = 1 - glm::smoothstep(0.f, 1.f, formation_);
+            auto backing = [&](float z0, float z1, float alpha) {
+                if (alpha <= 0)
+                    return;
+                if (alpha < 1)
+                    r.opacity(alpha);
+                r.quad(at(3.425f, (z0 + z1) * .5f) - normal * .006f,
+                       right * ((z1 - z0) * scale * .5f), {0, .675f * scale, 0}, {.61f, .64f, .54f});
+                r.quad(at(2.75f, (z0 + z1) * .5f), right * ((z1 - z0) * scale * .5f),
+                       {0, .025f * scale, 0}, paint * .82f);
+                if (alpha < 1)
+                    r.opacity(1);
+            };
+            backing(-11.42f, -10.75f, 1);
+            backing(-10.75f, -9.05f, remaining);
+            backing(-9.05f, -8.43f, 1);
+            const glm::vec2 span{-11.46f, -8.35f};
+            for (float y : {4.15f, 1.845f}) {
+                r.quad(at(y, (span.x + span.y) * .5f), right * ((span.y - span.x) * scale * .5f),
+                       {0, (y > 4 ? .05f : .025f) * scale, 0}, paint * .82f);
             }
-            // Continue the notice into the real wall beside the future opening.
-            r.quad(at(3.01f, -8.39f), right * (.04f * scale), {0, 1.19f * scale, 0}, wood * .85f);
-            r.quad(at(3.18f, -8.72f), right * (.25f * scale), {0, .48f * scale, 0}, plaster * 1.04f);
+            for (float z : {-11.46f, -8.39f})
+                r.quad(at(3.01f, z), right * (.04f * scale), {0, 1.19f * scale, 0}, paint * .82f);
+            // Only the portion across the future passage dissolves; the side notices stay on their wall.
+            auto notice = [&](float y, float z, glm::vec2 half, const wchar_t* title, float alpha) {
+                if (alpha <= 0)
+                    return;
+                if (alpha < 1)
+                    r.opacity(alpha);
+                const auto face = at(y, z) + normal * .002f;
+                r.quad(face, right * (half.x * scale), {0, half.y * scale, 0}, plaster * 1.02f);
+                for (int row = 0; row < 4; ++row) {
+                    const float lineY = y + half.y * (.22f - row * .23f);
+                    r.line(at(lineY, z - half.x * .73f) + normal * .004f,
+                           at(lineY, z + half.x * (row == 3 ? .22f : .73f)) + normal * .004f,
+                           .006f * scale, paint);
+                }
+                // A short strip of tape makes these sheets distinct from the framed inspection chart.
+                r.quad(at(y + half.y, z) + normal * .005f, right * (.07f * scale),
+                       {0, .024f * scale, 0}, {.79f, .75f, .59f});
+                r.label(title, at(y + half.y * .65f, z) + normal * .005f,
+                        right * (half.x * .72f * scale), {0, .043f * scale, 0}, metal);
+                if (alpha < 1)
+                    r.opacity(1);
+            };
+            notice(3.38f, -11.10f, {.22f, .32f}, L"알림", 1);
+            notice(3.42f, -10.30f, {.32f, .44f}, L"이번 주", remaining);
+            r.quad(at(3.24f, -8.72f) + normal * .002f, right * (.25f * scale),
+                   {0, .43f * scale, 0}, plaster * 1.04f);
             r.label(L"관리 일지", at(3.50f, -8.72f) + normal * .003f,
                     right * (.22f * scale), {0, .045f * scale, 0}, metal);
             for (int row = 0; row < 5; ++row)
