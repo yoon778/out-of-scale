@@ -491,7 +491,11 @@ int runTests() {
         camera.feet = position;
         camera.face(SchoolRoom::alignmentFocus);
         tickFor(room, camera, SchoolRoom::recognitionDuration + SchoolRoom::formationDuration);
-        check(room.stairsReady(), "nearby views in front of and behind the reference point are accepted");
+        if (position.z == 6.f)
+            check(!room.stairsReady() && !room.materializing(),
+                  "the formerly accepted distant rear view now needs closer stair alignment");
+        else
+            check(room.stairsReady(), "nearby views in front of and behind the reference point remain accepted");
     }
     room.reset();
     positionProjector(room, camera);
@@ -797,7 +801,7 @@ int runTests() {
           "walk back to the classroom entrance to connect the everyday fittings");
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::illusionFocus);
-    check(room.corridorAlignment(camera) >= .80f, "normal walking can reach a visually aligned door");
+    check(room.corridorAlignment(camera) >= .84f, "normal walking can reach a visually aligned door");
     const auto doorFeedback = room.alignmentFeedback(camera);
     Camera offAxis = camera;
     offAxis.feet.z += .75f;
@@ -852,7 +856,7 @@ int runTests() {
           "walk back to line up the painted floor and riser");
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::bridgeFocus);
-    check(room.corridorBridgeAlignment(camera) >= .75f, "matching rays recognize the complete grating");
+    check(room.corridorBridgeAlignment(camera) >= .80f, "matching rays recognize the complete grating");
     const auto bridgeFeedback = room.alignmentFeedback(camera);
     check(bridgeFeedback && bridgeFeedback->aligned && bridgeFeedback->score == room.corridorBridgeAlignment(camera),
           "the bridge HUD uses its own recognition threshold and alignment score");
@@ -993,7 +997,7 @@ int runTests() {
             nearby.feet += glm::vec3(x, 0, z);
             nearby.face(SchoolCorridor::illusionFocus);
             const auto feedback = room.corridor_.alignmentFeedback(nearby);
-            forgivingView = forgivingView && feedback && feedback->threshold == .80f && feedback->aligned;
+            forgivingView = forgivingView && feedback && feedback->threshold == .84f && feedback->aligned;
         }
     check(forgivingView, "the classroom return view retains a forgiving 40 by 24 cm recognition region");
     for (const auto feet : {glm::vec3(18.0f, 1.8f, -10.9f), glm::vec3(18.6f, 1.8f, -10.9f)}) {
@@ -1215,7 +1219,7 @@ int runTests() {
     check(!room.adjustingProjector() && camera.focusTime == 0,
           "jump cancels both equipment control and camera focus");
 
-    for (float threshold : {SchoolRoom::stairAlignmentThreshold, .80f, .75f}) {
+    for (float threshold : {SchoolRoom::stairAlignmentThreshold, .84f, .80f}) {
         float held = 0;
         for (int i = 0; i < 120; ++i)
             held = advanceAlignmentHold(held, threshold - .01f, threshold, 1.f / 120);
@@ -1270,7 +1274,7 @@ int runTests() {
         }
         tick(room, camera, {}, 24);
         const auto steadyView = camera;
-        const float threshold = bridge ? .75f : .80f;
+        const float threshold = bridge ? .80f : .84f;
         bool found = false;
         for (int axis : {0, 2}) {
             for (float sign : {-1.f, 1.f}) {
@@ -1301,6 +1305,65 @@ int runTests() {
         const auto returned = room.alignmentFeedback(camera);
         check(returned && returned->holdProgress == 0,
               "looking away resets both corridor puzzles before the next attempt");
+    }
+
+    // The former outer acceptance band must now stay a clue, even after a long steady look.
+    // Also sample a small real area around each solution so tightening cannot leave a single-pixel answer.
+    for (int puzzle = 0; puzzle < 3; ++puzzle) {
+        if (puzzle == 0) {
+            room.reset();
+            positionProjector(room, camera);
+            viewStudy(camera);
+        } else {
+            prepareCorridor();
+            if (puzzle == 2) {
+                tickFor(room, camera, SchoolCorridor::recognitionDuration + SchoolCorridor::formationDuration +
+                                          SchoolCorridor::openingDuration);
+                camera.feet = SchoolCorridor::bridgeEye - glm::vec3(0, 1.65f, 0);
+                camera.resetMotion();
+                camera.face(SchoolCorridor::bridgeFocus);
+            }
+        }
+        const auto correct = camera;
+        const auto focus = puzzle == 0 ? SchoolRoom::alignmentFocus :
+                           puzzle == 1 ? SchoolCorridor::illusionFocus : SchoolCorridor::bridgeFocus;
+        const float oldThreshold = puzzle == 0 ? .85f : puzzle == 1 ? .80f : .75f;
+        const float newThreshold = 1.f - (1.f - oldThreshold) * .8f;
+        bool nearSolution = true;
+        for (float dx : {-.1f, 0.f, .1f})
+            for (float dz : {-.1f, 0.f, .1f}) {
+                auto nearby = correct;
+                // The bridge's existing back-wall occlusion bounds the rear edge of its visible area.
+                nearby.feet += glm::vec3(dx, 0, puzzle == 2 ? (dz - .1f) * .5f : dz);
+                nearby.face(focus);
+                const auto feedback = room.alignmentFeedback(nearby);
+                nearSolution = nearSolution && feedback && feedback->aligned &&
+                               std::abs(feedback->threshold - newThreshold) < .0001f;
+            }
+        check(nearSolution, "tightened puzzles retain a 20 by 20 cm region (bridge 20 by 10 cm toward its gap): " +
+                                std::to_string(puzzle));
+        bool foundFormerBand = false;
+        for (int axis : {0, 2}) {
+            for (float sign : {-1.f, 1.f}) {
+                for (int i = 1; i <= 1500 && !foundFormerBand; ++i) {
+                    camera = correct;
+                    camera.feet[axis] += sign * i * .001f;
+                    camera.face(focus);
+                    const auto feedback = room.alignmentFeedback(camera);
+                    if (feedback && feedback->score >= oldThreshold + .005f &&
+                        feedback->score < newThreshold - .005f)
+                        foundFormerBand = !feedback->aligned;
+                }
+            }
+        }
+        check(foundFormerBand, "formerly accepted outer band now reports incomplete alignment: " +
+                                   std::to_string(puzzle));
+        tick(room, camera, {}, 180);
+        const auto feedback = room.alignmentFeedback(camera);
+        check(foundFormerBand && feedback && !feedback->aligned && feedback->holdProgress == 0 &&
+                  (puzzle == 0 ? !room.materializing() && !room.stairsReady() :
+                   puzzle == 1 ? !room.corridorDoorForming() : !room.corridorBridgeReady()),
+              "waiting at an old outer-band view cannot materialize the tightened puzzle: " + std::to_string(puzzle));
     }
 
     room.reset();
