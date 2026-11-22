@@ -408,11 +408,14 @@ void SchoolRoom::update(Camera& camera, const Input& input, float elapsed, bool 
         camera.grounded = false;
     }
     int count = std::max(1, static_cast<int>(std::ceil(dt * 120)));
+    const auto keyWorld = corridor_.looseClassroomKey() ? collisionBoxes() : std::vector<Box>{};
     for (int i = 0; i < count; ++i) {
         corridor_.update(camera, dt / count);
         move(camera, input, dt / count);
         if (notebookFalling_)
             updateNotebookFall(camera, dt / count);
+        if (!keyWorld.empty())
+            corridor_.updateKey(dt / count, keyWorld);
     }
     camera.motionFeet = camera.feet;
     camera.motionTracked = true;
@@ -1571,7 +1574,8 @@ void SchoolRoom::scene(Renderer& r, const Camera& camera, bool reflection,
     r.box({3.05f, 4.20f, -6.1f}, {0.80f, 0.06f, 0.30f}, {1.0f, 0.96f, 0.77f});
     r.box({3.05f, 4.4f, -6.05f}, {1.76f, 0.15f, 2.2f}, cream);
     corridor_.draw(r);
-    corridor_.drawHeldKey(r, camera);
+    if (corridor_.holdingClassroomKey())
+        corridor_.drawHeldKey(r, camera, collisionBoxes());
     if (stairsReady_)
         drawStairs(r);
 
@@ -1810,7 +1814,7 @@ const wchar_t* SchoolRoom::interactionLabel(const Camera& camera) const {
         return L"돌리기";
     if (aimedBoard(camera) >= 0)
         return L"밀기";
-    if (const auto action = corridor_.classroomInteractionLabel(camera))
+    if (const auto action = corridor_.classroomInteractionLabel(camera, collisionBoxes()))
         return action;
     if (canUseCupboard(camera))
         return cupboardOpen() ? L"닫기" : L"열기";
@@ -1906,7 +1910,8 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
         if (feedback->holdProgress > 0)
             r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
-    if (const auto keyStatus = corridor_.classroomKeyStatus(camera)) {
+    if (const auto keyStatus = corridor_.holdingClassroomKey()
+                                   ? corridor_.classroomKeyStatus(camera, collisionBoxes()) : nullptr) {
         const float textWidth = r.textWidth(keyStatus, 23 * scale);
         const float x = (width - textWidth) * .5f;
         r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale, {.12f, .22f, .18f});

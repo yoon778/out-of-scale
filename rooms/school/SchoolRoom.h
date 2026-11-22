@@ -74,8 +74,9 @@ class SchoolRoom {
     bool interactCorridor(const Camera& camera) {
         if (notebookRatio_ > 0)
             return false;
-        return corridor_.interactClassroom(camera) || toggleCupboard(camera);
+        return corridor_.interactClassroom(camera, collisionBoxes()) || toggleCupboard(camera);
     }
+    glm::vec3 classroomKeyCenter() const { return corridor_.classroomKeyCenter(); }
     bool cupboardOpen() const { return corridor_.doorOpen(); }
     float cupboardAngle() const { return corridor_.doorAngle(); }
     bool corridorDoorReady() const { return corridor_.doorwayReady(); }

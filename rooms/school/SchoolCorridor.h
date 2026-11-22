@@ -29,11 +29,14 @@ class SchoolCorridor {
     void update(const Camera& camera, float dt);
     bool canInteract(const Camera& camera) const;
     bool interact(const Camera& camera);
-    bool interactClassroom(const Camera& camera);
-    const wchar_t* classroomInteractionLabel(const Camera& camera) const;
-    bool holdingClassroomKey() const { return classroomKeyTaken_ && !classroomDoorUnlocked_; }
-    const wchar_t* classroomKeyStatus(const Camera& camera) const;
-    void drawHeldKey(Renderer& renderer, const Camera& camera) const;
+    bool interactClassroom(const Camera& camera, const std::vector<Box>& world);
+    const wchar_t* classroomInteractionLabel(const Camera& camera, const std::vector<Box>& world) const;
+    bool holdingClassroomKey() const { return keyRatio_ > 0; }
+    bool looseClassroomKey() const { return classroomKeyTaken_ && !holdingClassroomKey() && !classroomDoorUnlocked_; }
+    glm::vec3 classroomKeyCenter() const { return key_.center; }
+    const wchar_t* classroomKeyStatus(const Camera& camera, const std::vector<Box>& world) const;
+    void drawHeldKey(Renderer& renderer, const Camera& camera, const std::vector<Box>& world) const;
+    void updateKey(float dt, const std::vector<Box>& world);
     bool finished(const Camera& camera) const;
     bool doorOpen() const { return targetOpen_; }
     float doorAngle() const { return angle_; }
@@ -65,7 +68,7 @@ class SchoolCorridor {
 
   private:
     friend int runTests();
-    enum class ClassroomAction { none, takeKey, unlockDoor };
+    enum class ClassroomAction { none, takeKey, dropKey, blockedKey, unlockDoor };
     struct Solid {
         glm::vec3 center, size, color;
         bool visible = true;
@@ -91,11 +94,11 @@ class SchoolCorridor {
     void buildBridgeDrawing();
     void drawFalseHall(Renderer& renderer) const;
     void drawClassroomLock(Renderer& renderer) const;
-    ClassroomAction classroomAction(const Camera& camera) const;
+    ClassroomAction classroomAction(const Camera& camera, const std::vector<Box>& world) const;
     Box classroomDoorBox(float opening) const;
-    std::optional<perspective::Pose> keyAtLock(const Camera& camera) const;
-    perspective::Pose carriedKeyPose(const Camera& camera) const;
-    void updateKey(const Camera& camera, float dt);
+    std::optional<perspective::Pose> keyAtLock(const Camera& camera, const std::vector<Box>& world) const;
+    std::optional<perspective::Pose> keyPlacement(const Camera& camera, const std::vector<Box>& world) const;
+    perspective::Pose carriedKeyPose(const Camera& camera, const std::vector<Box>& world) const;
     void drawBridge(Renderer& renderer) const;
     void updateBridge(const Camera& camera, float dt);
     glm::vec3 paintedPoint(const InkPatch& patch, int corner) const;
@@ -109,8 +112,8 @@ class SchoolCorridor {
     float angularSpeed_ = 0;
     bool targetOpen_ = false;
     bool classroomKeyTaken_ = false, classroomDoorUnlocked_ = false;
-    float keyRatio_ = 0;
-    perspective::Pose keyDisplay_{classroomKeySpot, 1.f};
+    float keyRatio_ = 0, keyFallSpeed_ = 0;
+    perspective::Pose key_{classroomKeySpot, 1.f};
     float classroomDoorOpening_ = 0;
     float recognition_ = 0, formation_ = 0, opening_ = 0;
     bool forming_ = false;
