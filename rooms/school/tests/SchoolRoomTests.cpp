@@ -693,7 +693,43 @@ int runTests() {
     camera.face(SchoolCorridor::classroomKeySpot);
     check(!room.interactCorridor(camera), "the key is out of reach from the first classroom entrance");
     check(walkTo(room, camera, {6.25f, -12.4f}) && walkTo(room, camera, {9.7f, -12.4f}),
-          "enter classroom A and reach observation window before the first obstruction");
+          "enter classroom A and reach its privacy window before the first obstruction");
+    int privacyRays = 0;
+    bool concealedHall = true;
+    for (float x : {7.8f, 8.8f, 9.8f, 10.8f})
+        for (float z : {-12.05f, -12.55f, -14.f})
+            for (float y : {3.45f, 4.2f})
+                for (const auto target : {glm::vec3(10.3f, 2.6f, -10.9f), glm::vec3(11.8f, 3.4f, -9.4f),
+                                           glm::vec3(14.5f, 3.45f, -10.95f)}) {
+                    const glm::vec3 eye{x, y, z};
+                    const auto delta = target - eye;
+                    const auto paneHit = eye + delta * ((-11.6f - z) / delta.z);
+                    if (paneHit.x <= 7.6f || paneHit.x >= 11.05f || paneHit.y <= 2.85f || paneHit.y >= 4.2f)
+                        continue;
+                    ++privacyRays;
+                    bool opaque = false;
+                    for (const auto& solid : room.corridor_.solids_) {
+                        if (!solid.visible)
+                            continue; // Collision-only glass must not count as visual occlusion.
+                        const float hit = SchoolRoom::rayBox(eye, glm::normalize(delta),
+                                                            {solid.center - solid.size * .5f,
+                                                             solid.center + solid.size * .5f});
+                        opaque = opaque || (hit >= 0 && hit < glm::length(delta));
+                    }
+                    concealedHall = concealedHall && opaque;
+                }
+    check(privacyRays > 30 && concealedHall,
+          "classroom A conceals the post-key hall through its window from low, high and oblique views");
+    bool clearSecondWindow = true;
+    const glm::vec3 secondEye{16.5f, 3.45f, -12.4f}, secondTarget{16.5f, 3.45f, -10.9f};
+    for (const auto& solid : room.corridor_.solids_) {
+        if (!solid.visible)
+            continue;
+        const float hit = SchoolRoom::rayBox(secondEye, glm::normalize(secondTarget - secondEye),
+                                            {solid.center - solid.size * .5f, solid.center + solid.size * .5f});
+        clearSecondWindow = clearSecondWindow && (hit < 0 || hit >= glm::distance(secondEye, secondTarget));
+    }
+    check(clearSecondWindow, "classroom B keeps the later observation window clear");
     camera.yaw = 3.14159265f;
     tick(room, camera, {1, 0, true}, 90);
     check(camera.feet.z < -11.8f, "closed classroom glass prevents jumping through as a shortcut");

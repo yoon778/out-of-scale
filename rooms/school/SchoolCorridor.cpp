@@ -163,9 +163,11 @@ void SchoolCorridor::build() {
     for (const auto window : {Window{7.6f, 11.05f}, Window{14.7f, 17.8f}}) {
         wall(window.start, window.end, -11.6f, 0, 1.05f);
         wall(window.start, window.end, -11.6f, 2.4f);
-        // Transparent closed panes stop jumping through the observation window.
+        // 2-1 uses opaque privacy glass so its window cannot reveal the real hall behind the painted wall.
+        // 2-2 keeps its clear observation window for the later cupboard puzzle.
+        const bool privacyGlass = window.start < falseHallWallX;
         solid({(window.start + window.end) * .5f, 3.525f, -11.6f}, {window.end - window.start, 1.35f, .035f},
-              plaster, false);
+              {.69f, .76f, .72f}, privacyGlass);
         for (float x = window.start; x < window.end + .01f; x += 1.025f)
             detail({x, 3.525f, -11.6f}, {.055f, 1.4f, .10f}, wood);
         for (float y : {2.85f, 4.2f})
@@ -1032,9 +1034,9 @@ void SchoolCorridor::draw(Renderer& r) const {
     drawClassroomLock(r);
     drawBridge(r);
     r.label(L"점검 통로", {25.031f, 3.59f, -11.43f}, {0, 0, .37f}, {0, .13f, 0}, plaster);
-    // Closed glass remains visible while preserving the useful side view into each gap.
+    // Only 2-2 is clear; 2-1's privacy glass is rendered with its opaque collision pane.
     r.opacity(.08f);
-    for (const auto window : {Window{7.6f, 11.05f}, Window{14.7f, 17.8f}})
+    for (const auto window : {Window{14.7f, 17.8f}})
         r.quad({(window.start + window.end) * .5f, 3.525f, -11.6f}, {(window.end - window.start) * .5f, 0, 0},
                {0, .675f, 0}, {.65f, .80f, .78f});
     r.opacity(1);

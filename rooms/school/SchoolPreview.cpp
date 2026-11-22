@@ -161,6 +161,9 @@ void stageCapture(Application& state, const std::string& stage) {
         } else if (stage == "corridor-window-a") {
             state.camera.feet = {9.8f, 1.8f, -12.55f};
             state.camera.face({10.0f, 2.5f, -9.5f});
+        } else if (stage == "corridor-window-a-side" || stage == "corridor-window-a-high") {
+            state.camera.feet = {8.1f, stage == "corridor-window-a-high" ? 2.55f : 1.8f, -12.05f};
+            state.camera.face({11.8f, 3.4f, -9.4f});
         } else if (stage == "corridor-window-b") {
             state.camera.feet = {16.5f, 1.8f, -12.4f};
             state.camera.face({18.1f, 2.8f, -10.85f});
@@ -558,6 +561,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-class-exit",
                                         "corridor-class-unlocked",
                                         "corridor-window-a",
+                                        "corridor-window-a-side",
+                                        "corridor-window-a-high",
                                         "corridor-window-b",
                                         "corridor-door-open",
                                         "corridor-door-half-open",
