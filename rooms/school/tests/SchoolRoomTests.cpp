@@ -752,8 +752,15 @@ int runTests() {
     check(walkTo(room, camera, {6.25f, -10.65f}) && walkTo(room, camera, {6.25f, -12.55f}) &&
               walkTo(room, camera, {11.67f, -12.55f}),
           "carry the key back to the rear door");
-    camera.face(SchoolCorridor::classroomRearDoor);
-    check(room.interactCorridor(camera), "use the key to unlock the classroom rear door");
+    camera.face(SchoolCorridor::classroomLock);
+    tick(room, camera, {}, 35);
+    check(room.corridor_.holdingClassroomKey() && !room.interactCorridor(camera),
+          "carrying the oversized key alone cannot unlock the classroom rear door");
+    check(walkTo(room, camera, {12.05f, -12.28f}), "approach the lock to shrink the carried key by perspective");
+    camera.face(SchoolCorridor::classroomLock);
+    tick(room, camera, {}, 35);
+    check(room.interactCorridor(camera) && !room.corridor_.holdingClassroomKey(),
+          "fit the shrunken key to the lock and leave it in the unlocked door");
     tick(room, camera, {}, 100);
     check(walkTo(room, camera, {11.67f, -9.9f}) && walkTo(room, camera, {13.45f, -9.9f}),
           "walk through the opened rear classroom door to bypass the false hall");
@@ -1595,6 +1602,103 @@ int runTests() {
                 } else
                     check(room.notebookRatio_ == ratio, "a blocked upward release keeps the notebook in hand");
             }
+        }
+    }
+
+    room.reset();
+    camera = Camera();
+    camera.feet = {8.78f, 1.8f, -10.65f};
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(room.interactCorridor(camera), "prepare a carried key for obstruction and single-item checks");
+    for (const auto view : {glm::vec4(9.8f, 1.8f, -11.86f, 3.14159265f),
+                             glm::vec4(12.05f, 1.8f, -12.28f, 1.570796327f)}) {
+        camera.feet = glm::vec3(view);
+        camera.yaw = view.w;
+        camera.pitch = 0;
+        const auto pose = room.corridor_.carriedKeyPose(camera);
+        const auto toward = pose.center - camera.eye();
+        bool visible = pose.scale > 0 && glm::dot(toward, camera.direction()) > 0;
+        for (const auto& solid : room.corridor_.solids_) {
+            const float hit = SchoolRoom::rayBox(camera.eye(), glm::normalize(toward),
+                                                {solid.center - solid.size * .5f, solid.center + solid.size * .5f});
+            visible = visible && (hit < 0 || hit >= glm::length(toward));
+        }
+        check(visible, "held-key framing stops in front of thin glass and nearby walls");
+    }
+    camera.feet = {-4.83f, 0, 3.8f};
+    camera.face(room.notebookCenter());
+    check(!room.toggleNotebook(camera) && room.corridor_.holdingClassroomKey(),
+          "a carried key cannot share the hand with the notebook");
+    room.reset();
+    check(room.toggleNotebook(camera), "the notebook can be picked up after key reset");
+    camera.feet = {8.78f, 1.8f, -10.65f};
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(!room.interactCorridor(camera) && !room.corridor_.holdingClassroomKey(),
+          "holding the notebook prevents acquiring the key through direct interaction calls");
+
+    // Use the public pickup/use path at several rates and pickup distances, including point-blank grabs.
+    for (int fps : {30, 60, 144}) {
+        for (const auto pickup : {glm::vec3(8.78f, 1.8f, -10.65f), glm::vec3(9.29f, 1.8f, -9.9f),
+                                   glm::vec3(8.28f, 1.8f, -9.9f)}) {
+            SchoolRoom keyRoom;
+            Camera keyCamera;
+            keyCamera.feet = pickup;
+            keyCamera.face(SchoolCorridor::classroomKeySpot);
+            auto& keyCorridor = keyRoom.corridor_;
+            auto settleKey = [&]() {
+                keyCamera.resetMotion();
+                for (int frame = 0; frame < fps / 2; ++frame)
+                    keyRoom.update(keyCamera, {}, 1.f / fps);
+            };
+            check(keyRoom.interactCorridor(keyCamera) && keyCorridor.holdingClassroomKey() &&
+                      keyCorridor.classroomKeyStatus(keyCamera) && keyCorridor.keyDisplay_.scale > 0,
+                  "pickup shows a carried key and persistent ownership status");
+            keyCamera.feet = {12.05f, 1.8f, -13.f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            settleKey();
+            const auto large = keyCorridor.keyAtLock(keyCamera);
+            check(large && large->scale > .51f && !keyRoom.interactCorridor(keyCamera) &&
+                      std::wstring_view(keyCorridor.classroomKeyStatus(keyCamera)).find(L"커요") != std::wstring_view::npos,
+                  "an oversized key cannot unlock and explains how distance reduces its size");
+            keyCamera.feet = {12.07f, 1.8f, -11.99f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            settleKey();
+            const auto small = keyCorridor.keyAtLock(keyCamera);
+            check(small && small->scale < .39f && !keyRoom.interactCorridor(keyCamera) &&
+                      std::wstring_view(keyCorridor.classroomKeyStatus(keyCamera)).find(L"작아요") != std::wstring_view::npos,
+                  "an undersized key also fails and asks the player to step back");
+            const auto shown = keyCorridor.keyDisplay_;
+            keyCamera.feet.z -= .5f;
+            keyCamera.face(SchoolCorridor::classroomLock);
+            keyRoom.update(keyCamera, {}, 1.f, false);
+            check(keyCorridor.keyDisplay_.center == shown.center && keyCorridor.keyDisplay_.scale == shown.scale,
+                  "pause freezes the carried key and its size interpolation");
+            keyCamera.feet = {12.05f, 1.8f, -11.3f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            check(!keyCorridor.keyAtLock(keyCamera) && !keyRoom.interactCorridor(keyCamera),
+                  "the lock cannot be used through the back of its closed door");
+            keyCamera.feet = {13.4f, 1.8f, -12.7f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            check(!keyCorridor.keyAtLock(keyCamera) && !keyRoom.interactCorridor(keyCamera),
+                  "the adjacent classroom wall blocks sizing and inserting the key");
+            const float depth = .45f / keyCorridor.keyRatio_;
+            const float dx = 12.05f - SchoolCorridor::classroomLock.x;
+            const float dy = 3.45f - SchoolCorridor::classroomLock.y;
+            keyCamera.feet = {12.05f, 1.8f,
+                              SchoolCorridor::classroomLock.z - std::sqrt(depth * depth - dx * dx - dy * dy)};
+            keyCamera.face(SchoolCorridor::classroomRearDoor);
+            check(!keyRoom.interactCorridor(keyCamera), "correct distance alone cannot substitute for aiming at the lock");
+            keyCamera.face(SchoolCorridor::classroomLock);
+            settleKey();
+            const auto fit = keyCorridor.keyAtLock(keyCamera);
+            check(fit && std::abs(fit->scale - .45f) < .01f && keyRoom.interactCorridor(keyCamera) &&
+                      !keyCorridor.holdingClassroomKey() && !keyCorridor.classroomKeyStatus(keyCamera),
+                  "matching the actual key size unlocks once and removes the held-key status");
+            check(!keyRoom.interactCorridor(keyCamera), "the inserted key cannot be consumed twice");
+            keyRoom.reset();
+            check(!keyCorridor.holdingClassroomKey() && keyCorridor.keyRatio_ == 0 &&
+                      !keyCorridor.classroomDoorUnlocked_ && keyCorridor.keyDisplay_.center == SchoolCorridor::classroomKeySpot,
+                  "reset restores the hook, key scale, ownership and lock together");
         }
     }
 

@@ -510,7 +510,7 @@ Box SchoolRoom::notebookBounds(const perspective::Pose& pose) const {
     return bounds(pose.center, pose.scale * extent);
 }
 bool SchoolRoom::canGrabNotebook(const Camera& camera) const {
-    if (notebookRatio_ > 0 || adjustingProjector_ || adjustingMirror_ || !camera.grounded)
+    if (notebookRatio_ > 0 || corridor_.holdingClassroomKey() || adjustingProjector_ || adjustingMirror_ || !camera.grounded)
         return false;
     const auto look = camera.direction(), eye = camera.eye();
     const float t = rayBox(eye, look, notebookBounds(notebook_));
@@ -1571,6 +1571,7 @@ void SchoolRoom::scene(Renderer& r, const Camera& camera, bool reflection,
     r.box({3.05f, 4.20f, -6.1f}, {0.80f, 0.06f, 0.30f}, {1.0f, 0.96f, 0.77f});
     r.box({3.05f, 4.4f, -6.05f}, {1.76f, 0.15f, 2.2f}, cream);
     corridor_.draw(r);
+    corridor_.drawHeldKey(r, camera);
     if (stairsReady_)
         drawStairs(r);
 
@@ -1905,7 +1906,12 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
         if (feedback->holdProgress > 0)
             r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
-    if (notebookRatio_ > 0 && !placement) {
+    if (const auto keyStatus = corridor_.classroomKeyStatus(camera)) {
+        const float textWidth = r.textWidth(keyStatus, 23 * scale);
+        const float x = (width - textWidth) * .5f;
+        r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale, {.12f, .22f, .18f});
+        r.text(keyStatus, x, height - 54 * scale, 23 * scale);
+    } else if (notebookRatio_ > 0 && !placement) {
         const wchar_t* status = camera.direction().y > 0 ? L"놓을 공간이 없어요 · 시선을 내려 주세요"
                                                        : L"놓을 공간이 없어요 · 조금 물러나 주세요";
         const float textWidth = r.textWidth(status, 23 * scale);

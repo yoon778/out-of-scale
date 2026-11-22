@@ -14,6 +14,7 @@ constexpr float cupboardAngleTolerance = .025f;
 constexpr float falseHallWallX = 9.65f;
 constexpr glm::vec3 classroomDoorSize{1.25f, 2.286f, .072f};
 constexpr glm::vec3 brass{.67f, .53f, .30f};
+constexpr float fittedKeyScale = .45f, keyScaleTolerance = .06f;
 constexpr float gapNear = -12.0f, gapFar = -15.65f, stairShift = -3.65f;
 constexpr float bridgeWidth = 1.00f;
 constexpr float stairStart = -12.72f + stairShift, stairRun = .6f, stairRise = .2f;
@@ -27,6 +28,21 @@ glm::vec3 cupboardOutside(float angle) {
 }
 Box box(glm::vec3 center, glm::vec3 size) {
     return {center - size * .5f, center + size * .5f};
+}
+bool keyFits(float scale) {
+    return std::abs(scale - fittedKeyScale) <= keyScaleTolerance;
+}
+void drawKey(Renderer& r, glm::vec3 center, glm::vec3 right, glm::vec3 up, float scale) {
+    auto at = [&](float x, float y) { return center + (right * x + up * y) * scale; };
+    constexpr float circle = 6.283185307f;
+    for (int i = 0; i < 12; ++i) {
+        const float a = i * circle / 12, b = (i + 1) * circle / 12;
+        r.line(at(std::cos(a) * .018f, .026f + std::sin(a) * .018f),
+               at(std::cos(b) * .018f, .026f + std::sin(b) * .018f), .006f * scale, brass);
+    }
+    r.line(at(0, .011f), at(0, -.044f), .010f * scale, brass);
+    r.line(at(0, -.030f), at(.019f, -.030f), .009f * scale, brass);
+    r.line(at(0, -.041f), at(.015f, -.041f), .007f * scale, brass);
 }
 bool touches(const Camera& camera, const Box& b) {
     const auto p = camera.feet;
@@ -68,6 +84,8 @@ void SchoolCorridor::reset() {
     angularSpeed_ = 0;
     targetOpen_ = false;
     classroomKeyTaken_ = classroomDoorUnlocked_ = false;
+    keyRatio_ = 0;
+    keyDisplay_ = {classroomKeySpot, 1.f};
     classroomDoorOpening_ = 0;
     recognition_ = formation_ = opening_ = 0;
     forming_ = bridgeForming_ = false;
@@ -505,7 +523,12 @@ void SchoolCorridor::drawClassroomLock(Renderer& r) const {
         r.box(center + glm::vec3(0, y, -.054f), {.84f, .022f, .012f}, wood * .72f);
     for (float z : {-.049f, .049f})
         r.box(center + glm::vec3(.45f, -.01f, z), {.075f, .22f, .024f}, metal);
-    r.box(center + glm::vec3(.45f, -.15f, -.064f), {.042f, .050f, .025f}, brass * .84f);
+    const auto lock = classroomLock + center - classroomRearDoor;
+    r.box(lock + glm::vec3(0, .014f, .028f), {.11f, .14f, .025f}, metal);
+    r.box(lock + glm::vec3(0, .015f, .010f), {.073f, .085f, .033f}, brass * .84f);
+    r.quad(lock - glm::vec3(0, 0, .009f), {-.006f, 0, 0}, {0, .010f, 0}, {.10f, .12f, .10f});
+    if (classroomDoorUnlocked_)
+        drawKey(r, lock + glm::vec3(0, .041f * keyDisplay_.scale, -.019f), {-1, 0, 0}, {0, 1, 0}, keyDisplay_.scale);
     const auto notice = center + glm::vec3(-.06f, -.13f, -.041f);
     r.box(notice, {.46f, .25f, .010f}, {.84f, .82f, .71f});
     r.label(L"뒷문 열쇠", notice + glm::vec3(0, .052f, -.006f), {-.16f, 0, 0}, {0, .038f, 0}, metal);
@@ -516,17 +539,85 @@ void SchoolCorridor::drawClassroomLock(Renderer& r) const {
     r.box(key + glm::vec3(hookLength * .5f, .041f, 0), {hookLength, .009f, .010f}, metal);
     if (classroomKeyTaken_ || !r.visible(key, {.05f, .06f, .015f}))
         return;
-    // The key reads edge-on from the corridor entrance and face-on from the side.
-    constexpr float fullCircle = 6.283185307f;
-    for (int i = 0; i < 10; ++i) {
-        const float a = i * fullCircle / 10, b = (i + 1) * fullCircle / 10;
-        const auto ring = key + glm::vec3(0, .026f, 0);
-        r.line(ring + glm::vec3(std::cos(a), std::sin(a), 0) * .018f,
-               ring + glm::vec3(std::cos(b), std::sin(b), 0) * .018f, .006f, brass);
+    // The same key mesh is used on the hook, in the hand and in the lock.
+    drawKey(r, key, {1, 0, 0}, {0, 1, 0}, 1.f);
+}
+std::optional<perspective::Pose> SchoolCorridor::keyAtLock(const Camera& camera) const {
+    if (!holdingClassroomKey() || camera.eye().z >= classroomLock.z - .04f)
+        return std::nullopt;
+    const auto eye = camera.eye(), direction = camera.direction();
+    const float aimed = SchoolRoom::rayBox(eye, direction, box(classroomLock, {.18f, .22f, .08f}));
+    if (aimed < 0 || aimed > 2.4f)
+        return std::nullopt;
+    const auto toward = classroomLock - eye;
+    const float distance = glm::length(toward);
+    for (const auto& solid : solids_) {
+        const float hit = SchoolRoom::rayBox(eye, toward / distance, box(solid.center, solid.size));
+        if (hit >= 0 && hit < distance - .02f)
+            return std::nullopt;
     }
-    r.box(key + glm::vec3(0, -.015f, 0), {.011f, .052f, .009f}, brass);
-    r.box(key + glm::vec3(.009f, -.030f, 0), {.023f, .009f, .009f}, brass);
-    r.box(key + glm::vec3(.007f, -.041f, 0), {.019f, .007f, .009f}, brass);
+    const float scale = keyRatio_ * glm::dot(toward, direction);
+    return perspective::Pose{classroomLock + glm::vec3(0, .041f * scale, -.023f), scale};
+}
+perspective::Pose SchoolCorridor::carriedKeyPose(const Camera& camera) const {
+    const auto direction = camera.direction();
+    const glm::vec3 right{std::cos(camera.yaw), 0, std::sin(camera.yaw)};
+    const auto up = glm::normalize(glm::cross(right, direction));
+    const auto carry = direction + right * .30f - up * .28f;
+    float depth = .60f;
+    perspective::Pose pose{};
+    for (int attempt = 0; attempt < 24; ++attempt) {
+        pose = {camera.eye() + carry * depth, keyRatio_ * depth};
+        const glm::vec3 extent(.06f * pose.scale);
+        const auto toward = pose.center - camera.eye();
+        auto blockedBy = [&](const Box& solid) {
+            const float hit = SchoolRoom::rayBox(camera.eye(), glm::normalize(toward),
+                                                {solid.min - extent, solid.max + extent});
+            return hit >= 0 && hit < glm::length(toward);
+        };
+        bool blocked = blockedBy(classroomDoorBox(0));
+        for (const auto& solid : solids_)
+            blocked = blocked || blockedBy(box(solid.center, solid.size));
+        if (!blocked)
+            return pose;
+        depth *= .82f;
+    }
+    return pose;
+}
+void SchoolCorridor::updateKey(const Camera& camera, float dt) {
+    if (!holdingClassroomKey())
+        return;
+    const auto lockPose = keyAtLock(camera);
+    const auto target = lockPose ? *lockPose : carriedKeyPose(camera);
+    // Follow the same continuous size/depth relation as the notebook, with a short settling motion.
+    const float blend = 1.f - std::exp(-22.f * dt);
+    if (glm::distance(keyDisplay_.center, camera.eye()) > 3.f)
+        keyDisplay_ = target;
+    else {
+        keyDisplay_.center = glm::mix(keyDisplay_.center, target.center, blend);
+        keyDisplay_.scale = glm::mix(keyDisplay_.scale, target.scale, blend);
+    }
+}
+void SchoolCorridor::drawHeldKey(Renderer& r, const Camera& camera) const {
+    if (!holdingClassroomKey())
+        return;
+    const glm::vec3 right{std::cos(camera.yaw), 0, std::sin(camera.yaw)};
+    const auto up = glm::normalize(glm::cross(right, camera.direction()));
+    const bool atLock = keyAtLock(camera).has_value();
+    drawKey(r, keyDisplay_.center, atLock ? glm::vec3(-1, 0, 0) : right,
+            atLock ? glm::vec3(0, 1, 0) : up, keyDisplay_.scale);
+}
+const wchar_t* SchoolCorridor::classroomKeyStatus(const Camera& camera) const {
+    if (!holdingClassroomKey())
+        return nullptr;
+    const auto target = keyAtLock(camera);
+    if (!target)
+        return L"열쇠를 들고 있어요 · 자물쇠에 크기를 맞춰 보세요";
+    if (target->scale > fittedKeyScale + keyScaleTolerance)
+        return L"열쇠가 커요 · 자물쇠에 더 가까이 다가가세요";
+    if (target->scale < fittedKeyScale - keyScaleTolerance)
+        return L"열쇠가 작아요 · 조금 물러나세요";
+    return L"자물쇠에 맞는 크기예요";
 }
 SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& camera) const {
     const auto eye = camera.eye(), direction = camera.direction();
@@ -541,8 +632,11 @@ SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& ca
     };
     if (!classroomKeyTaken_ && reaches(box(classroomKeySpot, {.075f, .11f, .055f}), 1.28f))
         return ClassroomAction::takeKey;
-    if (classroomKeyTaken_ && !classroomDoorUnlocked_ && reaches(classroomDoorBox(0), 1.65f))
-        return ClassroomAction::unlockDoor;
+    if (const auto target = keyAtLock(camera)) {
+        if (keyFits(target->scale) && keyFits(keyDisplay_.scale) &&
+            glm::distance(keyDisplay_.center, target->center) < .025f)
+            return ClassroomAction::unlockDoor;
+    }
     return ClassroomAction::none;
 }
 const wchar_t* SchoolCorridor::classroomInteractionLabel(const Camera& camera) const {
@@ -556,9 +650,14 @@ bool SchoolCorridor::interactClassroom(const Camera& camera) {
     switch (classroomAction(camera)) {
     case ClassroomAction::takeKey:
         classroomKeyTaken_ = true;
+        // Cap near-hook magnification so the lock remains reachable even after a point-blank pickup.
+        keyRatio_ = std::min(1.4f, perspective::grabRatio(camera.eye(), camera.direction(), classroomKeySpot, 1.f, .09f));
+        keyDisplay_ = carriedKeyPose(camera);
         return true;
     case ClassroomAction::unlockDoor:
+        keyDisplay_ = *keyAtLock(camera);
         classroomDoorUnlocked_ = true;
+        keyRatio_ = 0;
         return true;
     default:
         return false;
@@ -893,6 +992,7 @@ bool SchoolCorridor::interact(const Camera& camera) {
     return true;
 }
 void SchoolCorridor::update(const Camera& camera, float dt) {
+    updateKey(camera, dt);
     if (classroomDoorUnlocked_ && classroomDoorOpening_ < 1) {
         const float next = std::min(1.f, classroomDoorOpening_ + dt / .74f);
         if (!touches(camera, classroomDoorBox(next)))

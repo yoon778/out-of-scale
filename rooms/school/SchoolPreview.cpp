@@ -177,14 +177,26 @@ void stageCapture(Application& state, const std::string& stage) {
             state.camera.feet = {9.0f, 1.8f, -10.65f};
             state.camera.face({9.55f, 3.25f, -9.9f});
         } else if (stage == "corridor-class-key" || stage == "corridor-class-exit" ||
-                   stage == "corridor-class-unlocked") {
+                   stage == "corridor-class-unlocked" || stage.rfind("corridor-key-", 0) == 0) {
             state.camera.feet = {8.78f, 1.8f, -10.65f};
             state.camera.face(school::SchoolCorridor::classroomKeySpot);
             if (stage != "corridor-class-key") {
-                if (stage == "corridor-class-unlocked" && !state.room.interactCorridor(state.camera))
+                if (stage != "corridor-class-exit" && !state.room.interactCorridor(state.camera))
                     throw std::runtime_error("Capture could not find the classroom key");
                 state.camera.feet = {11.60f, 1.8f, -13.0f};
-                state.camera.face(school::SchoolCorridor::classroomRearDoor);
+                state.camera.face(school::SchoolCorridor::classroomLock);
+                if (stage == "corridor-key-held") {
+                    state.camera.feet = {7.0f, 1.8f, -12.55f};
+                    state.camera.face({10.5f, 3.45f, -14.f});
+                } else if (stage == "corridor-key-fit" || stage == "corridor-class-unlocked") {
+                    state.camera.feet = {12.05f, 1.8f, -12.28f};
+                    state.camera.face(school::SchoolCorridor::classroomLock);
+                } else if (stage == "corridor-key-small") {
+                    state.camera.feet = {12.05f, 1.8f, -12.01f};
+                    state.camera.face(school::SchoolCorridor::classroomLock);
+                }
+                state.camera.resetMotion();
+                settle(state, .35f);
                 if (stage == "corridor-class-unlocked") {
                     if (!state.room.interactCorridor(state.camera))
                         throw std::runtime_error("Capture could not unlock the classroom rear door");
@@ -560,6 +572,10 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-class-key",
                                         "corridor-class-exit",
                                         "corridor-class-unlocked",
+                                        "corridor-key-held",
+                                        "corridor-key-large",
+                                        "corridor-key-fit",
+                                        "corridor-key-small",
                                         "corridor-window-a",
                                         "corridor-window-a-side",
                                         "corridor-window-a-high",

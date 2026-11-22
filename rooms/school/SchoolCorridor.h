@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../shared/PerspectiveCarry.h"
+
 #include <GL/glm/glm.hpp>
 #include <array>
 #include <optional>
@@ -29,6 +31,9 @@ class SchoolCorridor {
     bool interact(const Camera& camera);
     bool interactClassroom(const Camera& camera);
     const wchar_t* classroomInteractionLabel(const Camera& camera) const;
+    bool holdingClassroomKey() const { return classroomKeyTaken_ && !classroomDoorUnlocked_; }
+    const wchar_t* classroomKeyStatus(const Camera& camera) const;
+    void drawHeldKey(Renderer& renderer, const Camera& camera) const;
     bool finished(const Camera& camera) const;
     bool doorOpen() const { return targetOpen_; }
     float doorAngle() const { return angle_; }
@@ -45,6 +50,7 @@ class SchoolCorridor {
     static constexpr float floorHeight = 1.8f;
     static constexpr glm::vec3 classroomKeySpot{9.44f, 3.231f, -9.79f};
     static constexpr glm::vec3 classroomRearDoor{11.675f, 2.951f, -11.73f};
+    static constexpr glm::vec3 classroomLock{12.125f, 3.251f, -11.81f};
     static constexpr glm::vec3 hinge{19.30f, floorHeight, -11.48f};
     static constexpr float doorWidth = 1.20f;
     static constexpr float doorHeight = 2.30f;
@@ -87,6 +93,9 @@ class SchoolCorridor {
     void drawClassroomLock(Renderer& renderer) const;
     ClassroomAction classroomAction(const Camera& camera) const;
     Box classroomDoorBox(float opening) const;
+    std::optional<perspective::Pose> keyAtLock(const Camera& camera) const;
+    perspective::Pose carriedKeyPose(const Camera& camera) const;
+    void updateKey(const Camera& camera, float dt);
     void drawBridge(Renderer& renderer) const;
     void updateBridge(const Camera& camera, float dt);
     glm::vec3 paintedPoint(const InkPatch& patch, int corner) const;
@@ -100,6 +109,8 @@ class SchoolCorridor {
     float angularSpeed_ = 0;
     bool targetOpen_ = false;
     bool classroomKeyTaken_ = false, classroomDoorUnlocked_ = false;
+    float keyRatio_ = 0;
+    perspective::Pose keyDisplay_{classroomKeySpot, 1.f};
     float classroomDoorOpening_ = 0;
     float recognition_ = 0, formation_ = 0, opening_ = 0;
     bool forming_ = false;
