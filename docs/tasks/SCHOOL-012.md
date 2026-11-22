@@ -3,7 +3,7 @@
 ## 작업 시작
 
 - 날짜 / 담당자: 2026-11-22 / 김새누 작업 지원
-- 상태: 수정 완료 / 사용자 정정에 따라 공책처럼 놓기·재집기로 크기 조절. 사람의 최종 플레이 평가 미확인.
+- 상태: 추가 개선 완료 / 윤서의 군대 소품 조작을 대조해 먼 거리 회수·발 앞 놓기·크기 예고를 적용. 사람의 수정본 직접 플레이 미확인.
 - 브랜치 / 시작: `saenu` / `c97c5b6` (직전 판정 강화는 SCHOOL-011에 별도 커밋).
 - 확인: AGENTS.md, AI 협업 규칙, TEAM, 공식 기획서 학교, SCHOOL-009~011, origin/yoon778 B-031.
 - 목표: 복도 끝 열쇠를 공책처럼 E로 놓아 크기를 확정하고, 떨어진 열쇠를 다시 주워 실제 크기가 자물쇠에 맞을 때 E로 잠금을 푼다.
@@ -14,10 +14,10 @@
 
 ## 진행·인계
 
-- 변경: 보유 모델·놓기 미리보기와 상태 안내를 제공한다. 가까운 곳 또는 먼 곳에 E로 놓아 축소·확대하고, 낙하 후 다시 주워 확정된 크기로만 잠금을 푼다. 들고 이동하거나 잠금 장치를 겨누는 것만으로 크기가 바뀌지 않는다.
+- 변경: 보유 모델·놓을 크기의 적합 여부를 미리 보여준다. 놓은 열쇠는 최대 8m에서 회수할 수 있고, 멀리서 집은 뒤 가까운 바닥에 놓아 쉽게 축소할 수 있다. 발밑을 겨누면 몸과 겹치지 않는 발 앞으로 놓는다. 낙하 후 다시 주워 확정된 크기로만 잠금을 풀며, 들고 이동하거나 잠금 장치를 겨누는 것만으로 크기가 바뀌지 않는다.
 - 디자인: 허용 크기 0.39~0.51배(목표 .45배)는 유지한다. 놓기 배율은 0.20~5.5배이며 이전 보유 비율 상한 1.4는 제거했다. 밀착 집기는 중간 놓기·재집기로 줄일 수 있다. 원본 모양을 후크·보유·바닥·잠금 장치에 재사용한다.
 - 실제 수정 파일: `rooms/school/SchoolCorridor.h`, `rooms/school/SchoolCorridor.cpp`, `rooms/school/SchoolRoom.h`, `rooms/school/SchoolRoom.cpp`, `rooms/school/SchoolPreview.cpp`, `rooms/school/tests/SchoolRoomTests.cpp`, `rooms/school/README.md`, `illusion-escape-game-plan.md`, `docs/tasks/SCHOOL-012.md`.
-- 검증: x64 Debug·Release 빌드 및 각각 **759 checks, 0 failures**. 팀 Release 빌드와 학교→군대 방 전환 **21 checks, 0 failures**. 숨김 OpenGL **81장면**, 오류 없음. 아래 수정 결과 참조.
+- 검증: x64 Debug·Release 빌드 및 각각 **777 checks, 0 failures**. 팀 Release 빌드와 학교→군대 방 전환 **21 checks, 0 failures**. 숨김 OpenGL **84장면**, 오류 없음. 아래 수정 결과 참조.
 - 미검증: 사람의 실제 난이도·화면 평가, 다른 GPU.
 - 공유 확인: origin/main·origin/saenu a1c53a3, origin/yoon778 f9611e4. 직전 fetch에서 공유 AGENTS·TEAM·관련 MD 변경 없음. 상대 B-031과 범위 겹침 없음.
 - 공통 약속 변경: 없음. 키보드 E와 시점·이동만 사용.
@@ -28,7 +28,7 @@
 ## AI 활용
 
 - 요청 요약: 판정 추가 강화, 열쇠 보유 표시, 축소 후 잠금 해제.
-- 사람의 검토·수정: 사용자가 이전 구현을 보고 공책처럼 던져서 크기를 조절하는 의도라고 정정했다. 이 정정을 반영한 수정본의 직접 플레이는 미확인.
+- 사람의 검토·수정: 사용자가 공책처럼 던지는 방식으로 정정한 뒤 크기 조절이 어렵다고 평가하고 윤서 코드 적용을 요청했다. 이번 개선본의 직접 플레이는 미확인.
 - 결과 확인: AI가 기능 검사와 실제 렌더링을 확인했다. 사람의 수정본 플레이는 미확인.
 
 
@@ -63,3 +63,19 @@
 - 증거: `build/key-drop-20261122/release.log`, `tests.log`, `debug.log`, `debug-tests.log`, `team-tests.log`, `captures.log`, `captures/`. 팀 상세 로그는 `build/school-transition-tests/`.
 - 커밋 직전 공유 확인: 재차 fetch 후 origin/main·origin/saenu `a1c53a3`, origin/yoon778 `f9611e4` 유지. 공유 AGENTS·TEAM·관련 작업 MD 변경 없음. 문서 UTF-8·링크와 `git diff --check` 확인. 상대 B-031과 담당 범위 겹침 없음.
 - Git: 사용자 상시 요청에 따라 검증 후 수정과 기록을 같은 커밋에 저장. 푸시·main 통합 미요청·미수행.
+
+## 윤서 소품 조작을 참고한 크기 조절 개선 — 2026-11-22
+
+- 요청·시작: 사용자가 크기 조절이 어렵다고 평가하고 윤서 코드를 확인·이용하도록 요청. `saenu` `b9dfd66`, 기존 수정 없음. fetch 후 origin/main·origin/saenu `a1c53a3`, origin/yoon778 `f9611e4`, 공유 MD 변경 없음.
+- 비교 근거: `rooms/military/MilitaryRoom.cpp`의 `interact`, `placement`, `dropNearFeet`, `drawBarracks`와 `rooms/shared/PerspectiveCarry.h` 확인. 군대 소스와 공용 헤더가 origin/yoon778과 동일함을 확인했다. B-002·004의 배치·중력 기록 및 최신 B-031을 확인했다.
+- 원인: 군대 소품은 시야가 닿는 먼 거리에서 집어 가까이 놓을 수 있다. 열쇠의 2.2m 회수 제한은 같은 축소 조작을 막고, 정면 벽에 밀착하거나 반복 축소하도록 만들었다. 기존 안내는 놓을 크기의 적합 여부도 알려주지 않았다.
+- 변경: 최초 발견 범위 1.28m는 유지하고, 놓은 열쇠의 회수 거리를 8m로 확대한다. 군대와 같은 공용 `rayBoxDistance`·`grabRatio`를 사용하며, 먼 거리의 작은 열쇠는 최소 각도 범위를 보정하되 실제 중심까지 가림을 검사한다.
+- 변경: 군대 `dropNearFeet`의 발 앞 배치·선호 배율·최대 안전 크기 탐색을 학교에 맞춰 적용한다. 아래를 볼 때만, 플레이어 밖의 앞쪽·시야가 닿는 자리에서 작동한다. 위쪽이나 벽 너머로 우회하는 배치는 허용하지 않는다. 물리적 크기는 여전히 E 놓기 때만 확정한다.
+- 피드백: 놓을 크기가 자물쇠에 맞으면 미리보기를 녹색으로 표시하고 문장으로도 알린다. 크거나 작을 때는 가까운 곳에 놓기·멀리서 다시 집기·먼 곳 겨누기를 안내한다. `game-ui-ux`의 색과 문장 병용 기준을 적용했다. 자물쇠 크기 허용량과 시점 실물화 판정은 유지한다.
+- 설계 범위: 군대의 낙하 중 추가 확대는 이식하지 않았다. 열쇠는 놓기 전에 적합 여부를 예고하고 그 크기를 회수해야 하므로 기존의 놓는 순간 크기 확정 규칙을 유지한다.
+- 실제 수정 파일: `rooms/school/SchoolCorridor.cpp`, `rooms/school/SchoolPreview.cpp`, `rooms/school/tests/SchoolRoomTests.cpp`, `rooms/school/README.md`, `illusion-escape-game-plan.md`, `docs/tasks/SCHOOL-012.md`. 공용 API나 군대·내 방 코드는 변경하지 않았다.
+- 기능 검증: x64 Debug·Release 각각 **777 checks, 0 failures**. 30/144fps에서 3m 넘게 떨어져 회수, 아래 60~85도 범위의 축소, 재집기 후 잠금 해제 통과. 먼 회수의 벽 가림 및 아래를 볼 때 유리 너머로 발 앞 보정이 넘어가지 않는지 추가 확인했다. 기존 크기 보존·천장·낙하·밀착 집기·단일 보유·연속 완주 검사도 통과했다.
+- 통합·화면: 팀 Release 빌드 및 방 전환 **21 checks, 0 failures**. 기존 명령 한정 WholeProgramOptimization=false 사용. 숨김 OpenGL **84장면**, 오류 없음. 먼 거리 줍기, 일반 바닥·가파른 발밑의 적합 크기 미리보기, 큰 크기 안내를 직접 판독했다. 1280×800에서 글자가 겹치거나 잘리지 않았다.
+- 검증 자료: `build/key-carry-20261122/release.log`, `tests.log`, `debug.log`, `debug-tests.log`, `team-tests.log`, `captures.log`, `captures/`. 직접 키보드·마우스 플레이 체감과 다른 화면 비율·GPU는 미검증이다.
+- 커밋 직전: 다시 fetch 후 origin/main·origin/saenu `a1c53a3`, origin/yoon778 `f9611e4` 유지. 공유 AGENTS·TEAM·관련 작업 MD·윤서의 해당 소스 변경 없음. 문서 UTF-8·링크 및 diff 공백 검사 통과. 상대 담당과 수정 범위 겹침 없음.
+- Git: 검증한 변경과 같은 작업 기록을 로컬 기능 커밋으로 저장한다. 식별자는 이 기록의 git log로 확인. 푸시·main 통합 미요청·미수행. 사람의 수정본 직접 플레이 미확인.

@@ -1712,6 +1712,61 @@ int runTests() {
         }
     }
 
+    // Like the military props, a dropped key can be picked up from a distance and shrunk on nearby floor.
+    for (int fps : {30, 144}) {
+        SchoolRoom keyRoom;
+        Camera keyCamera;
+        auto& key = keyRoom.corridor_;
+        keyCamera.feet = {8.78f, 1.8f, -10.65f};
+        keyCamera.face(SchoolCorridor::classroomKeySpot);
+        check(keyRoom.interactCorridor(keyCamera), "discover the key at its original close pickup range");
+        keyCamera.feet = {11.5f, 1.8f, -15.4f};
+        keyCamera.face({11.5f, 3.45f, -16.6f});
+        check(keyRoom.interactCorridor(keyCamera) && key.looseClassroomKey(), "release a key for distant recovery");
+        keyCamera.resetMotion();
+        for (int frame = 0; frame < fps; ++frame)
+            keyRoom.update(keyCamera, {}, 1.f / fps);
+        keyCamera.feet = {12.8f, 1.8f, -12.9f};
+        keyCamera.face(key.key_.center);
+        check(!keyRoom.interactCorridor(keyCamera), "distant recovery still rejects a key behind the adjacent wall");
+        keyCamera.feet = {11.5f, 1.8f, -12.9f};
+        keyCamera.face(key.key_.center);
+        const auto before = key.key_;
+        check(glm::distance(keyCamera.eye(), before.center) > 3.f && keyRoom.interactCorridor(keyCamera) &&
+                  key.holdingClassroomKey() && key.key_.scale == before.scale,
+              "recovering from beyond the old reach preserves size and changes only the held perspective ratio");
+        const auto world = keyRoom.collisionBoxes();
+        bool broadFloorRange = true;
+        for (float degrees : {60.f, 65.f, 70.f, 75.f, 80.f, 85.f}) {
+            keyCamera.pitch = -glm::radians(degrees);
+            const auto preview = key.keyPlacement(keyCamera, world);
+            broadFloorRange = broadFloorRange && preview && preview->scale >= .39f && preview->scale <= .51f &&
+                              std::wstring_view(key.classroomKeyStatus(keyCamera, world)).find(L"놓으면 맞는") != std::wstring_view::npos;
+        }
+        check(broadFloorRange, "distant recovery gives a matching release across a broad downward aim range");
+        const auto floorCamera = keyCamera;
+        keyCamera.feet = {9.8f, 1.8f, -11.86f};
+        keyCamera.yaw = 3.141592654f;
+        keyCamera.pitch = glm::radians(-85.f);
+        const auto atGlass = key.keyPlacement(keyCamera, world);
+        check(!atGlass && keyRoom.interactCorridor(keyCamera) && key.holdingClassroomKey(),
+              "near-feet fallback cannot move a key through glass when facing down against the wall");
+        keyCamera = floorCamera;
+        const auto preview = key.keyPlacement(keyCamera, world);
+        check(preview && keyRoom.interactCorridor(keyCamera) && key.looseClassroomKey() &&
+                  key.key_.scale == preview->scale && key.key_.scale < before.scale &&
+                  glm::dot(key.key_.center - keyCamera.feet, glm::vec3(0, 0, -1)) > SchoolRoom::radius,
+              "steep downward release places the smaller key in front of the feet instead of blocking or dropping behind");
+        for (int frame = 0; frame < fps; ++frame)
+            keyRoom.update(keyCamera, {}, 1.f / fps);
+        keyCamera.face(key.key_.center);
+        check(keyRoom.interactCorridor(keyCamera), "recover the floor-scaled key without moving against a wall");
+        keyCamera.feet = {12.05f, 1.8f, -12.5f};
+        keyCamera.face(SchoolCorridor::classroomLock);
+        check(keyRoom.interactCorridor(keyCamera) && key.classroomDoorUnlocked_,
+              "the key resized on nearby floor unlocks only after being picked up again");
+    }
+
     // Enlarge, shrink too far, recover, and test releases against the real walls and ceiling.
     for (int fps : {30, 144}) {
         for (const auto aim : {glm::vec4(11.5f, 1.8f, -12.5f, 0.f),

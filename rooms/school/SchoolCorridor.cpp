@@ -17,6 +17,7 @@ constexpr glm::vec3 brass{.67f, .53f, .30f};
 constexpr float fittedKeyScale = .45f, keyScaleTolerance = .06f;
 constexpr glm::vec3 keyHalfSize{.025f, .006f, .048f};
 constexpr float minKeyScale = .20f, maxKeyScale = 5.5f, keyRestClearance = .006f;
+constexpr float looseKeyReach = 8.f;
 constexpr float gapNear = -12.0f, gapFar = -15.65f, stairShift = -3.65f;
 constexpr float bridgeWidth = 1.00f;
 constexpr float stairStart = -12.72f + stairShift, stairRun = .6f, stairRise = .2f;
@@ -50,17 +51,17 @@ float keySupport(const Box& area, const std::vector<Box>& world) {
             support = std::max(support, solid.max.y);
     return support;
 }
-void drawKey(Renderer& r, glm::vec3 center, glm::vec3 right, glm::vec3 up, float scale) {
+void drawKey(Renderer& r, glm::vec3 center, glm::vec3 right, glm::vec3 up, float scale, glm::vec3 color = brass) {
     auto at = [&](float x, float y) { return center + (right * x + up * y) * scale; };
     constexpr float circle = 6.283185307f;
     for (int i = 0; i < 12; ++i) {
         const float a = i * circle / 12, b = (i + 1) * circle / 12;
         r.line(at(std::cos(a) * .018f, .026f + std::sin(a) * .018f),
-               at(std::cos(b) * .018f, .026f + std::sin(b) * .018f), .006f * scale, brass);
+               at(std::cos(b) * .018f, .026f + std::sin(b) * .018f), .006f * scale, color);
     }
-    r.line(at(0, .011f), at(0, -.044f), .010f * scale, brass);
-    r.line(at(0, -.030f), at(.019f, -.030f), .009f * scale, brass);
-    r.line(at(0, -.041f), at(.015f, -.041f), .007f * scale, brass);
+    r.line(at(0, .011f), at(0, -.044f), .010f * scale, color);
+    r.line(at(0, -.030f), at(.019f, -.030f), .009f * scale, color);
+    r.line(at(0, -.041f), at(.015f, -.041f), .007f * scale, color);
 }
 bool touches(const Camera& camera, const Box& b) {
     const auto p = camera.feet;
@@ -652,7 +653,37 @@ std::optional<perspective::Pose> SchoolCorridor::keyPlacement(const Camera& came
     const perspective::Pose aimed{eye + direction * free.last, keyRatio_ * free.last};
     if (free.last >= free.first && fits(aimed))
         return aimed;
-    // Do not teleport a blocked release to a hidden floor or beyond a wall/ceiling.
+    // MilitaryRoom::dropNearFeet keeps downward releases usable outside the player cylinder.
+    // Keep this fallback in front, below the gaze, and visible through the school's full world.
+    if (direction.y < -.65f) {
+        const glm::vec3 forward{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
+        const float eyeHeight = eye.y - camera.feet.y;
+        const float preferred = std::clamp(keyRatio_ * eyeHeight / (1.f + keyRatio_ * keyHalfSize.y),
+                                            minKeyScale, maxKeyScale);
+        auto nearFeet = [&](float scale) -> std::optional<perspective::Pose> {
+            const float distance = SchoolRoom::radius + .065f + keyHalfSize.z * scale;
+            const auto center = camera.feet + forward * distance +
+                                glm::vec3(0, keyHalfSize.y * scale + keyRestClearance, 0);
+            const perspective::Pose pose{center, scale};
+            return fits(pose) ? std::optional{pose} : std::nullopt;
+        };
+        if (const auto pose = nearFeet(preferred))
+            return pose;
+        auto best = nearFeet(minKeyScale);
+        if (best) {
+            float low = minKeyScale, high = preferred;
+            for (int i = 0; i < 10; ++i) {
+                const float scale = (low + high) * .5f;
+                if (const auto pose = nearFeet(scale)) {
+                    best = pose;
+                    low = scale;
+                } else
+                    high = scale;
+            }
+            return best;
+        }
+    }
+    // No hidden fallback behind a wall or above the ceiling.
     return std::nullopt;
 }
 perspective::Pose SchoolCorridor::carriedKeyPose(const Camera& camera, const std::vector<Box>& world) const {
@@ -703,7 +734,8 @@ void SchoolCorridor::drawHeldKey(Renderer& r, const Camera& camera, const std::v
         return;
     }
     if (const auto placement = keyPlacement(camera, world)) {
-        drawKey(r, placement->center, {1, 0, 0}, {0, 0, -1}, placement->scale);
+        drawKey(r, placement->center, {1, 0, 0}, {0, 0, -1}, placement->scale,
+                keyFits(placement->scale) ? glm::vec3(.43f, .86f, .65f) : brass);
         return;
     }
     const auto pose = carriedKeyPose(camera, world);
@@ -713,21 +745,27 @@ void SchoolCorridor::drawHeldKey(Renderer& r, const Camera& camera, const std::v
 const wchar_t* SchoolCorridor::classroomKeyStatus(const Camera& camera, const std::vector<Box>& world) const {
     if (!holdingClassroomKey())
         return nullptr;
-    if (keyAtLock(camera, world)) {
-        if (key_.scale > fittedKeyScale + keyScaleTolerance)
-            return L"열쇠가 커요 · 가까운 곳에 놓고 다시 주워 보세요";
-        if (key_.scale < fittedKeyScale - keyScaleTolerance)
-            return L"열쇠가 작아요 · 먼 곳에 놓고 다시 주워 보세요";
+    const bool atLock = keyAtLock(camera, world).has_value();
+    if (atLock && keyFits(key_.scale))
         return L"자물쇠에 맞는 크기예요";
+    if (const auto placement = keyPlacement(camera, world)) {
+        if (keyFits(placement->scale))
+            return L"놓으면 맞는 크기예요 · 놓고 다시 집으세요";
+        if (placement->scale > fittedKeyScale + keyScaleTolerance)
+            return L"놓을 열쇠가 커요 · 가까운 곳에 놓거나 멀리서 다시 집으세요";
+        return L"놓을 열쇠가 작아요 · 더 먼 곳을 겨누세요";
     }
-    return keyPlacement(camera, world) ? L"열쇠를 들고 있어요 · 놓은 거리로 크기를 바꿀 수 있어요"
-                                      : L"열쇠를 들고 있어요 · 놓을 공간을 바라보세요";
+    if (atLock && key_.scale < fittedKeyScale - keyScaleTolerance)
+        return L"열쇠가 작아요 · 더 먼 곳에 놓고 다시 집으세요";
+    return L"열쇠를 들고 있어요 · 조금 물러나 놓을 곳을 바라보세요";
 }
 SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& camera, const std::vector<Box>& world) const {
     const auto eye = camera.eye(), direction = camera.direction();
     auto reaches = [&](const Box& target, glm::vec3 center, float range) {
-        const float distance = SchoolRoom::rayBox(eye, direction, target);
-        if (distance < 0 || distance > range)
+        // Use the same shared ray hit and apparent-size pickup as MilitaryRoom::interact.
+        const auto distance = perspective::rayBoxDistance(eye, direction, (target.min + target.max) * .5f,
+                                                           (target.max - target.min) * .5f);
+        if (!distance || *distance > range)
             return false;
         const auto toward = center - eye;
         const float centerDistance = glm::length(toward);
@@ -738,8 +776,11 @@ SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& ca
     };
     if (!classroomKeyTaken_ && reaches(box(classroomKeySpot, {.075f, .11f, .055f}), classroomKeySpot, 1.28f))
         return ClassroomAction::takeKey;
+    // First discovery stays close-range; a released key can be recovered from farther away to shrink it.
+    const float pickupWidth = std::max(.10f, glm::distance(eye, key_.center) * .024f);
     if (looseClassroomKey() && reaches(box(key_.center, glm::max(keyHalfSize * key_.scale * 2.f,
-                                                                glm::vec3(.10f, .07f, .10f))), key_.center, 2.2f))
+                                                                glm::vec3(pickupWidth, .07f, pickupWidth))),
+                                     key_.center, looseKeyReach))
         return ClassroomAction::takeKey;
     if (holdingClassroomKey()) {
         if (keyAtLock(camera, world) && keyFits(key_.scale))

@@ -188,6 +188,21 @@ void stageCapture(Application& state, const std::string& stage) {
                 if (stage == "corridor-key-held") {
                     state.camera.feet = {9.8f, 1.8f, -11.86f};
                     state.camera.face({9.8f, 3.45f, -10.f});
+                } else if (stage == "corridor-key-far-pickup" || stage == "corridor-key-floor-preview" ||
+                           stage == "corridor-key-foot-preview") {
+                    state.camera.feet = {11.5f, 1.8f, -15.4f};
+                    state.camera.face({11.5f, 3.45f, -16.6f});
+                    if (!state.room.interactCorridor(state.camera))
+                        throw std::runtime_error("Capture could not release the key for distant pickup");
+                    state.camera.resetMotion();
+                    settle(state, 1.f);
+                    state.camera.feet = {11.5f, 1.8f, -12.9f};
+                    state.camera.face(state.room.classroomKeyCenter());
+                    if (stage != "corridor-key-far-pickup") {
+                        if (!state.room.interactCorridor(state.camera))
+                            throw std::runtime_error("Capture could not pick up the key from a distance");
+                        state.camera.pitch = glm::radians(stage == "corridor-key-foot-preview" ? -85.f : -75.f);
+                    }
                 } else if (stage == "corridor-key-fit" || stage == "corridor-class-unlocked" ||
                            stage == "corridor-key-small" || stage.rfind("corridor-key-drop", 0) == 0 ||
                            stage == "corridor-key-falling" || stage == "corridor-key-enlarged") {
@@ -594,6 +609,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-key-falling",
                                         "corridor-key-dropped",
                                         "corridor-key-enlarged",
+                                        "corridor-key-far-pickup",
+                                        "corridor-key-floor-preview",
+                                        "corridor-key-foot-preview",
                                         "corridor-window-a",
                                         "corridor-window-a-side",
                                         "corridor-window-a-high",
