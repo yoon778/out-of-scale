@@ -169,7 +169,7 @@ void stageCapture(Application& state, const std::string& stage) {
             state.camera.face({18.65f, 2.95f, -11.48f});
         } else if (stage == "corridor-door-closed") {
             state.camera.feet = {18.7f, 1.8f, -10.1f};
-            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
         } else if (stage == "corridor-false-close") {
             state.camera.feet = {9.0f, 1.8f, -10.65f};
             state.camera.face({9.55f, 3.25f, -9.9f});
@@ -188,22 +188,28 @@ void stageCapture(Application& state, const std::string& stage) {
                     settle(state);
                 }
             }
-        } else if (stage == "corridor-door-open" || stage.rfind("corridor-illusion-", 0) == 0 ||
+        } else if (stage.rfind("corridor-door-", 0) == 0 || stage.rfind("corridor-illusion-", 0) == 0 ||
                    stage.rfind("corridor-bridge-", 0) == 0 || stage.rfind("corridor-stairwell", 0) == 0) {
             state.camera.feet = {17.0f, 1.8f, -10.9f};
-            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
             if (!state.room.toggleCupboard(state.camera))
                 throw std::runtime_error("Capture cannot open cupboard");
-            settle(state);
-            if (stage != "corridor-door-open") {
+            settle(state, stage == "corridor-door-half-open" ? .45f : 2.f);
+            if (stage == "corridor-door-open" || stage == "corridor-door-half-open") {
+                state.camera.feet = {17.0f, 1.8f, -9.9f};
+                state.camera.face(school::SchoolCorridor::hinge + glm::vec3(-.3f, 1.2f, .6f));
+            } else if (stage == "corridor-door-open-exterior") {
+                state.camera.feet = {20.0f, 1.8f, -9.2f};
+                state.camera.face(school::SchoolCorridor::hinge + glm::vec3(0, 1.2f, .6f));
+            } else {
                 state.camera.feet = school::SchoolCorridor::illusionEye - glm::vec3(0, 1.65f, 0);
                 state.camera.resetMotion();
                 if (stage == "corridor-illusion-wrong")
                     state.camera.feet.z += 1.1f;
                 else if (stage == "corridor-illusion-partial")
-                    state.camera.feet.z += .45f;
+                    state.camera.feet.z += .75f;
                 else if (stage == "corridor-illusion-at-handle")
-                    state.camera.feet = {17.0f, 1.8f, -10.9f};
+                    state.camera.feet = {18.6f, 1.8f, -10.9f};
                 else if (stage == "corridor-illusion-return")
                     state.camera.feet += glm::vec3(.8f, 0, .3f);
                 state.camera.face(school::SchoolCorridor::illusionFocus);
@@ -554,6 +560,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-window-a",
                                         "corridor-window-b",
                                         "corridor-door-open",
+                                        "corridor-door-half-open",
+                                        "corridor-door-open-exterior",
                                         "corridor-door-closed",
                                         "corridor-cupboard-context",
                                         "corridor-illusion-at-handle",

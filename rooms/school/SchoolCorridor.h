@@ -45,8 +45,9 @@ class SchoolCorridor {
     static constexpr float floorHeight = 1.8f;
     static constexpr glm::vec3 classroomKeySpot{9.44f, 3.231f, -9.79f};
     static constexpr glm::vec3 classroomRearDoor{11.675f, 2.951f, -11.73f};
-    static constexpr glm::vec3 hinge{18.10f, floorHeight, -11.48f};
+    static constexpr glm::vec3 hinge{19.30f, floorHeight, -11.48f};
     static constexpr float doorWidth = 1.20f;
+    static constexpr float doorHeight = 2.30f;
     static constexpr glm::vec3 illusionEye{14.50f, 3.45f, -10.95f};
     static constexpr glm::vec3 illusionFocus{20.45f, 3.0f, -9.90f};
     static constexpr float recognitionDuration = .55f;
@@ -57,6 +58,7 @@ class SchoolCorridor {
     static constexpr float exitZ = -21.85f;
 
   private:
+    friend int runTests();
     enum class ClassroomAction { none, takeKey, unlockDoor };
     struct Solid {
         glm::vec3 center, size, color;

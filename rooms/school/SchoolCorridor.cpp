@@ -18,6 +18,12 @@ constexpr float bridgeWidth = 1.00f;
 constexpr float stairStart = -12.72f + stairShift, stairRun = .6f, stairRise = .2f;
 const glm::vec3 plaster{0.86f, 0.84f, 0.75f}, paint{0.45f, 0.57f, 0.49f};
 const glm::vec3 wood{0.54f, 0.36f, 0.20f}, metal{0.31f, 0.38f, 0.36f};
+glm::vec3 cupboardAlong(float angle) {
+    return {-std::cos(angle), 0, std::sin(angle)};
+}
+glm::vec3 cupboardOutside(float angle) {
+    return {std::sin(angle), 0, std::cos(angle)};
+}
 Box box(glm::vec3 center, glm::vec3 size) {
     return {center - size * .5f, center + size * .5f};
 }
@@ -147,7 +153,7 @@ void SchoolCorridor::build() {
     wall(12.8f, 14.1f, -11.6f, 2.3f);
     wall(14.1f, 14.7f, -11.6f);
     wall(17.8f, 18.04f, -11.6f);
-    wall(18.04f, 19.36f, -11.6f, 2.2f);
+    wall(18.04f, 19.36f, -11.6f, doorHeight + .04f);
     wall(19.36f, 21.9f, -11.6f);
     for (const auto opening : {glm::vec2(5.6f, 6.9f), glm::vec2(11.05f, 12.30f), glm::vec2(12.8f, 14.1f)}) {
         floor(opening.x, opening.y, -11.7f, -11.5f);
@@ -209,11 +215,12 @@ void SchoolCorridor::build() {
     deskStack(12.3f, -8.88f);
     deskStack(15.0f, -8.88f);
     // A normal cupboard and the far wall supply separate everyday edges for the doorway.
-    solid({18.70f, 2.85f, -11.94f}, {1.35f, 2.1f, .66f}, paint, false);
-    detail({18.70f, 2.85f, -12.25f}, {1.35f, 2.1f, .08f}, paint);
+    const float cupboardCenterY = floorHeight + doorHeight * .5f;
+    solid({18.70f, cupboardCenterY, -11.94f}, {1.35f, doorHeight, .66f}, paint, false);
+    detail({18.70f, cupboardCenterY, -12.25f}, {1.35f, doorHeight, .08f}, paint);
     for (float x : {18.04f, 19.36f})
-        detail({x, 2.85f, -11.94f}, {.08f, 2.1f, .66f}, paint);
-    for (float y : {1.85f, 3.9f})
+        detail({x, cupboardCenterY, -11.94f}, {.08f, doorHeight, .66f}, paint);
+    for (float y : {floorHeight + .05f, floorHeight + doorHeight})
         detail({18.70f, y, -11.94f}, {1.35f, .08f, .66f}, paint);
     // A classroom notice ledge belongs to the return route, away from the cupboard handle.
     solid({14.95f, 2.74f, -11.40f}, {1.12f, .055f, .23f}, wood);
@@ -362,8 +369,10 @@ glm::vec3 SchoolCorridor::paintedPoint(const InkPatch& patch, int corner) const 
     if (!patch.onLeaf)
         return p;
     const float along = p.z - hinge.z, out = hinge.x - p.x;
-    return hinge + glm::vec3(along * std::cos(angle_) - out * std::sin(angle_), p.y - hinge.y,
-                             along * std::sin(angle_) + out * std::cos(angle_));
+    // The right-hinged leaf extends left when shut. Its inner face points into the cabinet,
+    // then towards the observation route when open; the solid leaf hides it naturally when shut.
+    return hinge + cupboardAlong(angle_) * along - cupboardOutside(angle_) * out +
+           glm::vec3(0, p.y - hinge.y, 0);
 }
 std::optional<float> SchoolCorridor::doorViewAlignment(const Camera& camera) const {
     const auto eye = camera.eye();
@@ -709,7 +718,7 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
         if (patch.material == DoorMaterial::infill && formed < 1)
             r.opacity(1);
         if (patch.material == DoorMaterial::timber && formed < 1) {
-            const auto normal = patch.onLeaf && !forming_ ? glm::vec3(-std::sin(angle_), 0, std::cos(angle_))
+            const auto normal = patch.onLeaf && !forming_ ? -cupboardOutside(angle_)
                                                           : glm::vec3(-1, 0, 0);
             const auto lip = normal * (.006f * (1 - formed));
             for (int edge = 0; edge < 4; ++edge) {
@@ -731,7 +740,7 @@ void SchoolCorridor::drawCupboardNotices(Renderer& r) const {
     for (bool leaf : {true, false}) {
         const float low = leaf ? -10.50f : split, high = leaf ? split : -9.30f;
         const float scale = ((leaf ? nearX : farX) - illusionEye.x) / (illusionFocus.x - illusionEye.x);
-        const glm::vec3 right = leaf ? glm::vec3(std::cos(angle_), 0, std::sin(angle_)) : glm::vec3(0, 0, 1);
+        const glm::vec3 right = leaf ? cupboardAlong(angle_) : glm::vec3(0, 0, 1);
         const auto normal = glm::cross(right, glm::vec3(0, 1, 0));
         auto at = [&](float y, float z) {
             InkPatch point{};
@@ -752,9 +761,6 @@ void SchoolCorridor::drawCupboardNotices(Renderer& r) const {
             strip(bottomY, 4.20f, hingeZ, hingeZ + .08f);
             strip(bottomY, 1.82f, -10.75f, -10.65f);
             strip(bottomY, bottomY + .08f, hingeZ, -10.65f);
-            for (float y : {1.72f, 1.78f, 1.84f})
-                r.quad(hinge + right * .32f + glm::vec3(0, y, 0) + normal * .043f,
-                       right * .16f, {0, .006f, 0}, paint * .66f);
         } else {
             // A complete school notice rack gives the distant edges a purpose before the cupboard opens.
             const float remaining = 1 - glm::smoothstep(0.f, 1.f, formation_);
@@ -803,7 +809,7 @@ void SchoolCorridor::drawCupboardNotices(Renderer& r) const {
                     r.opacity(1);
             };
             notice(3.38f, -11.10f, {.22f, .32f}, L"알림", 1);
-            notice(3.42f, -10.30f, {.32f, .44f}, L"이번 주", remaining);
+            notice(3.42f, -10.52f, {.22f, .37f}, L"이번 주", remaining);
             r.quad(at(3.24f, -8.72f) + normal * .002f, right * (.25f * scale),
                    {0, .43f * scale, 0}, plaster * 1.04f);
             r.label(L"관리 일지", at(3.50f, -8.72f) + normal * .003f,
@@ -828,8 +834,8 @@ std::vector<Box> SchoolCorridor::doorBoxes(float angle) const {
     std::vector<Box> result;
     const float c = std::cos(angle), s = std::sin(angle), length = doorWidth / 12;
     for (int i = 0; i < 12; i++) {
-        auto center = hinge + glm::vec3(c * length * (i + .5f), 1.06f, s * length * (i + .5f));
-        result.push_back(box(center, {std::abs(c) * length + std::abs(s) * .07f, 2.12f,
+        auto center = hinge + cupboardAlong(angle) * (length * (i + .5f)) + glm::vec3(0, doorHeight * .5f, 0);
+        result.push_back(box(center, {std::abs(c) * length + std::abs(s) * .07f, doorHeight,
                                       std::abs(s) * length + std::abs(c) * .07f}));
     }
     return result;
@@ -1007,18 +1013,20 @@ void SchoolCorridor::draw(Renderer& r) const {
         r.line({x, 1.87f, -11.88f}, {x + .09f, 3.65f, -12.04f}, .035f, wood);
         r.box({x, 1.98f, -11.88f}, {.25f, .17f, .10f}, {.56f, .51f, .35f});
     }
-    const glm::vec3 along{std::cos(angle_), 0, std::sin(angle_)};
-    const glm::vec3 front{-std::sin(angle_), 0, std::cos(angle_)};
-    const auto center = hinge + along * (doorWidth * .5f) + glm::vec3(0, 1.06f, 0);
-    r.box(center, {doorWidth, 2.12f, .07f}, paint, -angle_);
-    for (float y : {.13f, 1.98f})
+    const auto along = cupboardAlong(angle_), front = cupboardOutside(angle_);
+    const auto center = hinge + along * (doorWidth * .5f) + glm::vec3(0, doorHeight * .5f, 0);
+    r.box(center, {doorWidth, doorHeight, .07f}, paint, angle_);
+    for (float y : {.13f, doorHeight - .14f})
         r.box(hinge + glm::vec3(0, y, 0), {.09f, .12f, .09f}, metal);
-    const auto handle = hinge + along * (doorWidth * .45f) + glm::vec3(0, 1.05f, 0);
-    for (float sign : {-1.f, 1.f}) {
-        r.box(handle + front * (sign * .065f), {.06f, .20f, .05f}, metal, -angle_);
-        r.label(L"청소도구함", hinge + along * .32f + glm::vec3(0, .52f, 0) + front * (sign * .041f),
-                along * (sign * .23f), {0, .045f, 0}, plaster);
-    }
+    const auto handle = hinge + along * (doorWidth * .82f) + glm::vec3(0, 1.05f, 0);
+    for (float sign : {-1.f, 1.f})
+        r.box(handle + front * (sign * .065f), {.06f, .20f, .05f}, metal, angle_);
+    // The outside stays ordinary at every angle. No clue visibility switch or texture swap is needed.
+    r.label(L"청소도구함", hinge + along * (doorWidth * .5f) + glm::vec3(0, 1.40f, 0) + front * .041f,
+            -along * .28f, {0, .055f, 0}, plaster);
+    for (float y : {1.83f, 1.89f, 1.95f})
+        r.quad(hinge + along * (doorWidth * .5f) + glm::vec3(0, y, 0) + front * .043f,
+               -along * .16f, {0, .006f, 0}, paint * .66f);
     drawIllusion(r);
     drawFalseHall(r);
     drawClassroomLock(r);

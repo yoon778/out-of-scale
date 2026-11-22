@@ -719,7 +719,7 @@ int runTests() {
           "walk through the opened rear classroom door to bypass the false hall");
     check(walkTo(room, camera, {13.45f, -12.4f}) && walkTo(room, camera, {16.5f, -12.4f}),
           "classroom B preserves a side view of the cupboard and partition");
-    camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
     check(!room.canUseCupboard(camera), "cupboard cannot be operated remotely through classroom glass");
     check(walkTo(room, camera, {13.45f, -12.4f}) && walkTo(room, camera, {13.45f, -10.9f}) &&
               walkTo(room, camera, {17.0f, -10.9f}),
@@ -730,7 +730,7 @@ int runTests() {
     check(camera.feet.x < 20.29f && !room.corridorDoorForming(),
           "painted door is a solid wall before recognition, including a jump attempt");
     check(walkTo(room, camera, {17.0f, -10.9f}), "return from the flat door to the cupboard");
-    camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
     check(room.canUseCupboard(camera) && room.toggleCupboard(camera), "E opens the near painted surface");
     float doorAngle = room.cupboardAngle();
     room.update(camera, {}, 1, false);
@@ -744,9 +744,14 @@ int runTests() {
             for (size_t fixture = 0; fixture < boxes.size() - 12; fixture++) {
                 const auto& a = boxes[leaf];
                 const auto& b = boxes[fixture];
-                clearSweep &=
-                    !(a.min.x < b.max.x - .002f && a.max.x > b.min.x + .002f && a.min.y < b.max.y - .002f &&
-                      a.max.y > b.min.y + .002f && a.min.z < b.max.z - .002f && a.max.z > b.min.z + .002f);
+                const bool overlaps =
+                    a.min.x < b.max.x - .002f && a.max.x > b.min.x + .002f && a.min.y < b.max.y - .002f &&
+                    a.max.y > b.min.y + .002f && a.min.z < b.max.z - .002f && a.max.z > b.min.z + .002f;
+                if (clearSweep && overlaps)
+                    std::cerr << "Door sweep obstruction at angle " << room.cupboardAngle() << ": ["
+                              << b.min.x << ',' << b.min.y << ',' << b.min.z << "]-["
+                              << b.max.x << ',' << b.max.y << ',' << b.max.z << "]\n";
+                clearSweep &= !overlaps;
             }
     }
     check(clearSweep, "door sweep clears furniture, partition, walls and cupboard body");
@@ -759,7 +764,7 @@ int runTests() {
     check(room.corridorAlignment(camera) >= .80f, "normal walking can reach a visually aligned door");
     const auto doorFeedback = room.alignmentFeedback(camera);
     Camera offAxis = camera;
-    offAxis.feet.z += .45f;
+    offAxis.feet.z += .75f;
     offAxis.face(SchoolCorridor::illusionFocus);
     const auto partialDoorFeedback = room.alignmentFeedback(offAxis);
     check(doorFeedback && doorFeedback->aligned && partialDoorFeedback && !partialDoorFeedback->aligned &&
@@ -833,18 +838,18 @@ int runTests() {
               walkTo(room, camera, {21.2f, -9.9f}) && walkTo(room, camera, {19.9f, -9.9f}) &&
               walkTo(room, camera, {19.9f, -10.9f}),
           "materialized passage stays open for the return trip");
-    camera.face(SchoolCorridor::hinge + glm::vec3(1.1f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-1.1f, 1.2f, 0));
     check(room.toggleCupboard(camera), "cupboard can still open from its far side after materialization");
     tick(room, camera, {}, 120);
     check(room.cupboardAngle() > 1.56f && room.corridorDoorReady(),
           "later cupboard movement cannot undo the real doorway");
     // Swept door collision must stop before reaching the player, including between rendered frames.
-    camera.feet = {17.0f, 1.8f, -10.9f};
+    camera.feet = {19.9f, 1.8f, -10.9f};
     camera.face(SchoolCorridor::hinge + glm::vec3(0, 1.2f, 1));
     check(room.toggleCupboard(camera), "close cupboard for sweep recovery check");
     tick(room, camera, {}, 120);
-    camera.feet = {18.72f, 1.8f, -10.9f};
-    camera.face(SchoolCorridor::hinge + glm::vec3(1.1f, 1.2f, 0));
+    camera.feet = {18.68f, 1.8f, -10.9f};
+    camera.face(SchoolCorridor::hinge + glm::vec3(-1.1f, 1.2f, 0));
     check(room.toggleCupboard(camera), "open from within the swing area");
     tick(room, camera, {}, 120);
     check(room.cupboardAngle() < .001f && !room.cupboardOpen(),
@@ -858,7 +863,7 @@ int runTests() {
     }
     check(!intersects, "blocked sweep leaves the player outside all solids");
     check(walkTo(room, camera, {19.9f, -10.9f}), "player can retreat from the stopped sweep");
-    camera.face(SchoolCorridor::hinge + glm::vec3(1.1f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-1.1f, 1.2f, 0));
     check(room.toggleCupboard(camera), "reopen after retreating from the swing area");
     tick(room, camera, {}, 120);
     check(room.cupboardAngle() > 1.56f, "door opens safely when its swing area clears");
@@ -882,12 +887,60 @@ int runTests() {
     camera.yaw = 1.570796327f;
     tick(room, camera, {1, 0, true}, 160);
     check(camera.feet.x < 20.29f, "reset restores solid collision at the former passage");
+    // Inspect the actual rendered clue points against the physical leaf, not a separate proxy drawing.
+    SchoolCorridor innerFace;
+    auto clueOccluded = [&](glm::vec3 eye, glm::vec3 point) {
+        const auto ray = point - eye;
+        for (const auto& b : innerFace.doorBoxes(innerFace.angle_)) {
+            const float hit = SchoolRoom::rayBox(eye, glm::normalize(ray), b);
+            if (hit >= 0 && hit < glm::length(ray) - .002f)
+                return true;
+        }
+        return false;
+    };
+    bool shutConcealsClue = true, insideShowsClue = true, outsideConcealsClue = true, staysOnLeaf = true;
+    for (float angle : {0.f, .25f, .75f, 1.25f, 1.570796327f}) {
+        innerFace.angle_ = angle;
+        const glm::vec3 along{-std::cos(angle), 0, std::sin(angle)};
+        const glm::vec3 outside{std::sin(angle), 0, std::cos(angle)};
+        for (const auto& patch : innerFace.drawing_) {
+            if (!patch.onLeaf || patch.material == SchoolCorridor::DoorMaterial::infill)
+                continue;
+            glm::vec3 center{0};
+            for (int i = 0; i < 4; ++i) {
+                const auto p = innerFace.paintedPoint(patch, i), local = p - SchoolCorridor::hinge;
+                const float distanceAlong = glm::dot(local, along);
+                staysOnLeaf &= distanceAlong >= -.0001f && distanceAlong <= SchoolCorridor::doorWidth + .0001f &&
+                               local.y >= 0 && local.y <= SchoolCorridor::doorHeight &&
+                               glm::dot(local, outside) < -.035f;
+                center += p * .25f;
+            }
+            if (angle == 0)
+                shutConcealsClue &= clueOccluded({18.7f, 3.45f, -10.1f}, center) &&
+                                    clueOccluded({15.7f, 3.45f, -9.4f}, center);
+            if (angle > 1.57f) {
+                insideShowsClue &= !clueOccluded(SchoolCorridor::illusionEye, center);
+                outsideConcealsClue &= clueOccluded({20.0f, 3.45f, -10.5f}, center);
+            }
+        }
+    }
+    check(staysOnLeaf, "every visible clue remains within the inner face throughout the reverse swing");
+    check(shutConcealsClue, "the solid closed door hides the inner chart from the corridor");
+    check(insideShowsClue, "the open inner face exposes its actual clue geometry to the return view");
+    check(outsideConcealsClue, "the open outer face still conceals the inner clue without a visibility toggle");
+    Camera insideHandle, outsideHandle;
+    insideHandle.feet = {18.5f, 1.8f, -10.9f};
+    outsideHandle.feet = {19.9f, 1.8f, -10.9f};
+    for (auto* view : {&insideHandle, &outsideHandle})
+        view->face(SchoolCorridor::hinge + glm::vec3(0, 1.05f, SchoolCorridor::doorWidth * .82f));
+    check(innerFace.canInteract(insideHandle) && innerFace.canInteract(outsideHandle),
+          "the open cupboard remains reachable from both its inner and outer faces");
     // Actual angular agreement, not proximity or an observation flag, controls recognition.
     auto prepareCorridor = [&]() {
         room.reset();
         camera = Camera();
         camera.feet = {17.0f, 1.8f, -10.9f};
-        camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+        camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
         check(room.toggleCupboard(camera), "prepare the rotating projection surface");
         tick(room, camera, {}, 150);
         camera.feet = SchoolCorridor::illusionEye - glm::vec3(0, 1.65f, 0);
@@ -907,7 +960,7 @@ int runTests() {
             forgivingView = forgivingView && feedback && feedback->threshold == .80f && feedback->aligned;
         }
     check(forgivingView, "the classroom return view retains a forgiving 40 by 24 cm recognition region");
-    for (const auto feet : {glm::vec3(17.0f, 1.8f, -10.9f), glm::vec3(17.55f, 1.8f, -10.9f)}) {
+    for (const auto feet : {glm::vec3(18.0f, 1.8f, -10.9f), glm::vec3(18.6f, 1.8f, -10.9f)}) {
         Camera closeView = camera;
         closeView.feet = feet;
         closeView.face(SchoolCorridor::illusionFocus);
@@ -934,7 +987,7 @@ int runTests() {
     camera.yaw += 1.2f;
     check(room.corridorAlignment(camera) == 0, "position alone cannot recognize an offscreen picture");
     prepareCorridor();
-    camera.feet = {17.0f, 1.8f, -10.9f};
+    camera.feet = {19.9f, 1.8f, -10.9f};
     camera.face(SchoolCorridor::hinge + glm::vec3(0, 1.2f, 1));
     check(room.toggleCupboard(camera), "rotate the near fragment away again before solving");
     tick(room, camera, {}, 150);
@@ -1044,7 +1097,7 @@ int runTests() {
         room.reset();
         camera = Camera();
         camera.feet = {17.0f, 1.8f, -10.9f};
-        camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+        camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
         check(room.toggleCupboard(camera), "operate cupboard for eased motion probe");
         float first = 0, middle = 0, previous = room.cupboardAngle();
         bool bounded = true;
