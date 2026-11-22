@@ -35,6 +35,7 @@ class SchoolCorridor {
     bool looseClassroomKey() const { return classroomKeyTaken_ && !holdingClassroomKey() && !classroomDoorUnlocked_; }
     glm::vec3 classroomKeyCenter() const { return key_.center; }
     const wchar_t* classroomKeyStatus(const Camera& camera, const std::vector<Box>& world) const;
+    const wchar_t* classroomUnlockStatus() const;
     void drawHeldKey(Renderer& renderer, const Camera& camera, const std::vector<Box>& world) const;
     void updateKey(float dt, const std::vector<Box>& world);
     bool finished(const Camera& camera) const;
@@ -114,7 +115,7 @@ class SchoolCorridor {
     bool classroomKeyTaken_ = false, classroomDoorUnlocked_ = false;
     float keyRatio_ = 0, keyFallSpeed_ = 0;
     perspective::Pose key_{classroomKeySpot, 1.f};
-    float classroomDoorOpening_ = 0;
+    float classroomDoorOpening_ = 0, classroomUnlockTime_ = 0;
     float recognition_ = 0, formation_ = 0, opening_ = 0;
     bool forming_ = false;
     float bridgeHeld_ = 0, bridgeFormation_ = 0;

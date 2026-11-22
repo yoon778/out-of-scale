@@ -3,7 +3,7 @@
 ## 작업 시작
 
 - 날짜 / 담당자: 2026-11-22 / 김새누 작업 지원
-- 상태: 자물쇠 판정 완화 완료 / 자동 검사·숨김 화면 확인 완료, 사람의 수정본 직접 플레이 미확인.
+- 상태: 잠금 해제 연출 추가 완료 / 자동 검사·숨김 화면 확인 완료, 사람의 연출 체감 평가 미확인.
 - 브랜치 / 시작: `saenu` / `c97c5b6` (직전 판정 강화는 SCHOOL-011에 별도 커밋).
 - 확인: AGENTS.md, AI 협업 규칙, TEAM, 공식 기획서 학교, SCHOOL-009~011, origin/yoon778 B-031.
 - 목표: 복도 끝 열쇠를 공책처럼 E로 놓아 크기를 확정하고, 떨어진 열쇠를 다시 주워 실제 크기가 자물쇠에 맞을 때 E로 잠금을 푼다.
@@ -17,7 +17,7 @@
 - 변경: 보유 모델·놓을 크기의 적합 여부를 미리 보여준다. 놓은 열쇠는 최대 8m에서 회수할 수 있고, 멀리서 집은 뒤 가까운 바닥에 놓아 쉽게 축소할 수 있다. 발밑을 겨누면 몸과 겹치지 않는 발 앞으로 놓는다. 낙하 후 다시 주워 확정된 크기로만 잠금을 풀며, 들고 이동하거나 잠금 장치를 겨누는 것만으로 크기가 바뀌지 않는다.
 - 디자인: 자물쇠 허용 크기를 원본의 0.25~0.75배로 확대했다. 놓기 배율은 0.20~5.5배이며 이전 보유 비율 상한 1.4는 제거했다. 밀착 집기는 중간 놓기·재집기로 줄일 수 있다. 원본 모양을 후크·보유·바닥·잠금 장치에 재사용한다.
 - 실제 수정 파일: `rooms/school/SchoolCorridor.h`, `rooms/school/SchoolCorridor.cpp`, `rooms/school/SchoolRoom.h`, `rooms/school/SchoolRoom.cpp`, `rooms/school/SchoolPreview.cpp`, `rooms/school/tests/SchoolRoomTests.cpp`, `rooms/school/README.md`, `illusion-escape-game-plan.md`, `docs/tasks/SCHOOL-012.md`.
-- 검증: x64 Debug·Release 빌드 및 각각 **805 checks, 0 failures**. 팀 Release 빌드와 학교→군대 방 전환 **21 checks, 0 failures**. 숨김 OpenGL **84장면**, 오류 없음. 아래 수정 결과 참조.
+- 검증: x64 Debug·Release 빌드 및 각각 **841 checks, 0 failures**. 팀 Release 빌드와 학교→군대 방 전환 **21 checks, 0 failures**. 숨김 OpenGL **87장면**, 오류 없음. 아래 수정 결과 참조.
 - 미검증: 사람의 실제 난이도·화면 평가, 다른 GPU.
 - 공유 확인: origin/main·origin/saenu a1c53a3, origin/yoon778 f9611e4. 직전 fetch에서 공유 AGENTS·TEAM·관련 MD 변경 없음. 상대 B-031과 범위 겹침 없음.
 - 공통 약속 변경: 없음. 키보드 E와 시점·이동만 사용.
@@ -92,3 +92,17 @@
 - 검증 자료: `build/key-lock-20261122/release.log`, `tests.log`, `debug.log`, `debug-tests.log`, `team-tests.log`, `captures.log`, `captures/`. 사람의 직접 입력·체감과 다른 GPU·화면 비율은 미검증이다.
 - 커밋 직전: 재차 fetch 후 origin/main·origin/saenu `a1c53a3`, origin/yoon778 `f9611e4` 유지. 공유 AGENTS·TEAM·관련 작업 MD 변경 없음. 문서 UTF-8·링크·diff 공백 검사 통과. 상대 담당 범위 겹침 없음.
 - 공유: 공용 API·다른 담당 코드·실물화 판정 변경 없음. 검증 후 로컬 커밋하며 푸시·main 통합은 미요청·미수행. 사람의 수정본 플레이 미확인.
+
+## 잠금 해제 연출 — 2026-11-22
+
+- 요청·시작: 자물쇠를 푸는 연출 추가 요청. `saenu` `68779c8`, 기존 수정 없음. fetch 후 origin/main·origin/saenu `a1c53a3`, origin/yoon778 `f9611e4` 및 공유 MD 변경 없음.
+- 목표·범위: 승인된 열쇠 사용 후 삽입·회전·고리 해제를 보여주고 문 열림으로 연결한다. 학교 잠금 장치 렌더·시간 갱신·HUD·검사·캡처·문서만 수정한다.
+- 연출: 삽입 0~0.18초, 90도 회전 0.18~0.46초, 자물쇠 고리 상승 0.46~0.64초, 0.68초부터 기존 0.74초 문 열림. 각 동작은 smoothstep으로 연결하고 사용한 열쇠는 돌아간 상태로 문에 남는다. 잠금 해제 중·완료 안내는 1.8초까지 표시한다.
+- 적용 기준: `game-feel`의 이벤트 단위 연출·짧은 easing·상태 초기화 검증을 적용. 성공 입력 한 번으로 시작하며 카메라 강제 이동·입력 잠금·시간 정지 없이 물체 자체를 움직인다. 기존 25~75% 크기 허용·2.4m 사용 거리·넉넉한 조준 범위 유지.
+- 안전: 사용 시 열쇠를 한 번만 소비하고 중복 E로 연출이 다시 시작되지 않는다. 일시정지·초기화에 연출 시간도 포함한다. 문은 기존 플레이어 충돌 검사를 유지한다.
+- 실제 수정 파일: `rooms/school/SchoolCorridor.h`, `rooms/school/SchoolCorridor.cpp`, `rooms/school/SchoolRoom.cpp`, `rooms/school/SchoolPreview.cpp`, `rooms/school/tests/SchoolRoomTests.cpp`, `rooms/school/README.md`, `illusion-escape-game-plan.md`, `docs/tasks/SCHOOL-012.md`.
+- 기능 검증: x64 Debug·Release 각각 **841 checks, 0 failures**. 30/60/144fps × 기존 집기 3조합에서 즉시 피드백·회전 중 문 닫힘·일시정지·중복 입력·문 완전 열림·성공 안내 종료·초기화를 확인했다. 기존 연속 보행 완주·원근 크기 조절·넉넉한 자물쇠 판정도 통과했다.
+- 통합·화면: 팀 Release 빌드 및 학교→군대 전환 **21 checks, 0 failures**. 기존 명령 한정 WholeProgramOptimization=false 사용. 숨김 OpenGL **87장면**, 오류 없음. 삽입 0.08초·회전 0.34초·고리 해제 0.66초와 문 열린 화면을 직접 판독했다. 회전 중과 성공 안내가 단계에 맞게 보임을 확인했다.
+- 검증 자료: `build/key-unlock-20261122/release.log`, `tests.log`, `debug.log`, `debug-tests.log`, `team-tests.log`, `captures.log`, `captures/`. 사람의 직접 입력·연출 체감과 다른 GPU·화면 비율은 미검증이다.
+- 커밋 직전: 재차 fetch 후 origin/main·origin/saenu `a1c53a3`, origin/yoon778 `f9611e4` 유지. 공유 AGENTS·TEAM·관련 작업 MD 변경 없음. 변경 경로·문서 UTF-8·링크·diff 공백 검사 확인. 상대 담당과 수정 범위 겹침 없음.
+- 공유: 공용 인터페이스·윤서 코드·빌드 설정 수정 없음. 검증 후 기록과 로컬 커밋, 푸시·main 통합 미요청·미수행. 사람의 연출 체감 평가 미확인.

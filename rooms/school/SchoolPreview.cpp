@@ -178,6 +178,7 @@ void stageCapture(Application& state, const std::string& stage) {
             state.camera.face({9.55f, 3.25f, -9.9f});
         } else if (stage == "corridor-class-key" || stage == "corridor-class-exit" ||
                    stage == "corridor-class-unlocked" || stage.rfind("corridor-key-", 0) == 0) {
+            const bool unlocking = stage == "corridor-class-unlocked" || stage.rfind("corridor-key-unlock-", 0) == 0;
             state.camera.feet = {8.78f, 1.8f, -10.65f};
             state.camera.face(school::SchoolCorridor::classroomKeySpot);
             if (stage != "corridor-class-key") {
@@ -203,7 +204,7 @@ void stageCapture(Application& state, const std::string& stage) {
                             throw std::runtime_error("Capture could not pick up the key from a distance");
                         state.camera.pitch = glm::radians(stage == "corridor-key-foot-preview" ? -85.f : -75.f);
                     }
-                } else if (stage == "corridor-key-fit" || stage == "corridor-class-unlocked" ||
+                } else if (stage == "corridor-key-fit" || unlocking ||
                            stage == "corridor-key-small" || stage.rfind("corridor-key-drop", 0) == 0 ||
                            stage == "corridor-key-falling" || stage == "corridor-key-enlarged") {
                     state.camera.feet = {12.05f, 1.8f, -12.28f};
@@ -229,7 +230,7 @@ void stageCapture(Application& state, const std::string& stage) {
                             settle(state, 1.f);
                         }
                         state.camera.face(state.room.classroomKeyCenter());
-                        if (stage == "corridor-key-fit" || stage == "corridor-key-small" || stage == "corridor-class-unlocked") {
+                        if (stage == "corridor-key-fit" || stage == "corridor-key-small" || unlocking) {
                             if (!state.room.interactCorridor(state.camera))
                                 throw std::runtime_error("Capture could not recover the released key");
                             if (stage == "corridor-key-small")
@@ -239,10 +240,12 @@ void stageCapture(Application& state, const std::string& stage) {
                     }
                 }
                 state.camera.resetMotion();
-                if (stage == "corridor-class-unlocked") {
+                if (unlocking) {
                     if (!state.room.interactCorridor(state.camera))
                         throw std::runtime_error("Capture could not unlock the classroom rear door");
-                    settle(state);
+                    settle(state, stage == "corridor-key-unlock-insert" ? .08f :
+                                  stage == "corridor-key-unlock-turn" ? .34f :
+                                  stage == "corridor-key-unlock-release" ? .66f : 1.5f);
                 }
             }
         } else if (stage.rfind("corridor-door-", 0) == 0 || stage.rfind("corridor-illusion-", 0) == 0 ||
@@ -614,6 +617,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-class-key",
                                         "corridor-class-exit",
                                         "corridor-class-unlocked",
+                                        "corridor-key-unlock-insert",
+                                        "corridor-key-unlock-turn",
+                                        "corridor-key-unlock-release",
                                         "corridor-key-held",
                                         "corridor-key-large",
                                         "corridor-key-fit",

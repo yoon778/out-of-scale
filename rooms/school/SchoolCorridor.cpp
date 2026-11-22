@@ -18,6 +18,7 @@ constexpr float minFittedKeyScale = .25f, maxFittedKeyScale = .75f;
 constexpr glm::vec3 keyHalfSize{.025f, .006f, .048f};
 constexpr float minKeyScale = .20f, maxKeyScale = 5.5f, keyRestClearance = .006f;
 constexpr float looseKeyReach = 8.f;
+constexpr float keyInsertDuration = .18f, keyTurnEnd = .46f, lockReleaseEnd = .64f, doorUnlockDelay = .68f;
 constexpr float gapNear = -12.0f, gapFar = -15.65f, stairShift = -3.65f;
 constexpr float bridgeWidth = 1.00f;
 constexpr float stairStart = -12.72f + stairShift, stairRun = .6f, stairRise = .2f;
@@ -105,7 +106,7 @@ void SchoolCorridor::reset() {
     classroomKeyTaken_ = classroomDoorUnlocked_ = false;
     keyRatio_ = keyFallSpeed_ = 0;
     key_ = {classroomKeySpot, 1.f};
-    classroomDoorOpening_ = 0;
+    classroomDoorOpening_ = classroomUnlockTime_ = 0;
     recognition_ = formation_ = opening_ = 0;
     forming_ = bridgeForming_ = false;
     bridgeHeld_ = bridgeFormation_ = 0;
@@ -545,9 +546,21 @@ void SchoolCorridor::drawClassroomLock(Renderer& r) const {
     const auto lock = classroomLock + center - classroomRearDoor;
     r.box(lock + glm::vec3(0, .014f, .028f), {.11f, .14f, .025f}, metal);
     r.box(lock + glm::vec3(0, .015f, .010f), {.073f, .085f, .033f}, brass * .84f);
-    r.quad(lock - glm::vec3(0, 0, .009f), {-.006f, 0, 0}, {0, .010f, 0}, {.10f, .12f, .10f});
-    if (classroomDoorUnlocked_)
-        drawKey(r, lock + glm::vec3(0, .041f * key_.scale, -.019f), {-1, 0, 0}, {0, 1, 0}, key_.scale);
+    const float turn = halfPi * glm::smoothstep(keyInsertDuration, keyTurnEnd, classroomUnlockTime_);
+    const glm::vec3 keyRight{-std::cos(turn), std::sin(turn), 0}, keyUp{std::sin(turn), std::cos(turn), 0};
+    r.quad(lock - glm::vec3(0, 0, .009f), keyRight * .006f, keyUp * .010f, {.10f, .12f, .10f});
+    // The shackle lifts after the key turns. One leg stays inside the body; the other clears it.
+    const float lift = .028f * glm::smoothstep(keyTurnEnd, lockReleaseEnd, classroomUnlockTime_);
+    const auto shackle = lock + glm::vec3(0, lift, -.008f);
+    const glm::vec3 steel{.61f, .64f, .59f};
+    r.line(shackle + glm::vec3(-.024f, .018f, 0), shackle + glm::vec3(-.024f, .090f, 0), .006f, steel);
+    r.line(shackle + glm::vec3(-.024f, .090f, 0), shackle + glm::vec3(.024f, .090f, 0), .006f, steel);
+    r.line(shackle + glm::vec3(.024f, .090f, 0), shackle + glm::vec3(.024f, .045f, 0), .006f, steel);
+    if (classroomDoorUnlocked_) {
+        const float insertion = glm::smoothstep(0.f, keyInsertDuration, classroomUnlockTime_);
+        const auto pivot = lock + glm::vec3(0, 0, glm::mix(-.075f, -.019f, insertion));
+        drawKey(r, pivot + keyUp * (.041f * key_.scale), keyRight, keyUp, key_.scale);
+    }
     const auto notice = center + glm::vec3(-.06f, -.13f, -.041f);
     r.box(notice, {.46f, .25f, .010f}, {.84f, .82f, .71f});
     r.label(L"뒷문 열쇠", notice + glm::vec3(0, .052f, -.006f), {-.16f, 0, 0}, {0, .038f, 0}, metal);
@@ -579,7 +592,7 @@ std::optional<perspective::Pose> SchoolCorridor::keyAtLock(const Camera& camera,
             return std::nullopt;
     }
     // Lock fit uses the size committed on release. Approaching the lock cannot resize the key.
-    return perspective::Pose{classroomLock + glm::vec3(0, .041f * key_.scale, -.023f), key_.scale};
+    return perspective::Pose{classroomLock + glm::vec3(0, .041f * key_.scale, -.075f), key_.scale};
 }
 std::optional<perspective::Pose> SchoolCorridor::keyPlacement(const Camera& camera, const std::vector<Box>& world) const {
     if (!holdingClassroomKey())
@@ -760,6 +773,11 @@ const wchar_t* SchoolCorridor::classroomKeyStatus(const Camera& camera, const st
         return L"열쇠가 작아요 · 더 먼 곳에 놓고 다시 집으세요";
     return L"열쇠를 들고 있어요 · 조금 물러나 놓을 곳을 바라보세요";
 }
+const wchar_t* SchoolCorridor::classroomUnlockStatus() const {
+    if (!classroomDoorUnlocked_ || classroomUnlockTime_ >= 1.8f)
+        return nullptr;
+    return classroomUnlockTime_ < lockReleaseEnd ? L"잠금을 풀고 있어요" : L"잠금이 풀렸어요";
+}
 SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& camera, const std::vector<Box>& world) const {
     const auto eye = camera.eye(), direction = camera.direction();
     auto reaches = [&](const Box& target, glm::vec3 center, float range) {
@@ -814,6 +832,7 @@ bool SchoolCorridor::interactClassroom(const Camera& camera, const std::vector<B
     case ClassroomAction::unlockDoor:
         key_ = *keyAtLock(camera, world);
         classroomDoorUnlocked_ = true;
+        classroomUnlockTime_ = 0;
         keyRatio_ = 0;
         return true;
     default:
@@ -1152,10 +1171,14 @@ bool SchoolCorridor::interact(const Camera& camera) {
     return true;
 }
 void SchoolCorridor::update(const Camera& camera, float dt) {
-    if (classroomDoorUnlocked_ && classroomDoorOpening_ < 1) {
-        const float next = std::min(1.f, classroomDoorOpening_ + dt / .74f);
-        if (!touches(camera, classroomDoorBox(next)))
-            classroomDoorOpening_ = next;
+    if (classroomDoorUnlocked_) {
+        const float openingDt = std::max(0.f, dt - std::max(0.f, doorUnlockDelay - classroomUnlockTime_));
+        classroomUnlockTime_ = std::min(2.f, classroomUnlockTime_ + dt);
+        if (classroomDoorOpening_ < 1 && openingDt > 0) {
+            const float next = std::min(1.f, classroomDoorOpening_ + openingDt / .74f);
+            if (!touches(camera, classroomDoorBox(next)))
+                classroomDoorOpening_ = next;
+        }
     }
     const float target = targetOpen_ ? halfPi : 0;
     const float distance = target - angle_;

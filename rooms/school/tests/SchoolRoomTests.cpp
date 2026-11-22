@@ -1704,10 +1704,28 @@ int runTests() {
                       !keyCorridor.classroomKeyStatus(keyCamera, world),
                   "only the actual recovered key unlocks and leaves the held and loose states");
             check(!keyRoom.interactCorridor(keyCamera), "the inserted key cannot be consumed twice");
+            check(keyCorridor.classroomUnlockTime_ == 0 && keyCorridor.classroomDoorOpening_ == 0 &&
+                      keyCorridor.classroomUnlockStatus(), "accepted key begins feedback before the door slides");
+            keyRoom.update(keyCamera, {}, 1.f, false);
+            check(keyCorridor.classroomUnlockTime_ == 0 && keyCorridor.classroomDoorOpening_ == 0,
+                  "pause freezes the key and lock animation");
+            keyCamera.resetMotion();
+            for (int frame = 0; frame < static_cast<int>(fps * .4f); ++frame)
+                keyRoom.update(keyCamera, {}, 1.f / fps);
+            const float duringTurn = keyCorridor.classroomUnlockTime_;
+            check(duringTurn > .35f && keyCorridor.classroomDoorOpening_ == 0 &&
+                      !keyRoom.interactCorridor(keyCamera) && keyCorridor.classroomUnlockTime_ == duringTurn,
+                  "turning the inserted key keeps the door shut and repeated E cannot restart the animation");
+            for (int frame = 0; frame < fps * 2; ++frame)
+                keyRoom.update(keyCamera, {}, 1.f / fps);
+            check(keyCorridor.classroomDoorOpening_ == 1 && !keyCorridor.classroomUnlockStatus(),
+                  "the released lock opens the door fully and clears its brief success message at every frame rate");
             keyRoom.reset();
             check(!keyCorridor.holdingClassroomKey() && !keyCorridor.looseClassroomKey() &&
                       !keyCorridor.classroomDoorUnlocked_ && keyCorridor.key_.center == SchoolCorridor::classroomKeySpot &&
-                      keyCorridor.key_.scale == 1.f && keyCorridor.keyFallSpeed_ == 0,
+                      keyCorridor.key_.scale == 1.f && keyCorridor.keyFallSpeed_ == 0 &&
+                      keyCorridor.classroomUnlockTime_ == 0 && keyCorridor.classroomDoorOpening_ == 0 &&
+                      !keyCorridor.classroomUnlockStatus(),
                   "reset restores the original hook, scale, ownership, fall and lock state");
         }
     }

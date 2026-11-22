@@ -1911,7 +1911,7 @@ void SchoolRoom::hud(Renderer& r, const Camera& camera, int width, int height,
             r.panel(x, y, trackWidth * feedback->holdProgress, trackHeight, {.43f, .86f, .65f});
     }
     if (const auto keyStatus = corridor_.holdingClassroomKey()
-                                   ? corridor_.classroomKeyStatus(camera, collisionBoxes()) : nullptr) {
+                                   ? corridor_.classroomKeyStatus(camera, collisionBoxes()) : corridor_.classroomUnlockStatus()) {
         const float textWidth = r.textWidth(keyStatus, 23 * scale);
         const float x = (width - textWidth) * .5f;
         r.panel(x - 12 * scale, height - 60 * scale, textWidth + 24 * scale, 36 * scale, {.12f, .22f, .18f});
