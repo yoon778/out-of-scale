@@ -9,17 +9,36 @@ void stats(const char* name, std::vector<double> v) {
     std::sort(v.begin(), v.end());
     std::cout << ' ' << name << '=' << mean << '/' << v[size_t(v.size()*.95)] << '/' << v[size_t(v.size()*.99)];
 }
-int main() {
+int main(int argc, char** argv) {
+    // Positional arguments keep the same camera path while comparing display workloads.
+    const int width = argc > 1 ? std::stoi(argv[1]) : 1280;
+    const int height = argc > 2 ? std::stoi(argv[2]) : 800;
+    const int samples = argc > 3 ? std::stoi(argv[3]) : 4;
+    if (width < 320 || width > 7680 || height < 200 || height > 4320 || samples < 0 || samples > 8)
+        return 5;
     if (!glfwInit()) return 1;
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3); glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); glfwWindowHint(GLFW_SAMPLES, 4);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE); glfwWindowHint(GLFW_SAMPLES, samples);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    auto* w = glfwCreateWindow(1280, 800, "Hidden school profile", nullptr, nullptr);
+    glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    auto* w = glfwCreateWindow(width, height, "Hidden school profile", nullptr, nullptr);
     if (!w) return 2;
+    // Windows can clamp the initial window to its work area, even when hidden.
+    glfwSetWindowSize(w, width, height);
+    glfwPollEvents();
     glfwMakeContextCurrent(w); glewExperimental = GL_TRUE; glewInit();
     while(glGetError()!=GL_NO_ERROR) {}
     glfwSwapInterval(0);
-    std::cout << glGetString(GL_RENDERER) << " 1280x800 MSAA4 vsync0 mean/p95/p99 ms\n" << std::fixed << std::setprecision(3);
+    int framebufferWidth, framebufferHeight, actualSamples;
+    glfwGetFramebufferSize(w, &framebufferWidth, &framebufferHeight);
+    if (framebufferWidth != width || framebufferHeight != height) {
+        std::cerr << "Requested resolution is unavailable: " << framebufferWidth << 'x' << framebufferHeight << '\n';
+        glfwDestroyWindow(w); glfwTerminate(); return 6;
+    }
+    glGetIntegerv(GL_SAMPLES, &actualSamples);
+    std::cout << glGetString(GL_RENDERER) << ' ' << framebufferWidth << 'x' << framebufferHeight
+              << " MSAA" << actualSamples << " vsync0 mean/p95/p99 ms\n"
+              << std::fixed << std::setprecision(3);
     {
         school::Renderer r; if(!r.initialize()) return 3;
         GLuint query; glGenQueries(1, &query);
@@ -38,7 +57,7 @@ int main() {
                     if(scenario=="walk") input.right=(f/120%2==0 ? .4f : -.4f);
                     if(scenario=="mirror-turn") p.room.rotateMirror(std::cos(phase)*.003f);
                     auto a=Clock::now(); p.room.update(p.camera,input,1.f/120); auto b=Clock::now();
-                    glBeginQuery(GL_TIME_ELAPSED,query); p.room.draw(r,p.camera,1280,800); glEndQuery(GL_TIME_ELAPSED);
+                    glBeginQuery(GL_TIME_ELAPSED,query); p.room.draw(r,p.camera,framebufferWidth,framebufferHeight); glEndQuery(GL_TIME_ELAPSED);
                     auto c=Clock::now(); glFinish(); auto d=Clock::now();
                     GLuint64 ns; glGetQueryObjectui64v(query,GL_QUERY_RESULT,&ns);
                     if(f>=0) {update.push_back(ms(a,b));cpu.push_back(ms(b,c));total.push_back(ms(a,d));gpu.push_back(ns/1e6);}

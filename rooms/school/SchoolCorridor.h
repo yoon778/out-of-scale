@@ -1,5 +1,7 @@
 #pragma once
 
+#include "../shared/PerspectiveCarry.h"
+
 #include <GL/glm/glm.hpp>
 #include <array>
 #include <optional>
@@ -27,8 +29,15 @@ class SchoolCorridor {
     void update(const Camera& camera, float dt);
     bool canInteract(const Camera& camera) const;
     bool interact(const Camera& camera);
-    bool interactClassroom(const Camera& camera);
-    const wchar_t* classroomInteractionLabel(const Camera& camera) const;
+    bool interactClassroom(const Camera& camera, const std::vector<Box>& world);
+    const wchar_t* classroomInteractionLabel(const Camera& camera, const std::vector<Box>& world) const;
+    bool holdingClassroomKey() const { return keyRatio_ > 0; }
+    bool looseClassroomKey() const { return classroomKeyTaken_ && !holdingClassroomKey() && !classroomDoorUnlocked_; }
+    glm::vec3 classroomKeyCenter() const { return key_.center; }
+    const wchar_t* classroomKeyStatus(const Camera& camera, const std::vector<Box>& world) const;
+    const wchar_t* classroomUnlockStatus() const;
+    void drawHeldKey(Renderer& renderer, const Camera& camera, const std::vector<Box>& world) const;
+    void updateKey(float dt, const std::vector<Box>& world);
     bool finished(const Camera& camera) const;
     bool doorOpen() const { return targetOpen_; }
     float doorAngle() const { return angle_; }
@@ -45,9 +54,11 @@ class SchoolCorridor {
     static constexpr float floorHeight = 1.8f;
     static constexpr glm::vec3 classroomKeySpot{9.44f, 3.231f, -9.79f};
     static constexpr glm::vec3 classroomRearDoor{11.675f, 2.951f, -11.73f};
-    static constexpr glm::vec3 hinge{18.10f, floorHeight, -11.48f};
+    static constexpr glm::vec3 classroomLock{12.125f, 3.251f, -11.81f};
+    static constexpr glm::vec3 hinge{19.30f, floorHeight, -11.48f};
     static constexpr float doorWidth = 1.20f;
-    static constexpr glm::vec3 illusionEye{15.30f, 3.45f, -10.70f};
+    static constexpr float doorHeight = 2.30f;
+    static constexpr glm::vec3 illusionEye{14.50f, 3.45f, -10.95f};
     static constexpr glm::vec3 illusionFocus{20.45f, 3.0f, -9.90f};
     static constexpr float recognitionDuration = .55f;
     static constexpr float formationDuration = 1.8f;
@@ -57,7 +68,8 @@ class SchoolCorridor {
     static constexpr float exitZ = -21.85f;
 
   private:
-    enum class ClassroomAction { none, takeKey, unlockDoor };
+    friend int runTests();
+    enum class ClassroomAction { none, takeKey, dropKey, blockedKey, unlockDoor };
     struct Solid {
         glm::vec3 center, size, color;
         bool visible = true;
@@ -66,10 +78,12 @@ class SchoolCorridor {
     struct Window {
         float start, end;
     };
+    enum class DoorMaterial { infill, timber, paper, ruling };
     struct InkPatch {
         std::array<glm::vec3, 4> target, receiver;
         glm::vec3 color;
         bool onLeaf, frame;
+        DoorMaterial material = DoorMaterial::infill;
     };
     void build();
     void buildDrawing();
@@ -77,11 +91,15 @@ class SchoolCorridor {
     std::optional<float> bridgeViewAlignment(const Camera& camera) const;
     void updateIllusion(const Camera& camera, float dt);
     void drawIllusion(Renderer& renderer) const;
+    void drawCupboardNotices(Renderer& renderer) const;
     void buildBridgeDrawing();
     void drawFalseHall(Renderer& renderer) const;
     void drawClassroomLock(Renderer& renderer) const;
-    ClassroomAction classroomAction(const Camera& camera) const;
+    ClassroomAction classroomAction(const Camera& camera, const std::vector<Box>& world) const;
     Box classroomDoorBox(float opening) const;
+    std::optional<perspective::Pose> keyAtLock(const Camera& camera, const std::vector<Box>& world) const;
+    std::optional<perspective::Pose> keyPlacement(const Camera& camera, const std::vector<Box>& world) const;
+    perspective::Pose carriedKeyPose(const Camera& camera, const std::vector<Box>& world) const;
     void drawBridge(Renderer& renderer) const;
     void updateBridge(const Camera& camera, float dt);
     glm::vec3 paintedPoint(const InkPatch& patch, int corner) const;
@@ -95,7 +113,9 @@ class SchoolCorridor {
     float angularSpeed_ = 0;
     bool targetOpen_ = false;
     bool classroomKeyTaken_ = false, classroomDoorUnlocked_ = false;
-    float classroomDoorOpening_ = 0;
+    float keyRatio_ = 0, keyFallSpeed_ = 0;
+    perspective::Pose key_{classroomKeySpot, 1.f};
+    float classroomDoorOpening_ = 0, classroomUnlockTime_ = 0;
     float recognition_ = 0, formation_ = 0, opening_ = 0;
     bool forming_ = false;
     float bridgeHeld_ = 0, bridgeFormation_ = 0;

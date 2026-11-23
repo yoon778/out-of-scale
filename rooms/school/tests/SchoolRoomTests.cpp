@@ -352,9 +352,11 @@ int runTests() {
           "the aimed tabletop supports the notebook");
     check(grabForDrop(), "pick up the notebook for an upward drop");
     carrier.feet = {3.8f, 0, 2.4f};
-    carrier.pitch = 1.48f;
+    carrier.yaw = 0;
+    carrier.pitch = 1.1f;
     const auto overheadDrop = dropRoom.notebookPlacement(carrier);
-    check(overheadDrop && dropRoom.notebookBounds(*overheadDrop).max.y <= 4.5f &&
+    check(overheadDrop && overheadDrop->center.y > carrier.eye().y &&
+              dropRoom.notebookBounds(*overheadDrop).max.y <= 4.5f &&
               dropRoom.toggleNotebook(carrier) && dropRoom.notebookRatio_ == 0,
           "an upward drop stays below the classroom ceiling");
     check(grabForDrop(), "pick up the notebook for corridor placement");
@@ -465,7 +467,7 @@ int runTests() {
         room.update(camera, {}, 1.f / 120);
         check(room.projectorAligned(), "small horizontal and vertical aim errors remain accepted");
         viewStudy(camera);
-        camera.feet = {4.7f, 0, 4.f};
+        camera.feet = {4.25f, 0, 2.8f};
         camera.face(SchoolRoom::alignmentFocus);
         camera.yaw += glm::radians(18.f);
         tickFor(room, camera, SchoolRoom::recognitionDuration + SchoolRoom::formationDuration);
@@ -481,7 +483,7 @@ int runTests() {
         check(!room.projectorAligned() && !room.materializing() && !room.stairsReady(),
               "large or combined aim errors still block stairs from the correct viewpoint");
     }
-    for (const auto position : {glm::vec3(4.05f, 0, 1.9f), glm::vec3(4.05f, 0, 3.4f),
+    for (const auto position : {glm::vec3(4.05f, 0, 2.2f), glm::vec3(4.05f, 0, 2.8f),
                                 glm::vec3(5.f, 0, 6.f)}) {
         room.reset();
         positionProjector(room, camera);
@@ -489,7 +491,11 @@ int runTests() {
         camera.feet = position;
         camera.face(SchoolRoom::alignmentFocus);
         tickFor(room, camera, SchoolRoom::recognitionDuration + SchoolRoom::formationDuration);
-        check(room.stairsReady(), "nearby views in front of and behind the reference point are accepted");
+        if (position.z == 6.f)
+            check(!room.stairsReady() && !room.materializing(),
+                  "the formerly accepted distant rear view now needs closer stair alignment");
+        else
+            check(room.stairsReady(), "nearby views in front of and behind the reference point remain accepted");
     }
     room.reset();
     positionProjector(room, camera);
@@ -691,7 +697,43 @@ int runTests() {
     camera.face(SchoolCorridor::classroomKeySpot);
     check(!room.interactCorridor(camera), "the key is out of reach from the first classroom entrance");
     check(walkTo(room, camera, {6.25f, -12.4f}) && walkTo(room, camera, {9.7f, -12.4f}),
-          "enter classroom A and reach observation window before the first obstruction");
+          "enter classroom A and reach its privacy window before the first obstruction");
+    int privacyRays = 0;
+    bool concealedHall = true;
+    for (float x : {7.8f, 8.8f, 9.8f, 10.8f})
+        for (float z : {-12.05f, -12.55f, -14.f})
+            for (float y : {3.45f, 4.2f})
+                for (const auto target : {glm::vec3(10.3f, 2.6f, -10.9f), glm::vec3(11.8f, 3.4f, -9.4f),
+                                           glm::vec3(14.5f, 3.45f, -10.95f)}) {
+                    const glm::vec3 eye{x, y, z};
+                    const auto delta = target - eye;
+                    const auto paneHit = eye + delta * ((-11.6f - z) / delta.z);
+                    if (paneHit.x <= 7.6f || paneHit.x >= 11.05f || paneHit.y <= 2.85f || paneHit.y >= 4.2f)
+                        continue;
+                    ++privacyRays;
+                    bool opaque = false;
+                    for (const auto& solid : room.corridor_.solids_) {
+                        if (!solid.visible)
+                            continue; // Collision-only glass must not count as visual occlusion.
+                        const float hit = SchoolRoom::rayBox(eye, glm::normalize(delta),
+                                                            {solid.center - solid.size * .5f,
+                                                             solid.center + solid.size * .5f});
+                        opaque = opaque || (hit >= 0 && hit < glm::length(delta));
+                    }
+                    concealedHall = concealedHall && opaque;
+                }
+    check(privacyRays > 30 && concealedHall,
+          "classroom A conceals the post-key hall through its window from low, high and oblique views");
+    bool clearSecondWindow = true;
+    const glm::vec3 secondEye{16.5f, 3.45f, -12.4f}, secondTarget{16.5f, 3.45f, -10.9f};
+    for (const auto& solid : room.corridor_.solids_) {
+        if (!solid.visible)
+            continue;
+        const float hit = SchoolRoom::rayBox(secondEye, glm::normalize(secondTarget - secondEye),
+                                            {solid.center - solid.size * .5f, solid.center + solid.size * .5f});
+        clearSecondWindow = clearSecondWindow && (hit < 0 || hit >= glm::distance(secondEye, secondTarget));
+    }
+    check(clearSecondWindow, "classroom B keeps the later observation window clear");
     camera.yaw = 3.14159265f;
     tick(room, camera, {1, 0, true}, 90);
     check(camera.feet.z < -11.8f, "closed classroom glass prevents jumping through as a shortcut");
@@ -706,18 +748,35 @@ int runTests() {
               walkTo(room, camera, {6.25f, -10.65f}) && walkTo(room, camera, {8.78f, -10.65f}),
           "return around the classroom to inspect the false hall from the side");
     camera.face(SchoolCorridor::classroomKeySpot);
-    check(room.interactCorridor(camera) && !room.interactCorridor(camera), "take the key hanging over the painted latch once");
+    check(room.interactCorridor(camera) && room.corridor_.holdingClassroomKey(),
+          "take the key hanging over the painted latch");
     check(walkTo(room, camera, {6.25f, -10.65f}) && walkTo(room, camera, {6.25f, -12.55f}) &&
               walkTo(room, camera, {11.67f, -12.55f}),
           "carry the key back to the rear door");
-    camera.face(SchoolCorridor::classroomRearDoor);
-    check(room.interactCorridor(camera), "use the key to unlock the classroom rear door");
+    camera.face(SchoolCorridor::classroomLock);
+    tick(room, camera, {}, 35);
+    check(room.corridor_.key_.scale == 1.f && !room.corridor_.classroomDoorUnlocked_,
+          "carrying the oversized key to the door does not shrink or use it");
+    check(walkTo(room, camera, {12.05f, -12.28f}), "walk to a nearby release surface");
+    camera.face(SchoolCorridor::classroomLock);
+    const auto keyDrop = room.corridor_.keyPlacement(camera, room.collisionBoxes());
+    check(keyDrop && keyDrop->scale >= .39f && keyDrop->scale <= .51f && room.corridor_.key_.scale == 1.f,
+          "the release preview shows a small key without committing its physical size");
+    check(room.interactCorridor(camera) && room.corridor_.looseClassroomKey() && !room.corridor_.classroomDoorUnlocked_,
+          "E releases the key into the world instead of unlocking with the preview");
+    tick(room, camera, {}, 100);
+    camera.face(room.classroomKeyCenter());
+    check(room.interactCorridor(camera) && room.corridor_.holdingClassroomKey(),
+          "pick up the smaller key after it falls onto the corridor floor");
+    camera.face(SchoolCorridor::classroomLock);
+    check(room.interactCorridor(camera) && !room.corridor_.holdingClassroomKey(),
+          "use the released and recovered key's actual size to unlock the door");
     tick(room, camera, {}, 100);
     check(walkTo(room, camera, {11.67f, -9.9f}) && walkTo(room, camera, {13.45f, -9.9f}),
           "walk through the opened rear classroom door to bypass the false hall");
     check(walkTo(room, camera, {13.45f, -12.4f}) && walkTo(room, camera, {16.5f, -12.4f}),
           "classroom B preserves a side view of the cupboard and partition");
-    camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
     check(!room.canUseCupboard(camera), "cupboard cannot be operated remotely through classroom glass");
     check(walkTo(room, camera, {13.45f, -12.4f}) && walkTo(room, camera, {13.45f, -10.9f}) &&
               walkTo(room, camera, {17.0f, -10.9f}),
@@ -728,7 +787,7 @@ int runTests() {
     check(camera.feet.x < 20.29f && !room.corridorDoorForming(),
           "painted door is a solid wall before recognition, including a jump attempt");
     check(walkTo(room, camera, {17.0f, -10.9f}), "return from the flat door to the cupboard");
-    camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
     check(room.canUseCupboard(camera) && room.toggleCupboard(camera), "E opens the near painted surface");
     float doorAngle = room.cupboardAngle();
     room.update(camera, {}, 1, false);
@@ -742,21 +801,27 @@ int runTests() {
             for (size_t fixture = 0; fixture < boxes.size() - 12; fixture++) {
                 const auto& a = boxes[leaf];
                 const auto& b = boxes[fixture];
-                clearSweep &=
-                    !(a.min.x < b.max.x - .002f && a.max.x > b.min.x + .002f && a.min.y < b.max.y - .002f &&
-                      a.max.y > b.min.y + .002f && a.min.z < b.max.z - .002f && a.max.z > b.min.z + .002f);
+                const bool overlaps =
+                    a.min.x < b.max.x - .002f && a.max.x > b.min.x + .002f && a.min.y < b.max.y - .002f &&
+                    a.max.y > b.min.y + .002f && a.min.z < b.max.z - .002f && a.max.z > b.min.z + .002f;
+                if (clearSweep && overlaps)
+                    std::cerr << "Door sweep obstruction at angle " << room.cupboardAngle() << ": ["
+                              << b.min.x << ',' << b.min.y << ',' << b.min.z << "]-["
+                              << b.max.x << ',' << b.max.y << ',' << b.max.z << "]\n";
+                clearSweep &= !overlaps;
             }
     }
     check(clearSweep, "door sweep clears furniture, partition, walls and cupboard body");
     check(room.cupboardAngle() > 1.56f && !room.corridorDoorForming(),
           "opening the cupboard alone does not unlock a remote door");
-    check(walkTo(room, camera, {15.3f, -10.7f}), "step back to connect the near and far fragments");
+    check(walkTo(room, camera, {SchoolCorridor::illusionEye.x, SchoolCorridor::illusionEye.z}),
+          "walk back to the classroom entrance to connect the everyday fittings");
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::illusionFocus);
-    check(room.corridorAlignment(camera) >= .80f, "normal walking can reach a visually aligned door");
+    check(room.corridorAlignment(camera) >= .88f, "normal walking can reach a visually aligned door");
     const auto doorFeedback = room.alignmentFeedback(camera);
     Camera offAxis = camera;
-    offAxis.feet.z += .45f;
+    offAxis.feet.z += .75f;
     offAxis.face(SchoolCorridor::illusionFocus);
     const auto partialDoorFeedback = room.alignmentFeedback(offAxis);
     check(doorFeedback && doorFeedback->aligned && partialDoorFeedback && !partialDoorFeedback->aligned &&
@@ -808,7 +873,7 @@ int runTests() {
           "walk back to line up the painted floor and riser");
     tick(room, camera, {}, 30);
     camera.face(SchoolCorridor::bridgeFocus);
-    check(room.corridorBridgeAlignment(camera) >= .75f, "matching rays recognize the complete grating");
+    check(room.corridorBridgeAlignment(camera) >= .85f, "matching rays recognize the complete grating");
     const auto bridgeFeedback = room.alignmentFeedback(camera);
     check(bridgeFeedback && bridgeFeedback->aligned && bridgeFeedback->score == room.corridorBridgeAlignment(camera),
           "the bridge HUD uses its own recognition threshold and alignment score");
@@ -830,18 +895,18 @@ int runTests() {
               walkTo(room, camera, {21.2f, -9.9f}) && walkTo(room, camera, {19.9f, -9.9f}) &&
               walkTo(room, camera, {19.9f, -10.9f}),
           "materialized passage stays open for the return trip");
-    camera.face(SchoolCorridor::hinge + glm::vec3(1.1f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-1.1f, 1.2f, 0));
     check(room.toggleCupboard(camera), "cupboard can still open from its far side after materialization");
     tick(room, camera, {}, 120);
     check(room.cupboardAngle() > 1.56f && room.corridorDoorReady(),
           "later cupboard movement cannot undo the real doorway");
     // Swept door collision must stop before reaching the player, including between rendered frames.
-    camera.feet = {17.0f, 1.8f, -10.9f};
+    camera.feet = {19.9f, 1.8f, -10.9f};
     camera.face(SchoolCorridor::hinge + glm::vec3(0, 1.2f, 1));
     check(room.toggleCupboard(camera), "close cupboard for sweep recovery check");
     tick(room, camera, {}, 120);
-    camera.feet = {18.72f, 1.8f, -10.9f};
-    camera.face(SchoolCorridor::hinge + glm::vec3(1.1f, 1.2f, 0));
+    camera.feet = {18.68f, 1.8f, -10.9f};
+    camera.face(SchoolCorridor::hinge + glm::vec3(-1.1f, 1.2f, 0));
     check(room.toggleCupboard(camera), "open from within the swing area");
     tick(room, camera, {}, 120);
     check(room.cupboardAngle() < .001f && !room.cupboardOpen(),
@@ -855,7 +920,7 @@ int runTests() {
     }
     check(!intersects, "blocked sweep leaves the player outside all solids");
     check(walkTo(room, camera, {19.9f, -10.9f}), "player can retreat from the stopped sweep");
-    camera.face(SchoolCorridor::hinge + glm::vec3(1.1f, 1.2f, 0));
+    camera.face(SchoolCorridor::hinge + glm::vec3(-1.1f, 1.2f, 0));
     check(room.toggleCupboard(camera), "reopen after retreating from the swing area");
     tick(room, camera, {}, 120);
     check(room.cupboardAngle() > 1.56f, "door opens safely when its swing area clears");
@@ -879,12 +944,60 @@ int runTests() {
     camera.yaw = 1.570796327f;
     tick(room, camera, {1, 0, true}, 160);
     check(camera.feet.x < 20.29f, "reset restores solid collision at the former passage");
+    // Inspect the actual rendered clue points against the physical leaf, not a separate proxy drawing.
+    SchoolCorridor innerFace;
+    auto clueOccluded = [&](glm::vec3 eye, glm::vec3 point) {
+        const auto ray = point - eye;
+        for (const auto& b : innerFace.doorBoxes(innerFace.angle_)) {
+            const float hit = SchoolRoom::rayBox(eye, glm::normalize(ray), b);
+            if (hit >= 0 && hit < glm::length(ray) - .002f)
+                return true;
+        }
+        return false;
+    };
+    bool shutConcealsClue = true, insideShowsClue = true, outsideConcealsClue = true, staysOnLeaf = true;
+    for (float angle : {0.f, .25f, .75f, 1.25f, 1.570796327f}) {
+        innerFace.angle_ = angle;
+        const glm::vec3 along{-std::cos(angle), 0, std::sin(angle)};
+        const glm::vec3 outside{std::sin(angle), 0, std::cos(angle)};
+        for (const auto& patch : innerFace.drawing_) {
+            if (!patch.onLeaf || patch.material == SchoolCorridor::DoorMaterial::infill)
+                continue;
+            glm::vec3 center{0};
+            for (int i = 0; i < 4; ++i) {
+                const auto p = innerFace.paintedPoint(patch, i), local = p - SchoolCorridor::hinge;
+                const float distanceAlong = glm::dot(local, along);
+                staysOnLeaf &= distanceAlong >= -.0001f && distanceAlong <= SchoolCorridor::doorWidth + .0001f &&
+                               local.y >= 0 && local.y <= SchoolCorridor::doorHeight &&
+                               glm::dot(local, outside) < -.035f;
+                center += p * .25f;
+            }
+            if (angle == 0)
+                shutConcealsClue &= clueOccluded({18.7f, 3.45f, -10.1f}, center) &&
+                                    clueOccluded({15.7f, 3.45f, -9.4f}, center);
+            if (angle > 1.57f) {
+                insideShowsClue &= !clueOccluded(SchoolCorridor::illusionEye, center);
+                outsideConcealsClue &= clueOccluded({20.0f, 3.45f, -10.5f}, center);
+            }
+        }
+    }
+    check(staysOnLeaf, "every visible clue remains within the inner face throughout the reverse swing");
+    check(shutConcealsClue, "the solid closed door hides the inner chart from the corridor");
+    check(insideShowsClue, "the open inner face exposes its actual clue geometry to the return view");
+    check(outsideConcealsClue, "the open outer face still conceals the inner clue without a visibility toggle");
+    Camera insideHandle, outsideHandle;
+    insideHandle.feet = {18.5f, 1.8f, -10.9f};
+    outsideHandle.feet = {19.9f, 1.8f, -10.9f};
+    for (auto* view : {&insideHandle, &outsideHandle})
+        view->face(SchoolCorridor::hinge + glm::vec3(0, 1.05f, SchoolCorridor::doorWidth * .82f));
+    check(innerFace.canInteract(insideHandle) && innerFace.canInteract(outsideHandle),
+          "the open cupboard remains reachable from both its inner and outer faces");
     // Actual angular agreement, not proximity or an observation flag, controls recognition.
     auto prepareCorridor = [&]() {
         room.reset();
         camera = Camera();
         camera.feet = {17.0f, 1.8f, -10.9f};
-        camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+        camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
         check(room.toggleCupboard(camera), "prepare the rotating projection surface");
         tick(room, camera, {}, 150);
         camera.feet = SchoolCorridor::illusionEye - glm::vec3(0, 1.65f, 0);
@@ -894,6 +1007,24 @@ int runTests() {
     prepareCorridor();
     check(room.corridorAlignment(camera) > .999f,
           "reference eye gives matching rays on both receiving planes");
+    bool forgivingView = true;
+    for (float x : {-.20f, 0.f, .20f})
+        for (float z : {-.12f, 0.f, .12f}) {
+            Camera nearby = camera;
+            nearby.feet += glm::vec3(x, 0, z);
+            nearby.face(SchoolCorridor::illusionFocus);
+            const auto feedback = room.corridor_.alignmentFeedback(nearby);
+            forgivingView = forgivingView && feedback && feedback->threshold == .88f && feedback->aligned;
+        }
+    check(forgivingView, "the classroom return view retains a forgiving 40 by 24 cm recognition region");
+    for (const auto feet : {glm::vec3(18.0f, 1.8f, -10.9f), glm::vec3(18.6f, 1.8f, -10.9f)}) {
+        Camera closeView = camera;
+        closeView.feet = feet;
+        closeView.face(SchoolCorridor::illusionFocus);
+        tick(room, closeView, {}, 150);
+        check(room.corridorAlignment(closeView) < .80f && !room.corridorDoorForming(),
+              "opening the cupboard and waiting at its handle cannot replace the distant observation");
+    }
     camera.feet.z += 1.1f;
     camera.face(SchoolCorridor::illusionFocus);
     tick(room, camera, {}, 150);
@@ -913,7 +1044,7 @@ int runTests() {
     camera.yaw += 1.2f;
     check(room.corridorAlignment(camera) == 0, "position alone cannot recognize an offscreen picture");
     prepareCorridor();
-    camera.feet = {17.0f, 1.8f, -10.9f};
+    camera.feet = {19.9f, 1.8f, -10.9f};
     camera.face(SchoolCorridor::hinge + glm::vec3(0, 1.2f, 1));
     check(room.toggleCupboard(camera), "rotate the near fragment away again before solving");
     tick(room, camera, {}, 150);
@@ -1023,7 +1154,7 @@ int runTests() {
         room.reset();
         camera = Camera();
         camera.feet = {17.0f, 1.8f, -10.9f};
-        camera.face(SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+        camera.face(SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
         check(room.toggleCupboard(camera), "operate cupboard for eased motion probe");
         float first = 0, middle = 0, previous = room.cupboardAngle();
         bool bounded = true;
@@ -1105,7 +1236,7 @@ int runTests() {
     check(!room.adjustingProjector() && camera.focusTime == 0,
           "jump cancels both equipment control and camera focus");
 
-    for (float threshold : {SchoolRoom::stairAlignmentThreshold, .80f, .75f}) {
+    for (float threshold : {SchoolRoom::stairAlignmentThreshold, .88f, .85f}) {
         float held = 0;
         for (int i = 0; i < 120; ++i)
             held = advanceAlignmentHold(held, threshold - .01f, threshold, 1.f / 120);
@@ -1160,7 +1291,7 @@ int runTests() {
         }
         tick(room, camera, {}, 24);
         const auto steadyView = camera;
-        const float threshold = bridge ? .75f : .80f;
+        const float threshold = bridge ? .85f : .88f;
         bool found = false;
         for (int axis : {0, 2}) {
             for (float sign : {-1.f, 1.f}) {
@@ -1191,6 +1322,65 @@ int runTests() {
         const auto returned = room.alignmentFeedback(camera);
         check(returned && returned->holdProgress == 0,
               "looking away resets both corridor puzzles before the next attempt");
+    }
+
+    // The former outer acceptance band must now stay a clue, even after a long steady look.
+    // Also sample a small real area around each solution so tightening cannot leave a single-pixel answer.
+    for (int puzzle = 0; puzzle < 3; ++puzzle) {
+        if (puzzle == 0) {
+            room.reset();
+            positionProjector(room, camera);
+            viewStudy(camera);
+        } else {
+            prepareCorridor();
+            if (puzzle == 2) {
+                tickFor(room, camera, SchoolCorridor::recognitionDuration + SchoolCorridor::formationDuration +
+                                          SchoolCorridor::openingDuration);
+                camera.feet = SchoolCorridor::bridgeEye - glm::vec3(0, 1.65f, 0);
+                camera.resetMotion();
+                camera.face(SchoolCorridor::bridgeFocus);
+            }
+        }
+        const auto correct = camera;
+        const auto focus = puzzle == 0 ? SchoolRoom::alignmentFocus :
+                           puzzle == 1 ? SchoolCorridor::illusionFocus : SchoolCorridor::bridgeFocus;
+        const float oldThreshold = puzzle == 0 ? .88f : puzzle == 1 ? .84f : .80f;
+        const float newThreshold = 1.f - (1.f - oldThreshold) * .75f;
+        bool nearSolution = true;
+        for (float dx : {-.1f, 0.f, .1f})
+            for (float dz : {-.1f, 0.f, .1f}) {
+                auto nearby = correct;
+                // The bridge's existing back-wall occlusion bounds the rear edge of its visible area.
+                nearby.feet += glm::vec3(puzzle == 2 ? dx * .9f : dx, 0, puzzle == 2 ? (dz - .1f) * .4f : dz);
+                nearby.face(focus);
+                const auto feedback = room.alignmentFeedback(nearby);
+                nearSolution = nearSolution && feedback && feedback->aligned &&
+                               std::abs(feedback->threshold - newThreshold) < .0001f;
+            }
+        check(nearSolution, "tightened puzzles retain a 20 by 20 cm region (bridge 18 by 8 cm toward its gap): " +
+                                std::to_string(puzzle));
+        bool foundFormerBand = false;
+        for (int axis : {0, 2}) {
+            for (float sign : {-1.f, 1.f}) {
+                for (int i = 1; i <= 1500 && !foundFormerBand; ++i) {
+                    camera = correct;
+                    camera.feet[axis] += sign * i * .001f;
+                    camera.face(focus);
+                    const auto feedback = room.alignmentFeedback(camera);
+                    if (feedback && feedback->score >= oldThreshold + .005f &&
+                        feedback->score < newThreshold - .005f)
+                        foundFormerBand = !feedback->aligned;
+                }
+            }
+        }
+        check(foundFormerBand, "formerly accepted outer band now reports incomplete alignment: " +
+                                   std::to_string(puzzle));
+        tick(room, camera, {}, 180);
+        const auto feedback = room.alignmentFeedback(camera);
+        check(foundFormerBand && feedback && !feedback->aligned && feedback->holdProgress == 0 &&
+                  (puzzle == 0 ? !room.materializing() && !room.stairsReady() :
+                   puzzle == 1 ? !room.corridorDoorForming() : !room.corridorBridgeReady()),
+              "waiting at an old outer-band view cannot materialize the tightened puzzle: " + std::to_string(puzzle));
     }
 
     room.reset();
@@ -1335,6 +1525,42 @@ int runTests() {
               std::abs(tablePose->scale / tableDepth - room.notebookRatio_) < .0001f &&
               std::abs(room.notebookBounds(*tablePose).min.y - .78f) < .004f,
           "table placement keeps the same apparent size without shifting the book sideways or upward");
+    // A steep upward aim must not send the book to an unseen fallback on the floor.
+    for (float fps : {10.f, 30.f, 144.f}) {
+        for (float pitch : {1.3f, 1.45f, 1.54f}) {
+            room.reset();
+            camera = Camera();
+            camera.feet = {-4.83f, 0, 3.8f};
+            camera.face(room.notebookCenter());
+            check(room.toggleNotebook(camera), "pick up the original notebook for a steep upward release");
+            const float carryRatio = room.notebookRatio_;
+            const auto original = room.notebook_;
+            camera.feet = {3.8f, 0, 2.4f};
+            camera.yaw = 0;
+            camera.pitch = pitch;
+            const auto placement = room.notebookPlacement(camera);
+            const auto shown = placement.value_or(room.heldNotebookPose(camera));
+            check(!placement && glm::dot(glm::normalize(shown.center - camera.eye()), camera.direction()) > .9f &&
+                      room.notebookBounds(shown).max.y < 4.5f,
+                  "a blocked ceiling aim keeps a visible notebook below the roof instead of showing an unseen floor drop");
+            room.toggleNotebook(camera);
+            for (int frame = 0; frame < static_cast<int>(fps); ++frame)
+                room.update(camera, {}, 1.f / fps);
+            check(room.notebookRatio_ == carryRatio && !room.notebookFalling_ &&
+                      room.notebook_.center == original.center && room.notebook_.scale == original.scale,
+                  "pressing release at the blocked ceiling preserves the held book at low and high frame rates");
+            camera.face({3.8f, 0, 1.1f});
+            const auto floorPlacement = room.notebookPlacement(camera);
+            check(floorPlacement && room.toggleNotebook(camera) && room.notebookRatio_ == 0,
+                  "lowering the view after a blocked ceiling release permits a normal floor placement");
+            for (int frame = 0; frame < static_cast<int>(fps * 2); ++frame)
+                room.update(camera, {}, 1.f / fps);
+            camera.face(room.notebookCenter());
+            check(!room.notebookFalling_ && room.notebookBounds(room.notebook_).min.y >= -.003f &&
+                      room.toggleNotebook(camera) && room.notebookRatio_ > 0,
+                  "the notebook remains in the room and can be picked up again after lowering the view");
+        }
+    }
     room.reset();
     const auto sealedSolids = room.collisionBoxes(true, false);
     auto nearestSolid = [&](glm::vec3 origin, glm::vec3 ray) {
@@ -1388,6 +1614,288 @@ int runTests() {
             }
         }
     }
+
+    // Drop/recover is the only way to commit a new physical key size.
+    for (int fps : {30, 60, 144}) {
+        for (const auto pickup : {glm::vec3(8.78f, 1.8f, -10.65f), glm::vec3(9.29f, 1.8f, -9.9f),
+                                   glm::vec3(8.28f, 1.8f, -9.9f)}) {
+            SchoolRoom keyRoom;
+            Camera keyCamera;
+            keyCamera.feet = pickup;
+            keyCamera.face(SchoolCorridor::classroomKeySpot);
+            auto& keyCorridor = keyRoom.corridor_;
+            auto settleKey = [&]() {
+                keyCamera.resetMotion();
+                for (int frame = 0; frame < fps; ++frame)
+                    keyRoom.update(keyCamera, {}, 1.f / fps);
+            };
+            auto world = keyRoom.collisionBoxes();
+            check(keyRoom.interactCorridor(keyCamera) && keyCorridor.holdingClassroomKey() &&
+                      keyCorridor.classroomKeyStatus(keyCamera, world) && keyCorridor.key_.scale == 1.f,
+                  "pickup preserves the physical key size and shows its held state");
+            for (float z : {-13.f, -12.28f, -12.01f}) {
+                keyCamera.feet = {12.05f, 1.8f, z};
+                keyCamera.face(SchoolCorridor::classroomLock);
+                settleKey();
+                const auto atLock = keyCorridor.keyAtLock(keyCamera, world);
+                check(atLock && atLock->scale == 1.f && keyCorridor.key_.scale == 1.f &&
+                          keyCorridor.classroomAction(keyCamera, world) != SchoolCorridor::ClassroomAction::unlockDoor,
+                      "moving closer to the lock never shrinks or unlocks an unmodified key");
+            }
+            // Ordinary release against the classroom's back wall, then gravity and a real pickup.
+            // A point-blank initial grab may need an intermediate drop to reduce its apparent size.
+            bool recoveredFit = false;
+            for (int attempt = 0; attempt < 4 && !recoveredFit; ++attempt) {
+                bool foundFit = false;
+                for (int i = 0; i <= 400; ++i) {
+                    keyCamera.feet = {11.5f, 1.8f, -16.28f + i * .01f};
+                    keyCamera.face({11.5f, 3.45f, -16.6f});
+                    const auto placement = keyCorridor.keyPlacement(keyCamera, world);
+                    if (placement && placement->scale > .40f && placement->scale < .50f) {
+                        foundFit = true;
+                        break;
+                    }
+                }
+                if (!foundFit) {
+                    keyCamera.feet = {11.5f, 1.8f, -16.05f};
+                    keyCamera.face({11.5f, 3.45f, -16.6f});
+                }
+                const auto preview = keyCorridor.keyPlacement(keyCamera, world);
+                check(preview && keyRoom.interactCorridor(keyCamera) && keyCorridor.looseClassroomKey() &&
+                          !keyCorridor.classroomDoorUnlocked_, "E commits a world key instead of unlocking with a preview");
+                const auto released = keyCorridor.key_;
+                keyRoom.update(keyCamera, {}, 1.f, false);
+                check(keyCorridor.key_.center == released.center && keyCorridor.key_.scale == released.scale,
+                      "pause freezes a released key before it falls");
+                settleKey();
+                check(keyCorridor.key_.center.y < released.center.y - .5f &&
+                          std::abs(keyCorridor.key_.center.y - (1.806f + .006f * released.scale)) < .002f &&
+                          keyCorridor.key_.scale == released.scale && keyCorridor.keyFallSpeed_ == 0,
+                      "the key falls to the visible floor without tunnelling or changing its committed size");
+                keyCamera.feet = {12.8f, 1.8f, keyCorridor.key_.center.z};
+                keyCamera.face(keyCorridor.key_.center);
+                check(!keyRoom.interactCorridor(keyCamera), "a dropped key cannot be picked up through the classroom wall");
+                keyCamera.feet = {11.5f, 1.8f, keyCorridor.key_.center.z + 1.1f};
+                keyCamera.face(keyCorridor.key_.center);
+                check(keyRoom.interactCorridor(keyCamera) && keyCorridor.holdingClassroomKey() &&
+                          keyCorridor.key_.scale == released.scale,
+                      "picking up the fallen key preserves its released physical size");
+                recoveredFit = foundFit && keyCorridor.key_.scale >= .39f && keyCorridor.key_.scale <= .51f;
+            }
+            check(recoveredFit, "the perspective release puzzle is solvable even after a point-blank pickup");
+            for (float z : {-13.f, -12.01f}) {
+                keyCamera.feet = {12.05f, 1.8f, z};
+                keyCamera.face(SchoolCorridor::classroomLock);
+                const auto actual = keyCorridor.keyAtLock(keyCamera, world);
+                check(actual && actual->scale == keyCorridor.key_.scale &&
+                          keyCorridor.classroomAction(keyCamera, world) == SchoolCorridor::ClassroomAction::unlockDoor,
+                      "a recovered matching key stays the same size at different reachable lock distances");
+            }
+            keyCamera.feet = {12.05f, 1.8f, -11.3f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            check(!keyCorridor.keyAtLock(keyCamera, world), "the closed door blocks lock use from its back");
+            keyCamera.feet = {13.4f, 1.8f, -12.7f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            check(!keyCorridor.keyAtLock(keyCamera, world), "the adjacent classroom wall blocks the lock");
+            keyCamera.feet = {12.05f, 1.8f, -12.28f};
+            keyCamera.face(SchoolCorridor::classroomLock);
+            check(keyRoom.interactCorridor(keyCamera) && keyCorridor.classroomDoorUnlocked_ &&
+                      !keyCorridor.holdingClassroomKey() && !keyCorridor.looseClassroomKey() &&
+                      !keyCorridor.classroomKeyStatus(keyCamera, world),
+                  "only the actual recovered key unlocks and leaves the held and loose states");
+            check(!keyRoom.interactCorridor(keyCamera), "the inserted key cannot be consumed twice");
+            check(keyCorridor.classroomUnlockTime_ == 0 && keyCorridor.classroomDoorOpening_ == 0 &&
+                      keyCorridor.classroomUnlockStatus(), "accepted key begins feedback before the door slides");
+            keyRoom.update(keyCamera, {}, 1.f, false);
+            check(keyCorridor.classroomUnlockTime_ == 0 && keyCorridor.classroomDoorOpening_ == 0,
+                  "pause freezes the key and lock animation");
+            keyCamera.resetMotion();
+            for (int frame = 0; frame < static_cast<int>(fps * .4f); ++frame)
+                keyRoom.update(keyCamera, {}, 1.f / fps);
+            const float duringTurn = keyCorridor.classroomUnlockTime_;
+            check(duringTurn > .35f && keyCorridor.classroomDoorOpening_ == 0 &&
+                      !keyRoom.interactCorridor(keyCamera) && keyCorridor.classroomUnlockTime_ == duringTurn,
+                  "turning the inserted key keeps the door shut and repeated E cannot restart the animation");
+            for (int frame = 0; frame < fps * 2; ++frame)
+                keyRoom.update(keyCamera, {}, 1.f / fps);
+            check(keyCorridor.classroomDoorOpening_ == 1 && !keyCorridor.classroomUnlockStatus(),
+                  "the released lock opens the door fully and clears its brief success message at every frame rate");
+            keyRoom.reset();
+            check(!keyCorridor.holdingClassroomKey() && !keyCorridor.looseClassroomKey() &&
+                      !keyCorridor.classroomDoorUnlocked_ && keyCorridor.key_.center == SchoolCorridor::classroomKeySpot &&
+                      keyCorridor.key_.scale == 1.f && keyCorridor.keyFallSpeed_ == 0 &&
+                      keyCorridor.classroomUnlockTime_ == 0 && keyCorridor.classroomDoorOpening_ == 0 &&
+                      !keyCorridor.classroomUnlockStatus(),
+                  "reset restores the original hook, scale, ownership, fall and lock state");
+        }
+    }
+
+    // Like the military props, a dropped key can be picked up from a distance and shrunk on nearby floor.
+    for (int fps : {30, 144}) {
+        SchoolRoom keyRoom;
+        Camera keyCamera;
+        auto& key = keyRoom.corridor_;
+        keyCamera.feet = {8.78f, 1.8f, -10.65f};
+        keyCamera.face(SchoolCorridor::classroomKeySpot);
+        check(keyRoom.interactCorridor(keyCamera), "discover the key at its original close pickup range");
+        keyCamera.feet = {11.5f, 1.8f, -15.4f};
+        keyCamera.face({11.5f, 3.45f, -16.6f});
+        check(keyRoom.interactCorridor(keyCamera) && key.looseClassroomKey(), "release a key for distant recovery");
+        keyCamera.resetMotion();
+        for (int frame = 0; frame < fps; ++frame)
+            keyRoom.update(keyCamera, {}, 1.f / fps);
+        keyCamera.feet = {12.8f, 1.8f, -12.9f};
+        keyCamera.face(key.key_.center);
+        check(!keyRoom.interactCorridor(keyCamera), "distant recovery still rejects a key behind the adjacent wall");
+        keyCamera.feet = {11.5f, 1.8f, -12.9f};
+        keyCamera.face(key.key_.center);
+        const auto before = key.key_;
+        check(glm::distance(keyCamera.eye(), before.center) > 3.f && keyRoom.interactCorridor(keyCamera) &&
+                  key.holdingClassroomKey() && key.key_.scale == before.scale,
+              "recovering from beyond the old reach preserves size and changes only the held perspective ratio");
+        const auto world = keyRoom.collisionBoxes();
+        bool broadFloorRange = true;
+        for (float degrees : {60.f, 65.f, 70.f, 75.f, 80.f, 85.f}) {
+            keyCamera.pitch = -glm::radians(degrees);
+            const auto preview = key.keyPlacement(keyCamera, world);
+            broadFloorRange = broadFloorRange && preview && preview->scale >= .39f && preview->scale <= .51f &&
+                              std::wstring_view(key.classroomKeyStatus(keyCamera, world)).find(L"놓으면 맞는") != std::wstring_view::npos;
+        }
+        check(broadFloorRange, "distant recovery gives a matching release across a broad downward aim range");
+        const auto floorCamera = keyCamera;
+        keyCamera.feet = {9.8f, 1.8f, -11.86f};
+        keyCamera.yaw = 3.141592654f;
+        keyCamera.pitch = glm::radians(-85.f);
+        const auto atGlass = key.keyPlacement(keyCamera, world);
+        check(!atGlass && keyRoom.interactCorridor(keyCamera) && key.holdingClassroomKey(),
+              "near-feet fallback cannot move a key through glass when facing down against the wall");
+        keyCamera = floorCamera;
+        const auto preview = key.keyPlacement(keyCamera, world);
+        check(preview && keyRoom.interactCorridor(keyCamera) && key.looseClassroomKey() &&
+                  key.key_.scale == preview->scale && key.key_.scale < before.scale &&
+                  glm::dot(key.key_.center - keyCamera.feet, glm::vec3(0, 0, -1)) > SchoolRoom::radius,
+              "steep downward release places the smaller key in front of the feet instead of blocking or dropping behind");
+        for (int frame = 0; frame < fps; ++frame)
+            keyRoom.update(keyCamera, {}, 1.f / fps);
+        keyCamera.face(key.key_.center);
+        check(keyRoom.interactCorridor(keyCamera), "recover the floor-scaled key without moving against a wall");
+        keyCamera.feet = {12.05f, 1.8f, -12.5f};
+        keyCamera.face(SchoolCorridor::classroomLock);
+        check(keyRoom.interactCorridor(keyCamera) && key.classroomDoorUnlocked_,
+              "the key resized on nearby floor unlocks only after being picked up again");
+    }
+
+    // Enlarge, shrink too far, recover, and test releases against the real walls and ceiling.
+    for (int fps : {30, 144}) {
+        for (const auto aim : {glm::vec4(11.5f, 1.8f, -12.5f, 0.f),
+                                glm::vec4(12.05f, 1.8f, -12.06f, 1.f),
+                                glm::vec4(8.f, 1.8f, -13.f, 2.f),
+                                glm::vec4(9.8f, 1.8f, -11.86f, 3.f)}) {
+            SchoolRoom keyRoom;
+            Camera keyCamera;
+            keyCamera.feet = {8.78f, 1.8f, -10.65f};
+            keyCamera.face(SchoolCorridor::classroomKeySpot);
+            check(keyRoom.interactCorridor(keyCamera), "prepare the release boundary fixture");
+            keyCamera.feet = glm::vec3(aim);
+            if (aim.w == 0)
+                keyCamera.face({11.5f, 3.45f, -16.6f});
+            else if (aim.w == 1)
+                keyCamera.face(SchoolCorridor::classroomLock);
+            else if (aim.w == 2)
+                keyCamera.face(keyCamera.eye() + glm::vec3(0, 1, -.12f));
+            else
+                keyCamera.face({9.8f, 3.45f, -10.f});
+            const auto world = keyRoom.collisionBoxes();
+            auto& key = keyRoom.corridor_;
+            const auto preview = key.keyPlacement(keyCamera, world);
+            const auto original = key.key_;
+            check(keyRoom.interactCorridor(keyCamera), "release input is safely consumed even when no placement fits");
+            if (!preview) {
+                check(key.holdingClassroomKey() && key.key_.center == original.center && key.key_.scale == original.scale,
+                      "a blocked release keeps the physical key and its size in hand");
+                const auto pose = key.carriedKeyPose(keyCamera, world);
+                const auto toward = pose.center - keyCamera.eye();
+                bool visible = pose.scale > 0;
+                for (const auto& solid : world) {
+                    const float hit = SchoolRoom::rayBox(keyCamera.eye(), glm::normalize(toward), solid);
+                    visible = visible && (hit < 0 || hit >= glm::length(toward));
+                }
+                check(visible, "the blocked held model stays on the camera side of thin glass");
+                continue;
+            }
+            check(!key.holdingClassroomKey() && key.key_.scale == preview->scale,
+                  "only release commits the preview scale to the physical key");
+            bool clear = true;
+            for (int frame = 0; frame < fps; ++frame) {
+                keyRoom.update(keyCamera, {}, 1.f / fps);
+                const auto center = key.key_.center;
+                const auto half = glm::vec3(.025f, .006f, .048f) * key.key_.scale;
+                for (const auto& solid : world)
+                    clear = clear && !(center.x + half.x > solid.min.x + .002f && center.x - half.x < solid.max.x - .002f &&
+                                       center.y + half.y > solid.min.y + .002f && center.y - half.y < solid.max.y - .002f &&
+                                       center.z + half.z > solid.min.z + .002f && center.z - half.z < solid.max.z - .002f);
+                clear = clear && center.y - half.y >= 1.8f && center.y + half.y < 5.1f;
+            }
+            check(clear && key.key_.scale == preview->scale,
+                  "every falling-key frame stays clear of floor, ceiling, glass and furniture at both rates");
+            if (aim.w == 0)
+                check(key.key_.scale > 2.f, "a distant release enlarges the key without a wheel or lock interaction");
+            if (aim.w == 1) {
+                check(key.key_.scale < .25f, "a closer release can still make the key too small");
+                keyCamera.face(key.key_.center);
+                check(keyRoom.interactCorridor(keyCamera), "recover the undersized key from the floor");
+                keyCamera.face(SchoolCorridor::classroomLock);
+                check(key.classroomAction(keyCamera, world) != SchoolCorridor::ClassroomAction::unlockDoor &&
+                          std::wstring_view(key.classroomKeyStatus(keyCamera, world)).find(L"작아요") != std::wstring_view::npos,
+                      "a recovered undersized key is still rejected by the lock");
+            }
+        }
+    }
+
+    // A visibly reduced key should work with ordinary imprecise aiming and an oblique approach.
+    for (float scale : {.25f, .30f, .70f, .75f, .20f, .80f, 1.f}) {
+        SchoolRoom keyRoom;
+        Camera keyCamera;
+        auto& key = keyRoom.corridor_;
+        keyCamera.feet = {8.78f, 1.8f, -10.65f};
+        keyCamera.face(SchoolCorridor::classroomKeySpot);
+        keyRoom.interactCorridor(keyCamera);
+        key.key_.scale = scale; // Isolate lock tolerance from the separately tested release solver.
+        const auto world = keyRoom.collisionBoxes();
+        const bool fits = scale >= .25f && scale <= .75f;
+        for (const auto feet : {glm::vec3(12.05f, 1.8f, -14.f), glm::vec3(11.1f, 1.8f, -12.3f)}) {
+            keyCamera.feet = feet;
+            keyCamera.face(SchoolCorridor::classroomLock + glm::vec3(-.18f, -.20f, 0));
+            check(key.keyAtLock(keyCamera, world) &&
+                      (key.classroomAction(keyCamera, world) == SchoolCorridor::ClassroomAction::unlockDoor) == fits,
+                  "wide lock aim and side approach accept reduced keys but reject original and extreme sizes");
+        }
+        keyCamera.face(SchoolCorridor::classroomLock + glm::vec3(-.8f, 0, 0));
+        check(!key.keyAtLock(keyCamera, world), "looking well away from the lock cannot unlock it");
+        keyCamera.feet = {12.8f, 1.8f, -12.5f};
+        keyCamera.face(SchoolCorridor::classroomLock);
+        check(!key.keyAtLock(keyCamera, world), "wider lock targeting still respects the adjacent wall");
+    }
+
+    room.reset();
+    camera = Camera();
+    camera.feet = {8.78f, 1.8f, -10.65f};
+    camera.face(SchoolCorridor::classroomKeySpot);
+    check(room.interactCorridor(camera), "prepare single held-item checks");
+    camera.feet = {-4.83f, 0, 3.8f};
+    camera.face(room.notebookCenter());
+    check(!room.toggleNotebook(camera), "the notebook cannot be picked up while holding the key");
+    camera.feet = {11.5f, 1.8f, -15.9f};
+    camera.face({11.5f, 3.45f, -16.6f});
+    check(room.interactCorridor(camera) && room.corridor_.looseClassroomKey(), "put the key down to free the hand");
+    tick(room, camera, {}, 120);
+    camera.feet = {-4.83f, 0, 3.8f};
+    camera.face(room.notebookCenter());
+    check(room.toggleNotebook(camera), "a dropped key no longer blocks notebook pickup");
+    camera.feet = {11.5f, 1.8f, room.classroomKeyCenter().z + 1.1f};
+    camera.face(room.classroomKeyCenter());
+    check(!room.interactCorridor(camera) && !room.corridor_.holdingClassroomKey(),
+          "a held notebook still prevents picking up the loose key");
 
     std::cout << checks << " checks, " << failures << " failures\n";
     return failures ? 1 : 0;

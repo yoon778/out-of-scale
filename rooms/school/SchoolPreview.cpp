@@ -161,44 +161,117 @@ void stageCapture(Application& state, const std::string& stage) {
         } else if (stage == "corridor-window-a") {
             state.camera.feet = {9.8f, 1.8f, -12.55f};
             state.camera.face({10.0f, 2.5f, -9.5f});
+        } else if (stage == "corridor-window-a-side" || stage == "corridor-window-a-high") {
+            state.camera.feet = {8.1f, stage == "corridor-window-a-high" ? 2.55f : 1.8f, -12.05f};
+            state.camera.face({11.8f, 3.4f, -9.4f});
         } else if (stage == "corridor-window-b") {
             state.camera.feet = {16.5f, 1.8f, -12.4f};
             state.camera.face({18.1f, 2.8f, -10.85f});
+        } else if (stage == "corridor-cupboard-context") {
+            state.camera.feet = {15.7f, 1.8f, -9.4f};
+            state.camera.face({18.65f, 2.95f, -11.48f});
         } else if (stage == "corridor-door-closed") {
             state.camera.feet = {18.7f, 1.8f, -10.1f};
-            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
         } else if (stage == "corridor-false-close") {
             state.camera.feet = {9.0f, 1.8f, -10.65f};
             state.camera.face({9.55f, 3.25f, -9.9f});
         } else if (stage == "corridor-class-key" || stage == "corridor-class-exit" ||
-                   stage == "corridor-class-unlocked") {
+                   stage == "corridor-class-unlocked" || stage.rfind("corridor-key-", 0) == 0) {
+            const bool unlocking = stage == "corridor-class-unlocked" || stage.rfind("corridor-key-unlock-", 0) == 0;
             state.camera.feet = {8.78f, 1.8f, -10.65f};
             state.camera.face(school::SchoolCorridor::classroomKeySpot);
             if (stage != "corridor-class-key") {
-                if (stage == "corridor-class-unlocked" && !state.room.interactCorridor(state.camera))
+                if (stage != "corridor-class-exit" && !state.room.interactCorridor(state.camera))
                     throw std::runtime_error("Capture could not find the classroom key");
                 state.camera.feet = {11.60f, 1.8f, -13.0f};
-                state.camera.face(school::SchoolCorridor::classroomRearDoor);
-                if (stage == "corridor-class-unlocked") {
+                state.camera.face(school::SchoolCorridor::classroomLock);
+                if (stage == "corridor-key-held") {
+                    state.camera.feet = {9.8f, 1.8f, -11.86f};
+                    state.camera.face({9.8f, 3.45f, -10.f});
+                } else if (stage == "corridor-key-far-pickup" || stage == "corridor-key-floor-preview" ||
+                           stage == "corridor-key-foot-preview") {
+                    state.camera.feet = {11.5f, 1.8f, -15.4f};
+                    state.camera.face({11.5f, 3.45f, -16.6f});
+                    if (!state.room.interactCorridor(state.camera))
+                        throw std::runtime_error("Capture could not release the key for distant pickup");
+                    state.camera.resetMotion();
+                    settle(state, 1.f);
+                    state.camera.feet = {11.5f, 1.8f, -12.9f};
+                    state.camera.face(state.room.classroomKeyCenter());
+                    if (stage != "corridor-key-far-pickup") {
+                        if (!state.room.interactCorridor(state.camera))
+                            throw std::runtime_error("Capture could not pick up the key from a distance");
+                        state.camera.pitch = glm::radians(stage == "corridor-key-foot-preview" ? -85.f : -75.f);
+                    }
+                } else if (stage == "corridor-key-fit" || unlocking ||
+                           stage == "corridor-key-small" || stage.rfind("corridor-key-drop", 0) == 0 ||
+                           stage == "corridor-key-falling" || stage == "corridor-key-enlarged") {
+                    state.camera.feet = {12.05f, 1.8f, -12.28f};
+                    state.camera.face(school::SchoolCorridor::classroomLock);
+                    if (stage == "corridor-key-enlarged") {
+                        state.camera.feet = {11.5f, 1.8f, -12.5f};
+                        state.camera.face({11.5f, 3.45f, -16.6f});
+                    }
+                    state.camera.resetMotion();
+                    if (stage != "corridor-key-drop-preview") {
+                        if (!state.room.interactCorridor(state.camera))
+                            throw std::runtime_error("Capture could not release the key");
+                        settle(state, stage == "corridor-key-falling" ? .20f : 1.f);
+                        if (stage == "corridor-key-small") {
+                            state.camera.feet = {11.5f, 1.8f, -15.6f};
+                            state.camera.face(state.room.classroomKeyCenter());
+                            if (!state.room.interactCorridor(state.camera))
+                                throw std::runtime_error("Capture could not recover the key for further shrinking");
+                            state.camera.pitch = glm::radians(-85.f);
+                            if (!state.room.interactCorridor(state.camera))
+                                throw std::runtime_error("Capture could not release the undersized key");
+                            state.camera.resetMotion();
+                            settle(state, 1.f);
+                        }
+                        state.camera.face(state.room.classroomKeyCenter());
+                        if (stage == "corridor-key-fit" || stage == "corridor-key-small" || unlocking) {
+                            if (!state.room.interactCorridor(state.camera))
+                                throw std::runtime_error("Capture could not recover the released key");
+                            if (stage == "corridor-key-small")
+                                state.camera.feet = {12.05f, 1.8f, -12.28f};
+                            state.camera.face(school::SchoolCorridor::classroomLock);
+                        }
+                    }
+                }
+                state.camera.resetMotion();
+                if (unlocking) {
                     if (!state.room.interactCorridor(state.camera))
                         throw std::runtime_error("Capture could not unlock the classroom rear door");
-                    settle(state);
+                    settle(state, stage == "corridor-key-unlock-insert" ? .08f :
+                                  stage == "corridor-key-unlock-turn" ? .34f :
+                                  stage == "corridor-key-unlock-release" ? .66f : 1.5f);
                 }
             }
-        } else if (stage == "corridor-door-open" || stage.rfind("corridor-illusion-", 0) == 0 ||
+        } else if (stage.rfind("corridor-door-", 0) == 0 || stage.rfind("corridor-illusion-", 0) == 0 ||
                    stage.rfind("corridor-bridge-", 0) == 0 || stage.rfind("corridor-stairwell", 0) == 0) {
             state.camera.feet = {17.0f, 1.8f, -10.9f};
-            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(.8f, 1.2f, 0));
+            state.camera.face(school::SchoolCorridor::hinge + glm::vec3(-.8f, 1.2f, 0));
             if (!state.room.toggleCupboard(state.camera))
                 throw std::runtime_error("Capture cannot open cupboard");
-            settle(state);
-            if (stage != "corridor-door-open") {
+            settle(state, stage == "corridor-door-half-open" ? .45f : 2.f);
+            if (stage == "corridor-door-open" || stage == "corridor-door-half-open") {
+                state.camera.feet = {17.0f, 1.8f, -9.9f};
+                state.camera.face(school::SchoolCorridor::hinge + glm::vec3(-.3f, 1.2f, .6f));
+            } else if (stage == "corridor-door-open-exterior") {
+                state.camera.feet = {20.0f, 1.8f, -9.2f};
+                state.camera.face(school::SchoolCorridor::hinge + glm::vec3(0, 1.2f, .6f));
+            } else {
                 state.camera.feet = school::SchoolCorridor::illusionEye - glm::vec3(0, 1.65f, 0);
                 state.camera.resetMotion();
                 if (stage == "corridor-illusion-wrong")
                     state.camera.feet.z += 1.1f;
                 else if (stage == "corridor-illusion-partial")
-                    state.camera.feet.z += .45f;
+                    state.camera.feet.z += .75f;
+                else if (stage == "corridor-illusion-at-handle")
+                    state.camera.feet = {18.6f, 1.8f, -10.9f};
+                else if (stage == "corridor-illusion-return")
+                    state.camera.feet += glm::vec3(.8f, 0, .3f);
                 state.camera.face(school::SchoolCorridor::illusionFocus);
                 if (stage == "corridor-illusion-forming") {
                     settle(state, school::SchoolCorridor::recognitionDuration + school::SchoolCorridor::formationDuration * .5f);
@@ -210,7 +283,8 @@ void stageCapture(Application& state, const std::string& stage) {
                     if (state.room.corridorDoorFormation() < 1)
                         throw std::runtime_error("Capture could not form the sliding door");
                 } else if (stage != "corridor-illusion-wrong" && stage != "corridor-illusion-partial" &&
-                           stage != "corridor-illusion-aligned") {
+                           stage != "corridor-illusion-aligned" && stage != "corridor-illusion-at-handle" &&
+                           stage != "corridor-illusion-return") {
                     settle(state, school::SchoolCorridor::recognitionDuration + school::SchoolCorridor::formationDuration +
                                       school::SchoolCorridor::openingDuration + .05f);
                     if (!state.room.corridorDoorReady())
@@ -270,7 +344,9 @@ void stageCapture(Application& state, const std::string& stage) {
         state.camera.yaw = glm::radians(stage == "notebook-blocked-wall" ? -90.f : -180.f);
         state.camera.pitch = 0;
         state.room.update(state.camera, {}, 1.f / 120);
-    } else if (stage == "notebook-ceiling-aim" || stage == "notebook-ceiling-drop") {
+    } else if (stage == "notebook-ceiling-aim" || stage == "notebook-ceiling-drop" ||
+               stage == "notebook-ceiling-steep-aim" || stage == "notebook-ceiling-steep-release" ||
+               stage == "notebook-ceiling-recovered") {
         state.camera.feet = {-4.83f, 0, 3.8f};
         state.camera.face(state.room.notebookCenter());
         if (!state.room.toggleNotebook(state.camera))
@@ -278,6 +354,21 @@ void stageCapture(Application& state, const std::string& stage) {
         state.camera.feet = {4.8f, 0, 2.4f};
         state.camera.yaw = 0;
         state.camera.pitch = .65f;
+        if (stage == "notebook-ceiling-steep-aim" || stage == "notebook-ceiling-steep-release" ||
+            stage == "notebook-ceiling-recovered") {
+            state.camera.feet.x = 3.8f;
+            state.camera.pitch = 1.45f;
+            if (stage != "notebook-ceiling-steep-aim") {
+                state.room.toggleNotebook(state.camera);
+                settle(state, .25f);
+            }
+            if (stage == "notebook-ceiling-recovered") {
+                state.camera.face({3.8f, 0, 1.1f});
+                state.room.toggleNotebook(state.camera);
+                settle(state);
+                state.camera.face(state.room.notebookCenter());
+            }
+        }
         if (stage == "notebook-ceiling-drop") {
             state.room.toggleNotebook(state.camera);
             settle(state);
@@ -327,7 +418,7 @@ void stageCapture(Application& state, const std::string& stage) {
             throw std::runtime_error("Capture could not adjust the approximate projection");
         state.room.rotateProjector(glm::radians(2.f), glm::radians(1.f));
         state.room.toggleProjector(state.camera);
-        state.camera.feet = {4.7f, 0, 4.f};
+        state.camera.feet = {4.25f, 0, 2.8f};
         state.camera.face(school::SchoolRoom::alignmentFocus);
         state.room.update(state.camera, {}, 1.f / 120);
         if (!state.room.projectorAligned())
@@ -493,6 +584,9 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "notebook-blocked-rear",
                                         "notebook-ceiling-aim",
                                         "notebook-ceiling-drop",
+                                        "notebook-ceiling-steep-aim",
+                                        "notebook-ceiling-steep-release",
+                                        "notebook-ceiling-recovered",
                                         "notebook-on-desk",
                                         "pause-controls",
                                         "notebook-at-stand",
@@ -523,10 +617,31 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
                                         "corridor-class-key",
                                         "corridor-class-exit",
                                         "corridor-class-unlocked",
+                                        "corridor-key-unlock-insert",
+                                        "corridor-key-unlock-turn",
+                                        "corridor-key-unlock-release",
+                                        "corridor-key-held",
+                                        "corridor-key-large",
+                                        "corridor-key-fit",
+                                        "corridor-key-small",
+                                        "corridor-key-drop-preview",
+                                        "corridor-key-falling",
+                                        "corridor-key-dropped",
+                                        "corridor-key-enlarged",
+                                        "corridor-key-far-pickup",
+                                        "corridor-key-floor-preview",
+                                        "corridor-key-foot-preview",
                                         "corridor-window-a",
+                                        "corridor-window-a-side",
+                                        "corridor-window-a-high",
                                         "corridor-window-b",
                                         "corridor-door-open",
+                                        "corridor-door-half-open",
+                                        "corridor-door-open-exterior",
                                         "corridor-door-closed",
+                                        "corridor-cupboard-context",
+                                        "corridor-illusion-at-handle",
+                                        "corridor-illusion-return",
                                         "corridor-stairwell",
                                         "corridor-illusion-wrong",
                                         "corridor-illusion-partial",

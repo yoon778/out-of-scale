@@ -72,8 +72,11 @@ class SchoolRoom {
     bool canUseCupboard(const Camera& camera) const { return corridor_.canInteract(camera); }
     bool toggleCupboard(const Camera& camera) { return corridor_.interact(camera); }
     bool interactCorridor(const Camera& camera) {
-        return corridor_.interactClassroom(camera) || toggleCupboard(camera);
+        if (notebookRatio_ > 0)
+            return false;
+        return corridor_.interactClassroom(camera, collisionBoxes()) || toggleCupboard(camera);
     }
+    glm::vec3 classroomKeyCenter() const { return corridor_.classroomKeyCenter(); }
     bool cupboardOpen() const { return corridor_.doorOpen(); }
     float cupboardAngle() const { return corridor_.doorAngle(); }
     bool corridorDoorReady() const { return corridor_.doorwayReady(); }
@@ -101,7 +104,7 @@ class SchoolRoom {
 
   private:
     friend int runTests();
-    static constexpr float stairAlignmentThreshold = .85f;
+    static constexpr float stairAlignmentThreshold = .91f;
     static constexpr float projectorAimToleranceDegrees = 4.f;
     struct Chalk {
         glm::vec3 projectedA, projectedB, originalA, originalB;

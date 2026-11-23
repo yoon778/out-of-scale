@@ -8,18 +8,61 @@
 namespace school {
 namespace {
 constexpr float halfPi = 1.570796327f;
-constexpr float doorAlignmentThreshold = .80f, bridgeAlignmentThreshold = .75f;
+// Require a closer silhouette match while keeping a small, continuous viewing region.
+constexpr float doorAlignmentThreshold = .88f, bridgeAlignmentThreshold = .85f;
 constexpr float cupboardAngleTolerance = .025f;
 constexpr float falseHallWallX = 9.65f;
 constexpr glm::vec3 classroomDoorSize{1.25f, 2.286f, .072f};
 constexpr glm::vec3 brass{.67f, .53f, .30f};
+constexpr float minFittedKeyScale = .25f, maxFittedKeyScale = .75f;
+constexpr glm::vec3 keyHalfSize{.025f, .006f, .048f};
+constexpr float minKeyScale = .20f, maxKeyScale = 5.5f, keyRestClearance = .006f;
+constexpr float looseKeyReach = 8.f;
+constexpr float keyInsertDuration = .18f, keyTurnEnd = .46f, lockReleaseEnd = .64f, doorUnlockDelay = .68f;
 constexpr float gapNear = -12.0f, gapFar = -15.65f, stairShift = -3.65f;
 constexpr float bridgeWidth = 1.00f;
 constexpr float stairStart = -12.72f + stairShift, stairRun = .6f, stairRise = .2f;
 const glm::vec3 plaster{0.86f, 0.84f, 0.75f}, paint{0.45f, 0.57f, 0.49f};
 const glm::vec3 wood{0.54f, 0.36f, 0.20f}, metal{0.31f, 0.38f, 0.36f};
+glm::vec3 cupboardAlong(float angle) {
+    return {-std::cos(angle), 0, std::sin(angle)};
+}
+glm::vec3 cupboardOutside(float angle) {
+    return {std::sin(angle), 0, std::cos(angle)};
+}
 Box box(glm::vec3 center, glm::vec3 size) {
     return {center - size * .5f, center + size * .5f};
+}
+bool keyFits(float scale) {
+    return scale >= minFittedKeyScale && scale <= maxFittedKeyScale;
+}
+Box keyBounds(const perspective::Pose& pose) {
+    return {pose.center - keyHalfSize * pose.scale, pose.center + keyHalfSize * pose.scale};
+}
+bool overlapsXZ(const Box& a, const Box& b) {
+    return a.min.x < b.max.x && a.max.x > b.min.x && a.min.z < b.max.z && a.max.z > b.min.z;
+}
+float keySupport(const Box& area, const std::vector<Box>& world) {
+    // The first classroom uses an implicit floor, like the notebook solver.
+    const bool aboveClassroom = area.min.x >= -6.5f && area.max.x <= 6.5f &&
+                                area.min.z >= -4.95f && area.max.z <= 9.f;
+    float support = aboveClassroom ? 0.f : -std::numeric_limits<float>::infinity();
+    for (const auto& solid : world)
+        if (solid.max.y <= area.min.y + .002f && overlapsXZ(solid, area))
+            support = std::max(support, solid.max.y);
+    return support;
+}
+void drawKey(Renderer& r, glm::vec3 center, glm::vec3 right, glm::vec3 up, float scale, glm::vec3 color = brass) {
+    auto at = [&](float x, float y) { return center + (right * x + up * y) * scale; };
+    constexpr float circle = 6.283185307f;
+    for (int i = 0; i < 12; ++i) {
+        const float a = i * circle / 12, b = (i + 1) * circle / 12;
+        r.line(at(std::cos(a) * .018f, .026f + std::sin(a) * .018f),
+               at(std::cos(b) * .018f, .026f + std::sin(b) * .018f), .006f * scale, color);
+    }
+    r.line(at(0, .011f), at(0, -.044f), .010f * scale, color);
+    r.line(at(0, -.030f), at(.019f, -.030f), .009f * scale, color);
+    r.line(at(0, -.041f), at(.015f, -.041f), .007f * scale, color);
 }
 bool touches(const Camera& camera, const Box& b) {
     const auto p = camera.feet;
@@ -61,7 +104,9 @@ void SchoolCorridor::reset() {
     angularSpeed_ = 0;
     targetOpen_ = false;
     classroomKeyTaken_ = classroomDoorUnlocked_ = false;
-    classroomDoorOpening_ = 0;
+    keyRatio_ = keyFallSpeed_ = 0;
+    key_ = {classroomKeySpot, 1.f};
+    classroomDoorOpening_ = classroomUnlockTime_ = 0;
     recognition_ = formation_ = opening_ = 0;
     forming_ = bridgeForming_ = false;
     bridgeHeld_ = bridgeFormation_ = 0;
@@ -147,7 +192,7 @@ void SchoolCorridor::build() {
     wall(12.8f, 14.1f, -11.6f, 2.3f);
     wall(14.1f, 14.7f, -11.6f);
     wall(17.8f, 18.04f, -11.6f);
-    wall(18.04f, 19.36f, -11.6f, 2.2f);
+    wall(18.04f, 19.36f, -11.6f, doorHeight + .04f);
     wall(19.36f, 21.9f, -11.6f);
     for (const auto opening : {glm::vec2(5.6f, 6.9f), glm::vec2(11.05f, 12.30f), glm::vec2(12.8f, 14.1f)}) {
         floor(opening.x, opening.y, -11.7f, -11.5f);
@@ -157,9 +202,11 @@ void SchoolCorridor::build() {
     for (const auto window : {Window{7.6f, 11.05f}, Window{14.7f, 17.8f}}) {
         wall(window.start, window.end, -11.6f, 0, 1.05f);
         wall(window.start, window.end, -11.6f, 2.4f);
-        // Transparent closed panes stop jumping through the observation window.
+        // 2-1 uses opaque privacy glass so its window cannot reveal the real hall behind the painted wall.
+        // 2-2 keeps its clear observation window for the later cupboard puzzle.
+        const bool privacyGlass = window.start < falseHallWallX;
         solid({(window.start + window.end) * .5f, 3.525f, -11.6f}, {window.end - window.start, 1.35f, .035f},
-              plaster, false);
+              {.69f, .76f, .72f}, privacyGlass);
         for (float x = window.start; x < window.end + .01f; x += 1.025f)
             detail({x, 3.525f, -11.6f}, {.055f, 1.4f, .10f}, wood);
         for (float y : {2.85f, 4.2f})
@@ -208,13 +255,18 @@ void SchoolCorridor::build() {
     deskStack(10.40f, -10.94f);
     deskStack(12.3f, -8.88f);
     deskStack(15.0f, -8.88f);
-    // The cupboard leaf carries the near half of an anamorphic school doorway.
-    solid({18.70f, 2.85f, -11.94f}, {1.35f, 2.1f, .66f}, paint, false);
-    detail({18.70f, 2.85f, -12.25f}, {1.35f, 2.1f, .08f}, paint);
+    // A normal cupboard and the far wall supply separate everyday edges for the doorway.
+    const float cupboardCenterY = floorHeight + doorHeight * .5f;
+    solid({18.70f, cupboardCenterY, -11.94f}, {1.35f, doorHeight, .66f}, paint, false);
+    detail({18.70f, cupboardCenterY, -12.25f}, {1.35f, doorHeight, .08f}, paint);
     for (float x : {18.04f, 19.36f})
-        detail({x, 2.85f, -11.94f}, {.08f, 2.1f, .66f}, paint);
-    for (float y : {1.85f, 3.9f})
+        detail({x, cupboardCenterY, -11.94f}, {.08f, doorHeight, .66f}, paint);
+    for (float y : {floorHeight + .05f, floorHeight + doorHeight})
         detail({18.70f, y, -11.94f}, {1.35f, .08f, .66f}, paint);
+    // A classroom notice ledge belongs to the return route, away from the cupboard handle.
+    solid({14.95f, 2.74f, -11.40f}, {1.12f, .055f, .23f}, wood);
+    detail({14.83f, 2.795f, -11.40f}, {.33f, .045f, .19f}, plaster);
+    detail({15.19f, 2.80f, -11.40f}, {.25f, .055f, .16f}, paint * .8f);
     // A real partition, with a doorway-sized section that only becomes a passage on materialization.
     for (float z : {-11.1f, -8.7f}) {
         solid({20.60f, 3.45f, z}, {.20f, 3.3f, .80f}, plaster);
@@ -287,9 +339,11 @@ void SchoolCorridor::buildDrawing() {
         float y0, y1, z0, z1;
         glm::vec3 color;
         bool frame;
+        DoorMaterial material;
     };
     std::vector<Rectangle> rectangles;
-    auto rectangle = [&](float y0, float y1, float z0, float z1, glm::vec3 color, bool frame = false) {
+    auto rectangle = [&](float y0, float y1, float z0, float z1, glm::vec3 color, bool frame = false,
+                         DoorMaterial material = DoorMaterial::infill) {
         // Subtract overpainted regions before triangulation. Coplanar ink must not fight for depth.
         std::vector<Rectangle> uncovered;
         for (const auto& old : rectangles) {
@@ -301,7 +355,7 @@ void SchoolCorridor::buildDrawing() {
             }
             auto part = [&](float a, float b, float c, float d) {
                 if (b > a && d > c)
-                    uncovered.push_back({a, b, c, d, old.color, old.frame});
+                    uncovered.push_back({a, b, c, d, old.color, old.frame, old.material});
             };
             part(old.y0, ya, old.z0, old.z1);
             part(yb, old.y1, old.z0, old.z1);
@@ -309,28 +363,30 @@ void SchoolCorridor::buildDrawing() {
             part(ya, yb, zb, old.z1);
         }
         rectangles = std::move(uncovered);
-        rectangles.push_back({y0, y1, z0, z1, color, frame});
+        rectangles.push_back({y0, y1, z0, z1, color, frame, material});
     };
     const glm::vec3 frame{.43f, .32f, .22f}, timber{.62f, .47f, .30f}, glass{.53f, .66f, .63f};
-    rectangle(1.82f, 4.2f, -10.75f, -10.65f, frame, true);
-    rectangle(1.82f, 4.2f, -9.15f, -9.05f, frame, true);
-    rectangle(4.10f, 4.2f, -10.65f, -9.15f, frame, true);
-    rectangle(1.82f, 1.87f, -10.65f, -9.15f, frame, true);
+    const float nearX = hinge.x - .042f, farX = 20.478f, x = illusionFocus.x;
+    const float nearScale = (nearX - illusionEye.x) / (x - illusionEye.x);
+    const float split = illusionEye.z + (hinge.z + doorWidth - illusionEye.z) / nearScale;
+    rectangle(1.82f, 4.2f, -10.75f, -10.65f, frame, true, DoorMaterial::timber);
+    rectangle(1.82f, 4.2f, -9.15f, -9.05f, frame, true, DoorMaterial::timber);
+    rectangle(4.10f, 4.2f, -10.65f, -9.15f, frame, true, DoorMaterial::timber);
+    rectangle(1.82f, 1.87f, -10.65f, -9.15f, frame, true, DoorMaterial::timber);
     rectangle(1.87f, 4.10f, -10.65f, -9.15f, timber);
-    rectangle(2.81f, 4.01f, -10.55f, -9.25f, frame);
-    rectangle(2.86f, 3.96f, -10.50f, -9.30f, glass);
-    // Wired frosted glass and a recessed lower panel are ordinary school fittings, not symbols.
-    for (float z = -10.40f; z < -9.30f; z += .16f)
-        rectangle(2.86f, 3.96f, z, z + .006f, glass * .90f);
-    for (float y = 2.94f; y < 3.96f; y += .16f)
-        rectangle(y, y + .006f, -10.50f, -9.30f, glass * .90f);
+    rectangle(2.81f, 4.01f, -10.55f, -9.25f, frame, false, DoorMaterial::timber);
+    rectangle(2.86f, 3.96f, -10.50f, -9.30f, glass, false, DoorMaterial::paper);
+    // Cleaning/check sheets read as ordinary notices nearby. Their rows become wired glass on formation.
+    for (float z = -10.30f; z < -9.30f; z += .20f)
+        rectangle(2.86f, 3.72f, z, z + .006f, glass * .90f, false, DoorMaterial::ruling);
+    for (float y = 3.04f; y < 3.73f; y += .18f)
+        rectangle(y, y + .006f, -10.50f, -9.30f, glass * .90f, false, DoorMaterial::ruling);
+    // Close both sheets locally: neither should look like half of a missing drawing.
+    rectangle(2.81f, 4.01f, split - .025f, split + .025f, frame, false, DoorMaterial::timber);
     rectangle(2.03f, 2.72f, -10.55f, -9.25f, frame * 1.2f);
     rectangle(2.07f, 2.68f, -10.51f, -9.29f, timber * .91f);
     rectangle(2.51f, 2.77f, -9.39f, -9.30f, {.23f, .29f, .28f});
     rectangle(2.55f, 2.73f, -9.37f, -9.32f, {.70f, .74f, .71f});
-    const float nearX = hinge.x - .042f, farX = 20.478f, x = illusionFocus.x;
-    const float nearScale = (nearX - illusionEye.x) / (x - illusionEye.x);
-    const float split = illusionEye.z + (hinge.z + doorWidth - illusionEye.z) / nearScale;
     for (const auto& rect : rectangles)
         for (bool leaf : {true, false}) {
             const float a = leaf ? rect.z0 : std::max(rect.z0, split);
@@ -341,7 +397,8 @@ void SchoolCorridor::buildDrawing() {
                            {},
                            rect.color,
                            leaf,
-                           rect.frame};
+                           rect.frame,
+                           rect.material};
             const float scale = ((leaf ? nearX : farX) - illusionEye.x) / (x - illusionEye.x);
             for (int i = 0; i < 4; ++i)
                 patch.receiver[i] = illusionEye + (patch.target[i] - illusionEye) * scale;
@@ -353,8 +410,10 @@ glm::vec3 SchoolCorridor::paintedPoint(const InkPatch& patch, int corner) const 
     if (!patch.onLeaf)
         return p;
     const float along = p.z - hinge.z, out = hinge.x - p.x;
-    return hinge + glm::vec3(along * std::cos(angle_) - out * std::sin(angle_), p.y - hinge.y,
-                             along * std::sin(angle_) + out * std::cos(angle_));
+    // The right-hinged leaf extends left when shut. Its inner face points into the cabinet,
+    // then towards the observation route when open; the solid leaf hides it naturally when shut.
+    return hinge + cupboardAlong(angle_) * along - cupboardOutside(angle_) * out +
+           glm::vec3(0, p.y - hinge.y, 0);
 }
 std::optional<float> SchoolCorridor::doorViewAlignment(const Camera& camera) const {
     const auto eye = camera.eye();
@@ -484,7 +543,39 @@ void SchoolCorridor::drawClassroomLock(Renderer& r) const {
         r.box(center + glm::vec3(0, y, -.054f), {.84f, .022f, .012f}, wood * .72f);
     for (float z : {-.049f, .049f})
         r.box(center + glm::vec3(.45f, -.01f, z), {.075f, .22f, .024f}, metal);
-    r.box(center + glm::vec3(.45f, -.15f, -.064f), {.042f, .050f, .025f}, brass * .84f);
+    const auto lock = classroomLock + center - classroomRearDoor;
+    r.box(lock + glm::vec3(0, .014f, .028f), {.11f, .14f, .025f}, metal);
+    r.box(lock + glm::vec3(0, .015f, .010f), {.073f, .085f, .033f}, brass * .84f);
+    const float turn = halfPi * glm::smoothstep(keyInsertDuration, keyTurnEnd, classroomUnlockTime_);
+    const glm::vec3 keyRight{-std::cos(turn), std::sin(turn), 0}, keyUp{std::sin(turn), std::cos(turn), 0};
+    // A small metal collar makes the keyhole read as part of the lock, rather than a painted mark.
+    for (int i = 0; i < 12; ++i) {
+        const float a = i * halfPi / 3, b = (i + 1) * halfPi / 3;
+        r.line(lock + glm::vec3(std::cos(a) * .014f, std::sin(a) * .014f, -.009f),
+               lock + glm::vec3(std::cos(b) * .014f, std::sin(b) * .014f, -.009f), .003f, brass * 1.15f);
+    }
+    r.quad(lock - glm::vec3(0, 0, .009f), keyRight * .006f, keyUp * .010f, {.10f, .12f, .10f});
+    // The shackle lifts after the key turns. One leg stays inside the body; the other clears it.
+    const float lift = .028f * glm::smoothstep(keyTurnEnd, lockReleaseEnd, classroomUnlockTime_);
+    const auto shackle = lock + glm::vec3(0, lift, -.008f);
+    const glm::vec3 steel{.61f, .64f, .59f};
+    const float swing = .40f * glm::smoothstep(lockReleaseEnd, .82f, classroomUnlockTime_);
+    auto shacklePoint = [&](float x, float y) {
+        return shackle + glm::vec3(-.024f + (x + .024f) * std::cos(swing), y,
+                                   -(x + .024f) * std::sin(swing));
+    };
+    r.line(shacklePoint(-.024f, .058f - lift), shacklePoint(-.024f, .074f), .006f, steel);
+    for (int i = 0; i < 8; ++i) {
+        const float a = i * halfPi / 4, b = (i + 1) * halfPi / 4;
+        r.line(shacklePoint(std::cos(a) * .024f, .074f + std::sin(a) * .024f),
+               shacklePoint(std::cos(b) * .024f, .074f + std::sin(b) * .024f), .006f, steel);
+    }
+    r.line(shacklePoint(.024f, .074f), shacklePoint(.024f, std::max(.058f - lift, .045f)), .006f, steel);
+    if (classroomDoorUnlocked_) {
+        const float insertion = glm::smoothstep(0.f, keyInsertDuration, classroomUnlockTime_);
+        const auto pivot = lock + glm::vec3(0, 0, glm::mix(-.075f, -.019f, insertion));
+        drawKey(r, pivot + keyUp * (.041f * key_.scale), keyRight, keyUp, key_.scale);
+    }
     const auto notice = center + glm::vec3(-.06f, -.13f, -.041f);
     r.box(notice, {.46f, .25f, .010f}, {.84f, .82f, .71f});
     r.label(L"뒷문 열쇠", notice + glm::vec3(0, .052f, -.006f), {-.16f, 0, 0}, {0, .038f, 0}, metal);
@@ -493,51 +584,273 @@ void SchoolCorridor::drawClassroomLock(Renderer& r) const {
     const auto key = classroomKeySpot;
     const float hookLength = falseHallWallX - .10f - key.x;
     r.box(key + glm::vec3(hookLength * .5f, .041f, 0), {hookLength, .009f, .010f}, metal);
+    if (looseClassroomKey())
+        drawKey(r, key_.center, {1, 0, 0}, {0, 0, -1}, key_.scale);
     if (classroomKeyTaken_ || !r.visible(key, {.05f, .06f, .015f}))
         return;
-    // The key reads edge-on from the corridor entrance and face-on from the side.
-    constexpr float fullCircle = 6.283185307f;
-    for (int i = 0; i < 10; ++i) {
-        const float a = i * fullCircle / 10, b = (i + 1) * fullCircle / 10;
-        const auto ring = key + glm::vec3(0, .026f, 0);
-        r.line(ring + glm::vec3(std::cos(a), std::sin(a), 0) * .018f,
-               ring + glm::vec3(std::cos(b), std::sin(b), 0) * .018f, .006f, brass);
-    }
-    r.box(key + glm::vec3(0, -.015f, 0), {.011f, .052f, .009f}, brass);
-    r.box(key + glm::vec3(.009f, -.030f, 0), {.023f, .009f, .009f}, brass);
-    r.box(key + glm::vec3(.007f, -.041f, 0), {.019f, .007f, .009f}, brass);
+    // The same key mesh is used on the hook, in the hand and in the lock.
+    drawKey(r, key, {1, 0, 0}, {0, 1, 0}, 1.f);
 }
-SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& camera) const {
+std::optional<perspective::Pose> SchoolCorridor::keyAtLock(const Camera& camera, const std::vector<Box>& world) const {
+    if (!holdingClassroomKey() || camera.eye().z >= classroomLock.z - .04f)
+        return std::nullopt;
     const auto eye = camera.eye(), direction = camera.direction();
-    auto reaches = [&](const Box& target, float range) {
-        const float distance = SchoolRoom::rayBox(eye, direction, target);
-        if (distance < 0 || distance > range)
+    const float aimed = SchoolRoom::rayBox(eye, direction, box(classroomLock, {.50f, .60f, .16f}));
+    if (aimed < 0 || aimed > 2.4f)
+        return std::nullopt;
+    // Trace to the visible keyhole face, so the lock's own body does not hide it at an angle.
+    const auto toward = classroomLock + glm::vec3(0, 0, -.010f) - eye;
+    const float distance = glm::length(toward);
+    for (const auto& solid : world) {
+        const float hit = SchoolRoom::rayBox(eye, toward / distance, solid);
+        if (hit >= 0 && hit < distance - .002f)
+            return std::nullopt;
+    }
+    // Lock fit uses the size committed on release. Approaching the lock cannot resize the key.
+    return perspective::Pose{classroomLock + glm::vec3(0, .041f * key_.scale, -.075f), key_.scale};
+}
+std::optional<perspective::Pose> SchoolCorridor::keyPlacement(const Camera& camera, const std::vector<Box>& world) const {
+    if (!holdingClassroomKey())
+        return std::nullopt;
+    const auto eye = camera.eye(), direction = camera.direction();
+    auto fits = [&](const perspective::Pose& pose) {
+        if (pose.scale < minKeyScale || pose.scale > maxKeyScale + .001f)
             return false;
-        return std::none_of(solids_.begin(), solids_.end(), [&](const Solid& solid) {
-            const float hit = SchoolRoom::rayBox(eye, direction, box(solid.center, solid.size));
-            return hit >= 0 && hit < distance;
+        const auto area = keyBounds(pose);
+        const float support = keySupport(area, world);
+        if (!std::isfinite(support) || support > camera.feet.y + 1.30f ||
+            area.min.y < support + keyRestClearance - .002f)
+            return false;
+        const float dx = camera.feet.x - std::clamp(camera.feet.x, area.min.x, area.max.x);
+        const float dz = camera.feet.z - std::clamp(camera.feet.z, area.min.z, area.max.z);
+        if (dx * dx + dz * dz < std::pow(SchoolRoom::radius + .06f, 2) &&
+            area.min.y < camera.feet.y + SchoolRoom::bodyHeight && area.max.y > camera.feet.y)
+            return false;
+        const auto toward = pose.center - eye;
+        const float distance = glm::length(toward);
+        if (distance < .06f)
+            return false;
+        return std::none_of(world.begin(), world.end(), [&](const Box& solid) {
+            const float hit = SchoolRoom::rayBox(eye, toward / distance, solid);
+            return (hit >= 0 && hit < distance - .002f) ||
+                   (overlapsXZ(area, solid) && area.min.y < solid.max.y - .002f && area.max.y > solid.min.y + .002f);
         });
     };
-    if (!classroomKeyTaken_ && reaches(box(classroomKeySpot, {.075f, .11f, .055f}), 1.28f))
+    const float range = std::min(8.f, maxKeyScale / keyRatio_);
+    float surfaceDepth = range;
+    const Box* surface = nullptr;
+    for (const auto& solid : world) {
+        const float hit = SchoolRoom::rayBox(eye, direction, solid);
+        if (hit > .001f && hit < surfaceDepth) {
+            surfaceDepth = hit;
+            surface = &solid;
+        }
+    }
+    if (surface && direction.y < 0 &&
+        std::abs((eye + direction * surfaceDepth).y - surface->max.y) < .008f) {
+        const auto top = perspective::onFloor(eye, direction, keyRatio_, keyHalfSize.y,
+                                              surface->max.y + keyRestClearance);
+        if (top && glm::dot(top->center - eye, direction) <= range && fits(*top))
+            return top;
+    }
+    // The notebook's continuous growing-body sweep, with the flat key's own dimensions.
+    struct DepthRange {
+        float first, last;
+        bool below(float origin, float slope, float limit) {
+            if (slope > 0)
+                last = std::min(last, (limit - origin) / slope);
+            else if (slope < 0)
+                first = std::max(first, (limit - origin) / slope);
+            else if (origin > limit)
+                return false;
+            return first <= last;
+        }
+    };
+    const auto lower = direction - keyHalfSize * keyRatio_;
+    const auto upper = direction + keyHalfSize * keyRatio_;
+    DepthRange free{0, range};
+    free.below(-eye.y, -lower.y, -keyRestClearance);
+    for (const auto& solid : world) {
+        DepthRange contact{0, free.last};
+        bool hits = true;
+        for (int axis = 0; axis < 3 && hits; ++axis)
+            hits = contact.below(eye[axis], lower[axis], solid.max[axis] + .001f) &&
+                   contact.below(-eye[axis], -upper[axis], -solid.min[axis] + .001f);
+        if (hits)
+            free.last = std::min(free.last, contact.first);
+    }
+    const perspective::Pose aimed{eye + direction * free.last, keyRatio_ * free.last};
+    if (free.last >= free.first && fits(aimed))
+        return aimed;
+    // MilitaryRoom::dropNearFeet keeps downward releases usable outside the player cylinder.
+    // Keep this fallback in front, below the gaze, and visible through the school's full world.
+    if (direction.y < -.65f) {
+        const glm::vec3 forward{std::sin(camera.yaw), 0, -std::cos(camera.yaw)};
+        const float eyeHeight = eye.y - camera.feet.y;
+        const float preferred = std::clamp(keyRatio_ * eyeHeight / (1.f + keyRatio_ * keyHalfSize.y),
+                                            minKeyScale, maxKeyScale);
+        auto nearFeet = [&](float scale) -> std::optional<perspective::Pose> {
+            const float distance = SchoolRoom::radius + .065f + keyHalfSize.z * scale;
+            const auto center = camera.feet + forward * distance +
+                                glm::vec3(0, keyHalfSize.y * scale + keyRestClearance, 0);
+            const perspective::Pose pose{center, scale};
+            return fits(pose) ? std::optional{pose} : std::nullopt;
+        };
+        if (const auto pose = nearFeet(preferred))
+            return pose;
+        auto best = nearFeet(minKeyScale);
+        if (best) {
+            float low = minKeyScale, high = preferred;
+            for (int i = 0; i < 10; ++i) {
+                const float scale = (low + high) * .5f;
+                if (const auto pose = nearFeet(scale)) {
+                    best = pose;
+                    low = scale;
+                } else
+                    high = scale;
+            }
+            return best;
+        }
+    }
+    // No hidden fallback behind a wall or above the ceiling.
+    return std::nullopt;
+}
+perspective::Pose SchoolCorridor::carriedKeyPose(const Camera& camera, const std::vector<Box>& world) const {
+    const auto direction = camera.direction();
+    const glm::vec3 right{std::cos(camera.yaw), 0, std::sin(camera.yaw)};
+    const auto up = glm::normalize(glm::cross(right, direction));
+    const auto carry = direction + right * .30f - up * .28f;
+    float depth = .60f;
+    perspective::Pose pose{};
+    for (int attempt = 0; attempt < 24; ++attempt) {
+        pose = {camera.eye() + carry * depth, keyRatio_ * depth};
+        const glm::vec3 extent(.06f * pose.scale);
+        const auto toward = pose.center - camera.eye();
+        const bool blocked = std::any_of(world.begin(), world.end(), [&](const Box& solid) {
+            const float hit = SchoolRoom::rayBox(camera.eye(), glm::normalize(toward),
+                                                {solid.min - extent, solid.max + extent});
+            return hit >= 0 && hit < glm::length(toward);
+        });
+        if (!blocked)
+            return pose;
+        depth *= .82f;
+    }
+    return pose;
+}
+void SchoolCorridor::updateKey(float dt, const std::vector<Box>& world) {
+    if (!looseClassroomKey())
+        return;
+    const auto area = keyBounds(key_);
+    const float support = keySupport(area, world);
+    if (!std::isfinite(support)) {
+        // An unsupported pose cannot be released normally; recover safely if map geometry changes underneath it.
+        classroomKeyTaken_ = false;
+        key_ = {classroomKeySpot, 1.f};
+        keyFallSpeed_ = 0;
+        return;
+    }
+    keyFallSpeed_ += 9.8f * dt;
+    const float bottom = std::max(support + keyRestClearance, area.min.y - keyFallSpeed_ * dt);
+    key_.center.y += bottom - area.min.y;
+    if (bottom <= support + keyRestClearance + .001f)
+        keyFallSpeed_ = 0;
+}
+void SchoolCorridor::drawHeldKey(Renderer& r, const Camera& camera, const std::vector<Box>& world) const {
+    if (!holdingClassroomKey())
+        return;
+    if (const auto lock = keyAtLock(camera, world); lock && keyFits(key_.scale)) {
+        drawKey(r, lock->center, {-1, 0, 0}, {0, 1, 0}, key_.scale);
+        return;
+    }
+    if (const auto placement = keyPlacement(camera, world)) {
+        drawKey(r, placement->center, {1, 0, 0}, {0, 0, -1}, placement->scale,
+                keyFits(placement->scale) ? glm::vec3(.43f, .86f, .65f) : brass);
+        return;
+    }
+    const auto pose = carriedKeyPose(camera, world);
+    const glm::vec3 right{std::cos(camera.yaw), 0, std::sin(camera.yaw)};
+    drawKey(r, pose.center, right, glm::normalize(glm::cross(right, camera.direction())), pose.scale);
+}
+const wchar_t* SchoolCorridor::classroomKeyStatus(const Camera& camera, const std::vector<Box>& world) const {
+    if (!holdingClassroomKey())
+        return nullptr;
+    const bool atLock = keyAtLock(camera, world).has_value();
+    if (atLock && keyFits(key_.scale))
+        return L"자물쇠에 맞는 크기예요";
+    if (keyFits(key_.scale))
+        return L"맞는 크기의 열쇠를 들고 있어요 · 자물쇠에 사용해 보세요";
+    if (const auto placement = keyPlacement(camera, world)) {
+        if (keyFits(placement->scale))
+            return L"놓으면 맞는 크기예요 · 놓고 다시 집으세요";
+        if (placement->scale > maxFittedKeyScale)
+            return L"놓을 열쇠가 커요 · 가까운 곳에 놓거나 멀리서 다시 집으세요";
+        return L"놓을 열쇠가 작아요 · 더 먼 곳을 겨누세요";
+    }
+    if (atLock && key_.scale < minFittedKeyScale)
+        return L"열쇠가 작아요 · 더 먼 곳에 놓고 다시 집으세요";
+    return L"열쇠를 들고 있어요 · 조금 물러나 놓을 곳을 바라보세요";
+}
+const wchar_t* SchoolCorridor::classroomUnlockStatus() const {
+    if (!classroomDoorUnlocked_ || classroomUnlockTime_ >= 1.8f)
+        return nullptr;
+    return classroomUnlockTime_ < lockReleaseEnd ? L"잠금을 풀고 있어요" : L"잠금이 풀렸어요";
+}
+SchoolCorridor::ClassroomAction SchoolCorridor::classroomAction(const Camera& camera, const std::vector<Box>& world) const {
+    const auto eye = camera.eye(), direction = camera.direction();
+    auto reaches = [&](const Box& target, glm::vec3 center, float range) {
+        // Use the same shared ray hit and apparent-size pickup as MilitaryRoom::interact.
+        const auto distance = perspective::rayBoxDistance(eye, direction, (target.min + target.max) * .5f,
+                                                           (target.max - target.min) * .5f);
+        if (!distance || *distance > range)
+            return false;
+        const auto toward = center - eye;
+        const float centerDistance = glm::length(toward);
+        return std::none_of(world.begin(), world.end(), [&](const Box& solid) {
+            const float hit = SchoolRoom::rayBox(eye, toward / centerDistance, solid);
+            return hit >= 0 && hit < centerDistance - .002f;
+        });
+    };
+    if (!classroomKeyTaken_ && reaches(box(classroomKeySpot, {.075f, .11f, .055f}), classroomKeySpot, 1.28f))
         return ClassroomAction::takeKey;
-    if (classroomKeyTaken_ && !classroomDoorUnlocked_ && reaches(classroomDoorBox(0), 1.65f))
-        return ClassroomAction::unlockDoor;
+    // First discovery stays close-range; a released key can be recovered from farther away to shrink it.
+    const float pickupWidth = std::max(.10f, glm::distance(eye, key_.center) * .024f);
+    if (looseClassroomKey() && reaches(box(key_.center, glm::max(keyHalfSize * key_.scale * 2.f,
+                                                                glm::vec3(pickupWidth, .07f, pickupWidth))),
+                                     key_.center, looseKeyReach))
+        return ClassroomAction::takeKey;
+    if (holdingClassroomKey()) {
+        if (keyAtLock(camera, world) && keyFits(key_.scale))
+            return ClassroomAction::unlockDoor;
+        return keyPlacement(camera, world) ? ClassroomAction::dropKey : ClassroomAction::blockedKey;
+    }
     return ClassroomAction::none;
 }
-const wchar_t* SchoolCorridor::classroomInteractionLabel(const Camera& camera) const {
-    switch (classroomAction(camera)) {
+const wchar_t* SchoolCorridor::classroomInteractionLabel(const Camera& camera, const std::vector<Box>& world) const {
+    switch (classroomAction(camera, world)) {
     case ClassroomAction::takeKey: return L"열쇠 줍기";
+    case ClassroomAction::dropKey: return L"놓기";
     case ClassroomAction::unlockDoor: return L"잠금 풀기";
     default: return nullptr;
     }
 }
-bool SchoolCorridor::interactClassroom(const Camera& camera) {
-    switch (classroomAction(camera)) {
+bool SchoolCorridor::interactClassroom(const Camera& camera, const std::vector<Box>& world) {
+    switch (classroomAction(camera, world)) {
     case ClassroomAction::takeKey:
         classroomKeyTaken_ = true;
+        keyFallSpeed_ = 0;
+        keyRatio_ = perspective::grabRatio(camera.eye(), camera.direction(), key_.center, key_.scale, .096f);
         return true;
+    case ClassroomAction::dropKey:
+        key_ = *keyPlacement(camera, world);
+        keyRatio_ = keyFallSpeed_ = 0;
+        return true;
+    case ClassroomAction::blockedKey:
+        return true; // E is consumed while the key stays safely in hand.
     case ClassroomAction::unlockDoor:
+        key_ = *keyAtLock(camera, world);
         classroomDoorUnlocked_ = true;
+        classroomUnlockTime_ = 0;
+        keyRatio_ = 0;
         return true;
     default:
         return false;
@@ -676,6 +989,8 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
         r.box({20.44f, 4.26f, -10.70f}, {.14f, .065f, 3.30f}, metal);
     }
     for (const auto& patch : drawing_) {
+        if (patch.material == DoorMaterial::infill && !forming_)
+            continue;
         std::array<glm::vec3, 4> p;
         for (int i = 0; i < 4; ++i) {
             // From the aligned view each vertex travels along its original projection ray.
@@ -684,17 +999,138 @@ void SchoolCorridor::drawIllusion(Renderer& r) const {
             if (!patch.frame)
                 p[i].z -= slide;
         }
-        r.triangle(p[0], p[1], p[2], patch.color);
-        r.triangle(p[0], p[2], p[3], patch.color);
+        auto color = patch.color;
+        if (patch.material != DoorMaterial::infill) {
+            const auto ordinary = patch.material == DoorMaterial::timber ? paint * .82f :
+                                  patch.material == DoorMaterial::paper ? plaster * 1.04f : paint * .70f;
+            color = glm::mix(ordinary, patch.color, formed);
+        } else if (formed < 1) {
+            // A complete painted door is not exposed before recognition. Its panels fill in as it forms.
+            r.opacity(formed);
+        }
+        r.triangle(p[0], p[1], p[2], color);
+        r.triangle(p[0], p[2], p[3], color);
+        if (patch.material == DoorMaterial::infill && formed < 1)
+            r.opacity(1);
+        if (patch.material == DoorMaterial::timber && formed < 1) {
+            const auto normal = patch.onLeaf && !forming_ ? -cupboardOutside(angle_)
+                                                          : glm::vec3(-1, 0, 0);
+            const auto lip = normal * (.006f * (1 - formed));
+            for (int edge = 0; edge < 4; ++edge) {
+                const auto a = p[edge], b = p[(edge + 1) % 4];
+                r.triangle(a, b, b + lip, color * .82f);
+                r.triangle(a, b + lip, a + lip, color * .82f);
+            }
+            r.triangle(p[0] + lip, p[1] + lip, p[2] + lip, color);
+            r.triangle(p[0] + lip, p[2] + lip, p[3] + lip, color);
+        }
     }
+    drawCupboardNotices(r);
     r.sign(L"계단실", {20.485f, 4.55f, -9.9f}, {0, 0, .55f}, {0, .18f, 0});
+}
+void SchoolCorridor::drawCupboardNotices(Renderer& r) const {
+    const float nearX = hinge.x - .042f, farX = 20.478f;
+    const float nearScale = (nearX - illusionEye.x) / (illusionFocus.x - illusionEye.x);
+    const float split = illusionEye.z + (hinge.z + doorWidth - illusionEye.z) / nearScale;
+    for (bool leaf : {true, false}) {
+        const float low = leaf ? -10.50f : split, high = leaf ? split : -9.30f;
+        const float scale = ((leaf ? nearX : farX) - illusionEye.x) / (illusionFocus.x - illusionEye.x);
+        const glm::vec3 right = leaf ? cupboardAlong(angle_) : glm::vec3(0, 0, 1);
+        const auto normal = glm::cross(right, glm::vec3(0, 1, 0));
+        auto at = [&](float y, float z) {
+            InkPatch point{};
+            point.onLeaf = leaf;
+            point.receiver[0] = illusionEye + (glm::vec3(illusionFocus.x, y, z) - illusionEye) * scale;
+            return paintedPoint(point, 0) + normal * .004f;
+        };
+        if (leaf) {
+            // Shallow, matching paint reads as pressed cabinet panels instead of applied wooden strips.
+            const float hingeZ = illusionEye.z + (hinge.z + .075f - illusionEye.z) / scale;
+            const float bottomY = illusionEye.y + (floorHeight + .10f - illusionEye.y) / scale;
+            auto strip = [&](float y0, float y1, float z0, float z1) {
+                r.quad(at((y0 + y1) * .5f, (z0 + z1) * .5f), right * ((z1 - z0) * scale * .5f),
+                       {0, (y1 - y0) * scale * .5f, 0}, paint * .82f);
+            };
+            strip(4.10f, 4.20f, hingeZ, -10.75f);
+            strip(1.82f, 1.87f, hingeZ, -10.75f);
+            strip(bottomY, 4.20f, hingeZ, hingeZ + .08f);
+            strip(bottomY, 1.82f, -10.75f, -10.65f);
+            strip(bottomY, bottomY + .08f, hingeZ, -10.65f);
+        } else {
+            // A complete school notice rack gives the distant edges a purpose before the cupboard opens.
+            const float remaining = 1 - glm::smoothstep(0.f, 1.f, formation_);
+            auto backing = [&](float z0, float z1, float alpha) {
+                if (alpha <= 0)
+                    return;
+                if (alpha < 1)
+                    r.opacity(alpha);
+                r.quad(at(3.425f, (z0 + z1) * .5f) - normal * .006f,
+                       right * ((z1 - z0) * scale * .5f), {0, .675f * scale, 0}, {.61f, .64f, .54f});
+                r.quad(at(2.75f, (z0 + z1) * .5f), right * ((z1 - z0) * scale * .5f),
+                       {0, .025f * scale, 0}, paint * .82f);
+                if (alpha < 1)
+                    r.opacity(1);
+            };
+            backing(-11.42f, -10.75f, 1);
+            backing(-10.75f, -9.05f, remaining);
+            backing(-9.05f, -8.43f, 1);
+            const glm::vec2 span{-11.46f, -8.35f};
+            for (float y : {4.15f, 1.845f}) {
+                r.quad(at(y, (span.x + span.y) * .5f), right * ((span.y - span.x) * scale * .5f),
+                       {0, (y > 4 ? .05f : .025f) * scale, 0}, paint * .82f);
+            }
+            for (float z : {-11.46f, -8.39f})
+                r.quad(at(3.01f, z), right * (.04f * scale), {0, 1.19f * scale, 0}, paint * .82f);
+            // Only the portion across the future passage dissolves; the side notices stay on their wall.
+            auto notice = [&](float y, float z, glm::vec2 half, const wchar_t* title, float alpha) {
+                if (alpha <= 0)
+                    return;
+                if (alpha < 1)
+                    r.opacity(alpha);
+                const auto face = at(y, z) + normal * .002f;
+                r.quad(face, right * (half.x * scale), {0, half.y * scale, 0}, plaster * 1.02f);
+                for (int row = 0; row < 4; ++row) {
+                    const float lineY = y + half.y * (.22f - row * .23f);
+                    r.line(at(lineY, z - half.x * .73f) + normal * .004f,
+                           at(lineY, z + half.x * (row == 3 ? .22f : .73f)) + normal * .004f,
+                           .006f * scale, paint);
+                }
+                // A short strip of tape makes these sheets distinct from the framed inspection chart.
+                r.quad(at(y + half.y, z) + normal * .005f, right * (.07f * scale),
+                       {0, .024f * scale, 0}, {.79f, .75f, .59f});
+                r.label(title, at(y + half.y * .65f, z) + normal * .005f,
+                        right * (half.x * .72f * scale), {0, .043f * scale, 0}, metal);
+                if (alpha < 1)
+                    r.opacity(1);
+            };
+            notice(3.38f, -11.10f, {.22f, .32f}, L"알림", 1);
+            notice(3.42f, -10.52f, {.22f, .37f}, L"이번 주", remaining);
+            r.quad(at(3.24f, -8.72f) + normal * .002f, right * (.25f * scale),
+                   {0, .43f * scale, 0}, plaster * 1.04f);
+            r.label(L"관리 일지", at(3.50f, -8.72f) + normal * .003f,
+                    right * (.22f * scale), {0, .045f * scale, 0}, metal);
+            for (int row = 0; row < 5; ++row)
+                r.line(at(3.35f - row * .13f, -8.91f) + normal * .003f,
+                       at(3.35f - row * .13f, -8.53f) + normal * .003f, .008f, paint);
+        }
+        if (forming_)
+            continue;
+        r.label(leaf ? L"청소 당번" : L"시설 점검", at(3.83f, (low + high) * .5f),
+                right * ((high - low) * scale * .42f), {0, .042f * scale, 0}, metal);
+        for (int row = 0; row < 4; ++row) {
+            const float y = 3.66f - row * .18f;
+            const float z = low + (high - low) * (.24f + .12f * (row % 2));
+            r.line(at(y, z), at(y - .035f, z + .028f), .008f * scale, metal);
+            r.line(at(y - .035f, z + .028f), at(y + .035f, z + .09f), .008f * scale, metal);
+        }
+    }
 }
 std::vector<Box> SchoolCorridor::doorBoxes(float angle) const {
     std::vector<Box> result;
     const float c = std::cos(angle), s = std::sin(angle), length = doorWidth / 12;
     for (int i = 0; i < 12; i++) {
-        auto center = hinge + glm::vec3(c * length * (i + .5f), 1.06f, s * length * (i + .5f));
-        result.push_back(box(center, {std::abs(c) * length + std::abs(s) * .07f, 2.12f,
+        auto center = hinge + cupboardAlong(angle) * (length * (i + .5f)) + glm::vec3(0, doorHeight * .5f, 0);
+        result.push_back(box(center, {std::abs(c) * length + std::abs(s) * .07f, doorHeight,
                                       std::abs(s) * length + std::abs(c) * .07f}));
     }
     return result;
@@ -704,7 +1140,10 @@ std::vector<Box> SchoolCorridor::collisionBoxes() const {
     result.reserve(solids_.size() + 16);
     for (const auto& solid : solids_)
         result.push_back(box(solid.center, solid.size));
-    result.push_back(classroomDoorBox(classroomDoorOpening_));
+    const auto rearDoor = classroomDoorBox(classroomDoorOpening_);
+    result.push_back(rearDoor);
+    const auto lock = classroomLock + (rearDoor.min + rearDoor.max) * .5f - classroomRearDoor;
+    result.push_back(box(lock + glm::vec3(0, .015f, .010f), {.073f, .085f, .033f}));
     if (bridgeReady()) {
         result.push_back(
             box({bridgeEye.x, 1.78f, (gapNear + gapFar) * .5f}, {bridgeWidth, .04f, gapNear - gapFar}));
@@ -749,10 +1188,14 @@ bool SchoolCorridor::interact(const Camera& camera) {
     return true;
 }
 void SchoolCorridor::update(const Camera& camera, float dt) {
-    if (classroomDoorUnlocked_ && classroomDoorOpening_ < 1) {
-        const float next = std::min(1.f, classroomDoorOpening_ + dt / .74f);
-        if (!touches(camera, classroomDoorBox(next)))
-            classroomDoorOpening_ = next;
+    if (classroomDoorUnlocked_) {
+        const float openingDt = std::max(0.f, dt - std::max(0.f, doorUnlockDelay - classroomUnlockTime_));
+        classroomUnlockTime_ = std::min(2.f, classroomUnlockTime_ + dt);
+        if (classroomDoorOpening_ < 1 && openingDt > 0) {
+            const float next = std::min(1.f, classroomDoorOpening_ + openingDt / .74f);
+            if (!touches(camera, classroomDoorBox(next)))
+                classroomDoorOpening_ = next;
+        }
     }
     const float target = targetOpen_ ? halfPi : 0;
     const float distance = target - angle_;
@@ -872,26 +1315,28 @@ void SchoolCorridor::draw(Renderer& r) const {
         r.line({x, 1.87f, -11.88f}, {x + .09f, 3.65f, -12.04f}, .035f, wood);
         r.box({x, 1.98f, -11.88f}, {.25f, .17f, .10f}, {.56f, .51f, .35f});
     }
-    const glm::vec3 along{std::cos(angle_), 0, std::sin(angle_)};
-    const glm::vec3 front{-std::sin(angle_), 0, std::cos(angle_)};
-    const auto center = hinge + along * (doorWidth * .5f) + glm::vec3(0, 1.06f, 0);
-    r.box(center, {doorWidth, 2.12f, .07f}, paint, -angle_);
-    for (float y : {.13f, 1.98f})
+    const auto along = cupboardAlong(angle_), front = cupboardOutside(angle_);
+    const auto center = hinge + along * (doorWidth * .5f) + glm::vec3(0, doorHeight * .5f, 0);
+    r.box(center, {doorWidth, doorHeight, .07f}, paint, angle_);
+    for (float y : {.13f, doorHeight - .14f})
         r.box(hinge + glm::vec3(0, y, 0), {.09f, .12f, .09f}, metal);
-    const auto handle = hinge + along * (doorWidth * .45f) + glm::vec3(0, 1.05f, 0);
-    for (float sign : {-1.f, 1.f}) {
-        r.box(handle + front * (sign * .065f), {.06f, .20f, .05f}, metal, -angle_);
-        r.label(L"청소도구함", center + front * (sign * .041f) + glm::vec3(0, -.68f, 0),
-                along * (sign * .36f), {0, .10f, 0}, plaster);
-    }
+    const auto handle = hinge + along * (doorWidth * .82f) + glm::vec3(0, 1.05f, 0);
+    for (float sign : {-1.f, 1.f})
+        r.box(handle + front * (sign * .065f), {.06f, .20f, .05f}, metal, angle_);
+    // The outside stays ordinary at every angle. No clue visibility switch or texture swap is needed.
+    r.label(L"청소도구함", hinge + along * (doorWidth * .5f) + glm::vec3(0, 1.40f, 0) + front * .041f,
+            -along * .28f, {0, .055f, 0}, plaster);
+    for (float y : {1.83f, 1.89f, 1.95f})
+        r.quad(hinge + along * (doorWidth * .5f) + glm::vec3(0, y, 0) + front * .043f,
+               -along * .16f, {0, .006f, 0}, paint * .66f);
     drawIllusion(r);
     drawFalseHall(r);
     drawClassroomLock(r);
     drawBridge(r);
     r.label(L"점검 통로", {25.031f, 3.59f, -11.43f}, {0, 0, .37f}, {0, .13f, 0}, plaster);
-    // Closed glass remains visible while preserving the useful side view into each gap.
+    // Only 2-2 is clear; 2-1's privacy glass is rendered with its opaque collision pane.
     r.opacity(.08f);
-    for (const auto window : {Window{7.6f, 11.05f}, Window{14.7f, 17.8f}})
+    for (const auto window : {Window{14.7f, 17.8f}})
         r.quad({(window.start + window.end) * .5f, 3.525f, -11.6f}, {(window.end - window.start) * .5f, 0, 0},
                {0, .675f, 0}, {.65f, .80f, .78f});
     r.opacity(1);
