@@ -14,9 +14,13 @@ constexpr int textureWidth = 1280;
 constexpr int textureHeight = 720;
 constexpr int guideWidth = 860;
 constexpr int guideHeight = 60;
-constexpr int canvasX = 435, canvasY = 90, canvasWidth = 720, canvasHeight = 540;
 
 struct WorkspaceViewport { int x, y, width, height; };
+WorkspaceViewport workspaceCanvas(int lesson) {
+    return lesson == 5 ? WorkspaceViewport{350,135,600,450}
+                       : WorkspaceViewport{435,90,720,540};
+}
+
 WorkspaceViewport workspaceViewport(int width, int height) {
     const float scale = std::min(width / 1280.0f, height / 720.0f);
     const int w = std::max(1, static_cast<int>(1280 * scale));
@@ -195,6 +199,22 @@ GLuint workspaceTexture(int selected) {
         text(names[i],{36,100+i*76,294,164+i*76},RGB(236,242,245));
     }
     text(captions[selected],{355,24,1260,76},RGB(223,235,241));
+    if (selected == 5) {
+        fill({980,135,1260,455},RGB(24,35,45));
+        text(L"완성 모양",{1000,150,1240,194},RGB(223,235,241));
+        fill({995,205,1245,405},RGB(14,22,29));
+        // Same proportions, orientation and colors as the assembled 2D key.
+        // X:Y scale matches the 4:3 workspace; this picture has no hit target.
+        const auto part = [&](float x,float y,float width,float height,COLORREF color) {
+            const auto px = [](float value) { return static_cast<LONG>(std::lround(1035+180*value)); };
+            const auto py = [](float value) { return static_cast<LONG>(std::lround(305-135*value)); };
+            fill({px(x-width*.5f),py(y+height*.5f),px(x+width*.5f),py(y-height*.5f)},color);
+        };
+        part(0,0,.40f,.40f,RGB(87,189,217));
+        part(.61f,.07f,.86f,.14f,RGB(224,168,74));
+        part(.77f,-.07f,.09f,.14f,RGB(224,168,74));
+        part(.99f,-.07f,.09f,.14f,RGB(224,168,74));
+    }
     text(L"목록을 마우스로 선택",{30,598,310,642},RGB(155,180,194));
     text(L"Tab  방으로 돌아가기",{30,644,310,690},RGB(195,216,226));
     GdiFlush();
@@ -332,10 +352,11 @@ void ComputerScreen::pointer(float u,float v) {
     if (auto* window=glfwGetCurrentContext()) glfwGetFramebufferSize(window,&width,&height);
     if (width<=0 || height<=0) return;
     const auto area=workspaceViewport(width,height);
+    const auto canvas=workspaceCanvas(labs_.selected());
     pointer_={(u*width-area.x)*textureWidth/area.width,(v*height-area.y)*textureHeight/area.height};
-    canvasPointer_=pointer_.x>=canvasX && pointer_.x<=canvasX+canvasWidth &&
-                   pointer_.y>=canvasY && pointer_.y<=canvasY+canvasHeight;
-    labs_.pointer({(pointer_.x-canvasX)*2/canvasWidth-1,1-(pointer_.y-canvasY)*2/canvasHeight},canvasPointer_);
+    canvasPointer_=pointer_.x>=canvas.x && pointer_.x<=canvas.x+canvas.width &&
+                   pointer_.y>=canvas.y && pointer_.y<=canvas.y+canvas.height;
+    labs_.pointer({(pointer_.x-canvas.x)*2/canvas.width-1,1-(pointer_.y-canvas.y)*2/canvas.height},canvasPointer_);
     dirty_=true;
 }
 void ComputerScreen::mouseButton(int button,int action,int) {
@@ -400,9 +421,10 @@ void ComputerScreen::renderTexture() const {
     glDepthMask(GL_TRUE); glDepthFunc(GL_LESS); glClearDepth(1);
     glClearColor(.03f,.04f,.05f,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     drawTexture(workspaceLabels_[labs_.selected()],glm::scale(glm::mat4{1},{2,2,1}),true);
-    glViewport(canvasX,textureHeight-canvasY-canvasHeight,canvasWidth,canvasHeight);
+    const auto canvas=workspaceCanvas(labs_.selected());
+    glViewport(canvas.x,textureHeight-canvas.y-canvas.height,canvas.width,canvas.height);
     glEnable(GL_SCISSOR_TEST);
-    glScissor(canvasX,textureHeight-canvasY-canvasHeight,canvasWidth,canvasHeight);
+    glScissor(canvas.x,textureHeight-canvas.y-canvas.height,canvas.width,canvas.height);
     labs_.draw();
     glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST);
     glViewport(0,0,textureWidth,textureHeight); glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
