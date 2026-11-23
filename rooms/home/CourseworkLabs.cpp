@@ -10,11 +10,13 @@
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 
 namespace {
 constexpr float pi = 3.14159265358979323846f;
+constexpr std::array<glm::vec2,4> keyOffsets{{{0,0},{.61f,.07f},{.77f,-.07f},{.99f,-.07f}}};
 glm::mat4 model(glm::vec3 position, glm::vec3 angle, glm::vec3 size = glm::vec3{1}) {
     auto value = glm::translate(glm::mat4{1}, position);
     value = glm::rotate(value, glm::radians(angle.x), {1,0,0});
@@ -261,7 +263,11 @@ void CourseworkLabs::pointer(glm::vec2 ndc, bool inside) {
 }
 void CourseworkLabs::mouse(int button, int action) {
     if (button!=GLFW_MOUSE_BUTTON_LEFT) return;
-    if (action==GLFW_RELEASE) { dragging_=false; return; }
+    if (action==GLFW_RELEASE) {
+        if (lesson_==5 && dragging_ && pointerInside_ && !keyTaken_) snapKeyPart(partSelection_);
+        dragging_=false;
+        return;
+    }
     if (action!=GLFW_PRESS || !pointerInside_) return;
     if (lesson_==0) {
         shapeSelection_=-1;
@@ -274,12 +280,26 @@ void CourseworkLabs::mouse(int button, int action) {
         }
     } else if (lesson_==5 && !keyTaken_) {
         partSelection_=-1;
+        const auto hit = [&](int i,float padding) {
+            const auto& part=keyParts_[i];
+            const auto local=rotate2(pointer_-part.center,-part.angle);
+            const auto half=part.size*part.scale*.5f+glm::vec2{padding};
+            return std::abs(local.x)<=half.x && std::abs(local.y)<=half.y;
+        };
+        // Pick visible parts first; expanded tooth hit areas must not steal shaft clicks.
         for (int i=3;i>=0;--i) {
-            const auto& part=keyParts_[i]; const auto local=rotate2(pointer_-part.center,-part.angle);
-            const auto half=part.size*part.scale*.5f+glm::vec2{.012f};
-            if (std::abs(local.x)<=half.x && std::abs(local.y)<=half.y) {
-                partSelection_=i; dragging_=true; dragOffset_=part.center-pointer_; break;
+            if (hit(i,.012f)) { partSelection_=i; break; }
+        }
+        if (partSelection_<0) {
+            float nearest=std::numeric_limits<float>::max();
+            for (int i=2;i<4;++i) {
+                const float distance=glm::length(pointer_-keyParts_[i].center);
+                if (hit(i,.04f) && distance<nearest) { nearest=distance; partSelection_=i; }
             }
+        }
+        if (partSelection_>=0) {
+            dragging_=true;
+            dragOffset_=keyParts_[partSelection_].center-pointer_;
         }
     }
 }
@@ -288,6 +308,38 @@ void CourseworkLabs::clampPart(Part& part) {
     const glm::vec2 extent{std::abs(std::cos(part.angle))*half.x+std::abs(std::sin(part.angle))*half.y,
                            std::abs(std::sin(part.angle))*half.x+std::abs(std::cos(part.angle))*half.y};
     part.center=glm::clamp(part.center,-glm::vec2{.97f}+extent,glm::vec2{.97f}-extent);
+}
+void CourseworkLabs::snapKeyPart(int index) {
+    if (index<=0) return;
+    const auto& head=keyParts_[0];
+    auto& part=keyParts_[index];
+    if (std::abs(part.scale/head.scale-1)>.35f) return;
+    float nearest=.18f;
+    Part best=part;
+    const int firstSlot=index==1?1:2;
+    const int lastSlot=index==1?1:3;
+    for (int quarter=0;quarter<4;++quarter) {
+        const float axis=head.angle+quarter*pi*.5f;
+        if (std::abs(std::remainder(part.angle-axis,pi))>.60f) continue;
+        for (int slot=firstSlot;slot<=lastSlot;++slot) {
+            const auto target=head.center+rotate2(keyOffsets[slot]*head.scale,axis);
+            const float distance=glm::length(part.center-target)/head.scale;
+            if (distance>nearest) continue;
+            if (index>=2) {
+                const auto& other=keyParts_[5-index];
+                if (glm::length(other.center-target)/head.scale<.055f &&
+                    std::abs(other.scale/head.scale-1)<.10f &&
+                    std::abs(std::remainder(other.angle-axis,pi))<.12f) continue;
+            }
+            Part candidate=part;
+            candidate.center=target; candidate.angle=axis; candidate.scale=head.scale;
+            clampPart(candidate);
+            if (glm::length(candidate.center-target)>.001f) continue;
+            nearest=distance;
+            best=candidate;
+        }
+    }
+    part=best;
 }
 void CourseworkLabs::scroll(double amount) {
     if (lesson_!=5 || partSelection_<0 || keyTaken_) return;
@@ -340,19 +392,18 @@ bool CourseworkLabs::update(float elapsed) {
 bool CourseworkLabs::keyReady() const {
     if (keyTaken_ || dragging_) return false;
     const auto& head=keyParts_[0];
-    constexpr glm::vec2 offset[4]{{0,0},{.61f,.07f},{.77f,-.07f},{.99f,-.07f}};
     // Rectangles repeat after 180 degrees; the square head repeats after 90.
     // Infer the key's axis from the shaft, rather than an invisible square orientation.
     for (const float axis : {keyParts_[1].angle,keyParts_[1].angle+pi}) {
         if (std::abs(std::remainder(head.angle-axis,pi*.5f))>.12f) continue;
-        bool match=true;
-        for (int i=1;i<4;++i) {
-            const auto& part=keyParts_[i];
+        const auto matches = [&](int index,int slot) {
+            const auto& part=keyParts_[index];
             const auto local=rotate2(part.center-head.center,-axis)/head.scale;
-            if (glm::length(local-offset[i])>.055f || std::abs(part.scale/head.scale-1)>.10f ||
-                std::abs(std::remainder(part.angle-axis,pi))>.12f) { match=false; break; }
-        }
-        if (match) return true;
+            return glm::length(local-keyOffsets[slot])<=.055f && std::abs(part.scale/head.scale-1)<=.10f &&
+                   std::abs(std::remainder(part.angle-axis,pi))<=.12f;
+        };
+        if (matches(1,1) && ((matches(2,2) && matches(3,3)) ||
+                             (matches(2,3) && matches(3,2)))) return true;
     }
     return false;
 }

@@ -37,6 +37,7 @@ private:
     void resetStack();
     void resetTransform();
     void clampPart(Part& part);
+    void snapKeyPart(int index);
     void render(std::span<const Vertex> vertices, GLenum mode, const glm::mat4& model,
                 const glm::mat4& viewProjection, bool lit = false) const;
     void rect(glm::vec2 center, glm::vec2 size, glm::vec3 color,
