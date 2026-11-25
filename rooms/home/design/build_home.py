@@ -2,6 +2,7 @@
 
 import math
 import random
+import runpy
 from pathlib import Path
 
 import bpy
@@ -46,7 +47,7 @@ def material(name, color, roughness=0.65, metallic=0.0, emission=0.0, texture=No
     result.diffuse_color = (*color, 1.0)
     result.use_nodes = True
     result["home_emission"] = emission
-    shader = result.node_tree.nodes.get("Principled BSDF")
+    shader = next(node for node in result.node_tree.nodes if node.type == 'BSDF_PRINCIPLED')
     shader.inputs["Base Color"].default_value = (*color, 1.0)
     shader.inputs["Roughness"].default_value = roughness
     shader.inputs["Metallic"].default_value = metallic
@@ -1311,6 +1312,8 @@ def main():
     for name, collection in COLLECTIONS.items():
         collection.use_fake_user = True
     bpy.context.view_layer.update()
+    polish = runpy.run_path(str(OUTPUT.parents[1] / 'shared' / 'design' / 'polish_materials.py'))
+    polish['polish_scene']('home')
     bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT / "내 방.blend"))
     print("Saved authored home with", len(bpy.data.objects), "objects")
 
