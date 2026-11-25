@@ -12,22 +12,21 @@
 namespace {
 constexpr int textureWidth = 1280;
 constexpr int textureHeight = 720;
-constexpr int guideWidth = 860;
-constexpr int guideHeight = 60;
-
-struct WorkspaceViewport { int x, y, width, height; };
-WorkspaceViewport workspaceCanvas(int lesson) {
-    return lesson == 5 ? WorkspaceViewport{350,135,600,450}
-                       : WorkspaceViewport{435,90,720,540};
-}
-
-WorkspaceViewport workspaceViewport(int width, int height) {
-    const float scale = std::min(width / 1280.0f, height / 720.0f);
-    const int w = std::max(1, static_cast<int>(1280 * scale));
-    const int h = std::max(1, static_cast<int>(720 * scale));
-    return {(width-w)/2,(height-h)/2,w,h};
-}
-
+struct ScreenRect {
+    int left, top, right, bottom;
+    bool contains(float x, float y) const {
+        return x >= left && x <= right && y >= top && y <= bottom;
+    }
+};
+constexpr ScreenRect closeButton{1184, 0, 1280, 64};
+constexpr ScreenRect keyFileIcon{76, 110, 270, 335};
+constexpr int lessonCount = 5;
+constexpr int lessonTop = 150;
+constexpr int lessonStep = 76;
+constexpr int lessonHeight = 64;
+struct CanvasViewport { int x, y, width, height; };
+constexpr CanvasViewport canvas{435, 140, 720, 540};
+enum class ScreenPage { Ide, Desktop, KeyDocument, EmptyDocument };
 class GlState {
 public:
     GlState() {
@@ -121,111 +120,90 @@ GLuint shader(GLenum type, const char* source) {
     return result;
 }
 
-GLuint guideTexture(const wchar_t* text) {
+GLuint screenTexture(ScreenPage page, int selected = 0) {
     HDC dc = CreateCompatibleDC(nullptr);
     if (!dc) return 0;
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth = guideWidth;
-    info.bmiHeader.biHeight = -guideHeight;
+    info.bmiHeader.biWidth = textureWidth;
+    info.bmiHeader.biHeight = -textureHeight;
     info.bmiHeader.biPlanes = 1;
     info.bmiHeader.biBitCount = 32;
     void* pixels = nullptr;
     HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
-    if (!bitmap) {
-        DeleteDC(dc);
-        return 0;
-    }
-    HGDIOBJ oldBitmap = SelectObject(dc, bitmap);
-    RECT rect{0, 0, guideWidth, guideHeight};
-    HBRUSH brush = CreateSolidBrush(RGB(23, 35, 42));
-    FillRect(dc, &rect, brush);
-    DeleteObject(brush);
-    HFONT font = CreateFontW(-20, 0, 0, 0, FW_MEDIUM, FALSE, FALSE, FALSE, HANGEUL_CHARSET,
-                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY,
-                             DEFAULT_PITCH, L"Malgun Gothic");
-    HGDIOBJ oldFont = SelectObject(dc, font);
-    SIZE measured{};
-    GetTextExtentPoint32W(dc,text,lstrlenW(text),&measured);
-    if (measured.cx > guideWidth-16) {
-        SelectObject(dc,oldFont);
-        DeleteObject(font);
-        const int height=std::max(15,20*(guideWidth-16)/static_cast<int>(measured.cx));
-        font=CreateFontW(-height,0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,HANGEUL_CHARSET,
-                         OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Malgun Gothic");
-        SelectObject(dc,font);
-    }
+    if (!bitmap) { DeleteDC(dc); return 0; }
+    const auto oldBitmap = SelectObject(dc, bitmap);
+    const auto fill = [&](RECT area, COLORREF color) {
+        HBRUSH brush = CreateSolidBrush(color);
+        FillRect(dc, &area, brush);
+        DeleteObject(brush);
+    };
+    HFONT font = CreateFontW(-25, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, HANGEUL_CHARSET,
+        OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH, L"Malgun Gothic");
+    const auto oldFont = SelectObject(dc, font);
     SetBkMode(dc, TRANSPARENT);
-    SetTextColor(dc, RGB(240, 245, 244));
-    DrawTextW(dc, text, -1, &rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    const auto text = [&](const wchar_t* value, RECT rect, COLORREF color, bool centered = false) {
+        SetTextColor(dc, color);
+        DrawTextW(dc, value, -1, &rect, DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
+                  (centered ? DT_CENTER : DT_LEFT));
+    };
+    if (page == ScreenPage::Desktop) {
+        fill({0, 0, textureWidth, textureHeight}, RGB(30, 53, 70));
+        fill({0, 674, textureWidth, textureHeight}, RGB(26, 31, 39));
+        fill({110, 132, 224, 264}, RGB(230, 231, 226));
+        fill({180, 132, 224, 176}, RGB(188, 194, 193));
+        fill({130, 188, 156, 216}, RGB(81, 139, 154));
+        fill({156, 197, 204, 207}, RGB(171, 132, 67));
+        fill({184, 205, 194, 220}, RGB(171, 132, 67));
+        text(L"열쇠", {76, 280, 270, 330}, RGB(240, 242, 244), true);
+    } else {
+        const bool ide = page == ScreenPage::Ide;
+        fill({0, 0, textureWidth, textureHeight}, RGB(30, 30, 30));
+        fill({0, 0, textureWidth, 64}, RGB(55, 42, 72));
+        text(ide ? L"Out of Scale - Microsoft Visual Studio" : L"열쇠",
+             {26, 0, 1160, 64}, RGB(238, 237, 242));
+        fill({closeButton.left, closeButton.top, closeButton.right, closeButton.bottom}, RGB(69, 49, 76));
+        HPEN pen = CreatePen(PS_SOLID, 3, RGB(242, 238, 243));
+        const auto oldPen = SelectObject(dc, pen);
+        MoveToEx(dc, 1218, 20, nullptr); LineTo(dc, 1246, 44);
+        MoveToEx(dc, 1246, 20, nullptr); LineTo(dc, 1218, 44);
+        SelectObject(dc, oldPen); DeleteObject(pen);
+        if (ide) {
+            constexpr const wchar_t* files[lessonCount]{L"1_7.cpp", L"1_12.cpp", L"1_14.cpp", L"1_18.cpp", L"1_26.cpp"};
+            fill({0, 64, 320, 720}, RGB(37, 37, 38));
+            text(L"솔루션 탐색기", {24, 72, 308, 128}, RGB(205, 205, 210));
+            for (int i = 0; i < lessonCount; ++i) {
+                const int top = lessonTop + i * lessonStep;
+                fill({20, top, 300, top + lessonHeight},
+                     i == selected ? RGB(55, 62, 76) : RGB(42, 42, 44));
+                text(files[i], {38, top, 292, top + lessonHeight}, RGB(222, 224, 228));
+            }
+            fill({336, 78, 570, 125}, RGB(45, 45, 48));
+            text(files[selected], {355, 78, 562, 125}, RGB(235, 235, 240));
+            fill({canvas.x - 2, canvas.y - 2, canvas.x + canvas.width + 2,
+                  canvas.y + canvas.height + 2}, RGB(12, 13, 15));
+        } else if (page == ScreenPage::KeyDocument) {
+            // Same head, shaft and teeth as the complete key drawn in the room.
+            fill({380, 285, 560, 465}, RGB(87, 189, 217));
+            fill({560, 345, 920, 405}, RGB(224, 168, 74));
+            fill({760, 405, 805, 465}, RGB(224, 168, 74));
+            fill({870, 405, 915, 465}, RGB(224, 168, 74));
+        }
+    }
     GdiFlush();
     GLuint result = 0;
     glGenTextures(1, &result);
     glBindTexture(GL_TEXTURE_2D, result);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, guideWidth, guideHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, pixels);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, textureWidth, textureHeight, 0,
+                 GL_BGRA, GL_UNSIGNED_BYTE, pixels);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    SelectObject(dc, oldFont);
-    DeleteObject(font);
-    SelectObject(dc, oldBitmap);
-    DeleteObject(bitmap);
-    DeleteDC(dc);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    SelectObject(dc, oldFont); DeleteObject(font);
+    SelectObject(dc, oldBitmap); DeleteObject(bitmap); DeleteDC(dc);
     return result;
 }
-
-GLuint workspaceTexture(int selected) {
-    HDC dc=CreateCompatibleDC(nullptr);
-    if (!dc) return 0;
-    BITMAPINFO info{};
-    info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
-    info.bmiHeader.biWidth=textureWidth; info.bmiHeader.biHeight=-textureHeight;
-    info.bmiHeader.biPlanes=1; info.bmiHeader.biBitCount=32;
-    void* pixels=nullptr;
-    HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);
-    if (!bitmap) { DeleteDC(dc); return 0; }
-    const auto oldBitmap=SelectObject(dc,bitmap);
-    const auto fill=[&](RECT area,COLORREF color) { HBRUSH brush=CreateSolidBrush(color); FillRect(dc,&area,brush); DeleteObject(brush); };
-    fill({0,0,1280,720},RGB(16,24,31));
-    fill({0,0,320,720},RGB(24,35,45));
-    HFONT font=CreateFontW(-23,0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,HANGEUL_CHARSET,
-                           OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Malgun Gothic");
-    const auto oldFont=SelectObject(dc,font); SetBkMode(dc,TRANSPARENT);
-    const auto text=[&](const wchar_t* value,RECT rect,COLORREF color) { SetTextColor(dc,color); DrawTextW(dc,value,-1,&rect,DT_VCENTER|DT_SINGLELINE|DT_NOPREFIX); };
-    text(L"컴퓨터그래픽스 실습",{26,22,310,70},RGB(229,239,244));
-    constexpr const wchar_t* names[6]{L"1_7.cpp · 도형",L"1_12.cpp · 쌓기",L"1_14.cpp · 3D 변환",L"1_18.cpp · 행성",L"1_26.cpp · 조명",L"열쇠 제작"};
-    constexpr const wchar_t* captions[6]{L"실습 1_7  ·  점 / 선 / 삼각형 / 사각형",L"실습 1_12  ·  움직이는 사각형 맞추기",L"실습 1_14  ·  이동 / 회전 / 깊이",L"실습 1_18  ·  부모와 자식의 변환",L"실습 1_26  ·  Phong 조명과 광원 공전",L"열쇠 제작"};
-    for(int i=0;i<6;++i) {
-        fill({20,100+i*76,300,164+i*76},i==selected?RGB(48,94,111):RGB(32,46,57));
-        text(names[i],{36,100+i*76,294,164+i*76},RGB(236,242,245));
-    }
-    text(captions[selected],{355,24,1260,76},RGB(223,235,241));
-    if (selected == 5) {
-        fill({980,135,1260,455},RGB(24,35,45));
-        text(L"완성 모양",{1000,150,1240,194},RGB(223,235,241));
-        fill({995,205,1245,405},RGB(14,22,29));
-        // Same proportions, orientation and colors as the assembled 2D key.
-        // X:Y scale matches the 4:3 workspace; this picture has no hit target.
-        const auto part = [&](float x,float y,float width,float height,COLORREF color) {
-            const auto px = [](float value) { return static_cast<LONG>(std::lround(1035+180*value)); };
-            const auto py = [](float value) { return static_cast<LONG>(std::lround(305-135*value)); };
-            fill({px(x-width*.5f),py(y+height*.5f),px(x+width*.5f),py(y-height*.5f)},color);
-        };
-        part(0,0,.40f,.40f,RGB(87,189,217));
-        part(.61f,.07f,.86f,.14f,RGB(224,168,74));
-        part(.77f,-.07f,.09f,.14f,RGB(224,168,74));
-        part(.99f,-.07f,.09f,.14f,RGB(224,168,74));
-    }
-    text(L"목록을 마우스로 선택",{30,598,310,642},RGB(155,180,194));
-    text(L"Tab  방으로 돌아가기",{30,644,310,690},RGB(195,216,226));
-    GdiFlush();
-    GLuint texture=0; glGenTextures(1,&texture); glBindTexture(GL_TEXTURE_2D,texture);
-    glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,textureWidth,textureHeight,0,GL_BGRA,GL_UNSIGNED_BYTE,pixels);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-    SelectObject(dc,oldFont);DeleteObject(font);SelectObject(dc,oldBitmap);DeleteObject(bitmap);DeleteDC(dc);
-    return texture;
-}
-
 const std::array<MeshVertex, 36>& cubeMesh() {
     static const auto vertices = [] {
         std::array<MeshVertex, 36> result{};
@@ -268,7 +246,8 @@ ComputerScreen::~ComputerScreen() {
     if (program_) glDeleteProgram(program_);
     if (vertexArray_) glDeleteVertexArrays(1, &vertexArray_);
     glDeleteTextures(static_cast<GLsizei>(workspaceLabels_.size()),workspaceLabels_.data());
-    glDeleteTextures(static_cast<GLsizei>(helpLabels_.size()),helpLabels_.data());
+    const GLuint labels[]{desktopLabel_, keyDocumentLabel_, emptyDocumentLabel_};
+    glDeleteTextures(3, labels);
 }
 
 bool ComputerScreen::initialize() {
@@ -324,58 +303,87 @@ void main() { pixel = texture(image, vec2(uv.x, flip ? 1.0-uv.y : uv.y)); }
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, textureWidth, textureHeight);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_);
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
-    constexpr const wchar_t* help[6]{
-        L"P 점 · E 선 · T 삼각형 · R 사각형 | 클릭 선택 · WASD/IJKL 이동 · 1~4 전체 · C 비우기",
-        L"두 사각형이 점선 안에 들어오면 Enter · R 다시 시작",
-        L"C 육면체 / P 사각뿔 · X/Y 회전(Shift 반대) · 방향키 이동 · W/Shift+W · H 깊이 · S 초기화",
-        L"WASD 이동 · +/- 깊이 · P/Shift+P 투영 · M/Shift+M 와이어 · 1/2/3 애니메이션",
-        L"N 도형 · M 조명 · Y 회전 · R/Shift+R 광원 공전 · Z/Shift+Z 광원 거리",
-        L"도형 클릭·드래그 · Q/R 회전 · 휠 크기 · E 확인"};
-    for (int i=0;i<6;++i) {
-        workspaceLabels_[i]=workspaceTexture(i);
-        helpLabels_[i]=guideTexture(help[i]);
-        if (!workspaceLabels_[i] || !helpLabels_[i]) return false;
+    for (int i = 0; i < lessonCount; ++i) {
+        workspaceLabels_[i] = screenTexture(ScreenPage::Ide, i);
+        if (!workspaceLabels_[i]) return false;
     }
-    return complete;
+    desktopLabel_ = screenTexture(ScreenPage::Desktop);
+    keyDocumentLabel_ = screenTexture(ScreenPage::KeyDocument);
+    emptyDocumentLabel_ = screenTexture(ScreenPage::EmptyDocument);
+    labs_.select(0);
+    return complete && desktopLabel_ && keyDocumentLabel_ && emptyDocumentLabel_;
 }
 
-void ComputerScreen::keyInput(int key,int action,int mods) {
-    labs_.key(key,action,mods); dirty_=true;
+void ComputerScreen::keyInput(int key, int action, int mods) {
+    if (view_ != View::Ide || key < GLFW_KEY_RIGHT || key > GLFW_KEY_UP) return;
+    labs_.key(key, action, mods);
+    dirty_ = true;
 }
 void ComputerScreen::selectLesson(int lesson) {
-    labs_.select(lesson); dirty_=true;
+    if (lesson < 0 || lesson >= lessonCount) return;
+    labs_.clearInput();
+    labs_.select(lesson);
+    dirty_ = true;
 }
 int ComputerScreen::selectedLesson() const { return labs_.selected(); }
 void ComputerScreen::clearInput() { labs_.clearInput(); dirty_=true; }
-void ComputerScreen::pointer(float u,float v) {
-    int width=0,height=0;
-    if (auto* window=glfwGetCurrentContext()) glfwGetFramebufferSize(window,&width,&height);
-    if (width<=0 || height<=0) return;
-    const auto area=workspaceViewport(width,height);
-    const auto canvas=workspaceCanvas(labs_.selected());
-    pointer_={(u*width-area.x)*textureWidth/area.width,(v*height-area.y)*textureHeight/area.height};
-    canvasPointer_=pointer_.x>=canvas.x && pointer_.x<=canvas.x+canvas.width &&
-                   pointer_.y>=canvas.y && pointer_.y<=canvas.y+canvas.height;
-    labs_.pointer({(pointer_.x-canvas.x)*2/canvas.width-1,1-(pointer_.y-canvas.y)*2/canvas.height},canvasPointer_);
-    dirty_=true;
+void ComputerScreen::setView(View view) {
+    labs_.clearInput();
+    view_ = view;
+    dirty_ = true;
 }
-void ComputerScreen::mouseButton(int button,int action,int) {
-    if (button==GLFW_MOUSE_BUTTON_LEFT && action==GLFW_PRESS && pointer_.x>=20 && pointer_.x<=300) {
-        for(int i=0;i<6;++i) if(pointer_.y>=100+i*76 && pointer_.y<=164+i*76) {
-            selectLesson(i); return;
-        }
+
+ComputerScreen::Action ComputerScreen::click(float u, float v) {
+    if (!std::isfinite(u) || !std::isfinite(v) || u < 0 || u > 1 || v < 0 || v > 1)
+        return Action::None;
+    const float x = u * textureWidth;
+    const float y = v * textureHeight;
+    if (view_ != View::Desktop && closeButton.contains(x, y)) {
+        setView(View::Desktop);
+        return Action::None;
     }
-    labs_.mouse(button,action); dirty_=true;
+    if (view_ == View::Ide) {
+        for (int i = 0; i < lessonCount; ++i) {
+            const int top = lessonTop + i * lessonStep;
+            if (ScreenRect{20, top, 300, top + lessonHeight}.contains(x, y)) {
+                selectLesson(i);
+                break;
+            }
+        }
+    } else if (view_ == View::Desktop && keyFileIcon.contains(x, y)) {
+        setView(View::KeyDocument);
+        if (!keyTaken_) return Action::TakeCompleteKey;
+    } else if (view_ == View::KeyDocument && y > closeButton.bottom && !keyTaken_) {
+        return Action::TakeCompleteKey;
+    }
+    return Action::None;
 }
-void ComputerScreen::scroll(double amount) { labs_.scroll(amount); dirty_=true; }
-void ComputerScreen::update(float elapsed) { if (labs_.update(elapsed)) dirty_=true; }
-ComputerScreen::Action ComputerScreen::confirm() {
-    if (labs_.selected()!=5 || labs_.keyTaken()) return Action::None;
-    if (!labs_.keyReady()) return Action::None;
-    return Action::TakeCompleteKey;
+
+std::optional<glm::vec2> ComputerScreen::rayToUv(const glm::vec3& eye,
+    const glm::vec3& direction, float maxDistance) {
+    for (int axis = 0; axis < 3; ++axis) {
+        if (!std::isfinite(eye[axis]) || !std::isfinite(direction[axis])) return std::nullopt;
+    }
+    if (!std::isfinite(maxDistance) || maxDistance <= 0 || eye.x >= center.x || direction.x <= 0)
+        return std::nullopt;
+    const float length = glm::length(direction);
+    if (!std::isfinite(length) || length < 0.000001f) return std::nullopt;
+    const glm::vec3 ray = direction / length;
+    if (ray.x < 0.000001f) return std::nullopt;
+    const float distance = (center.x - eye.x) / ray.x;
+    if (distance > maxDistance) return std::nullopt;
+    const glm::vec3 hit = eye + ray * distance;
+    const glm::vec2 uv{(hit.z - center.z + 1.6f) / 3.2f,
+                       (center.y + 0.9f - hit.y) / 1.8f};
+    if (uv.x < 0 || uv.x > 1 || uv.y < 0 || uv.y > 1) return std::nullopt;
+    return uv;
 }
-void ComputerScreen::consumeKey() { labs_.consumeKey(); dirty_=true; }
-bool ComputerScreen::keyTaken() const { return labs_.keyTaken(); }
+
+void ComputerScreen::update(float elapsed) {
+    if (view_ == View::Ide && labs_.update(elapsed)) dirty_ = true;
+}
+void ComputerScreen::consumeKey() { keyTaken_ = true; dirty_ = true; }
+bool ComputerScreen::keyTaken() const { return keyTaken_; }
 
 void ComputerScreen::drawCube(const glm::mat4& viewProjection, const glm::mat4& model) const {
     const GlState state;
@@ -420,33 +428,17 @@ void ComputerScreen::renderTexture() const {
     glPolygonMode(GL_FRONT_AND_BACK,GL_FILL); glLineWidth(1);
     glDepthMask(GL_TRUE); glDepthFunc(GL_LESS); glClearDepth(1);
     glClearColor(.03f,.04f,.05f,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-    drawTexture(workspaceLabels_[labs_.selected()],glm::scale(glm::mat4{1},{2,2,1}),true);
-    const auto canvas=workspaceCanvas(labs_.selected());
-    glViewport(canvas.x,textureHeight-canvas.y-canvas.height,canvas.width,canvas.height);
-    glEnable(GL_SCISSOR_TEST);
-    glScissor(canvas.x,textureHeight-canvas.y-canvas.height,canvas.width,canvas.height);
-    labs_.draw();
-    glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST);
-    glViewport(0,0,textureWidth,textureHeight); glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
-    const GLuint help=helpLabels_[labs_.selected()];
-    // Footer uses the same top-left layout as pointer hit-testing.
-    auto footer=glm::translate(glm::mat4{1},{2*795.0f/textureWidth-1,1-2*674.0f/textureHeight,0});
-    footer=glm::scale(footer,{930.0f*2/textureWidth,60.0f*2/textureHeight,1});
-    drawTexture(help,footer,true);
+    const GLuint background = view_ == View::Ide ? workspaceLabels_[labs_.selected()]
+        : view_ == View::Desktop ? desktopLabel_
+        : keyTaken_ ? emptyDocumentLabel_ : keyDocumentLabel_;
+    drawTexture(background, glm::scale(glm::mat4{1}, {2, 2, 1}), true);
+    if (view_ == View::Ide) {
+        glViewport(canvas.x, textureHeight - canvas.y - canvas.height, canvas.width, canvas.height);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(canvas.x, textureHeight - canvas.y - canvas.height, canvas.width, canvas.height);
+        labs_.draw();
+    }
     dirty_=false;
-}
-
-void ComputerScreen::drawWorkspace() const {
-    const GlState state;
-    renderTexture();
-    GLint viewport[4]{}; glGetIntegerv(GL_VIEWPORT,viewport);
-    const auto area=workspaceViewport(viewport[2],viewport[3]);
-    glDisable(GL_DEPTH_TEST); glDisable(GL_SCISSOR_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE);
-    glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
-    // Clear the full destination so non-16:9 windows have quiet letterbox bars.
-    glClearColor(.01f,.015f,.02f,1); glClear(GL_COLOR_BUFFER_BIT);
-    glViewport(viewport[0]+area.x,viewport[1]+area.y,area.width,area.height);
-    drawTexture(color_,glm::scale(glm::mat4{1},{2,2,1}),false);
 }
 
 void ComputerScreen::drawTexture(GLuint texture, const glm::mat4& transform, bool flip) const {

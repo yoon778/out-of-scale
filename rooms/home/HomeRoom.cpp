@@ -2,6 +2,7 @@
 
 #include "../shared/PerspectiveCarry.h"
 
+#include <GL/glfw3.h>
 #include <GL/glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
@@ -480,19 +481,9 @@ bool HomeRoom::initialize() {
     return renderer_.initialize({}, movable) && computer_.initialize();
 }
 
-bool HomeRoom::computerActive() const { return computerActive_; }
-void HomeRoom::closeComputer() { computerActive_ = false; computer_.clearInput(); }
-void HomeRoom::computerSelect(int number) {
-    if (computerActive_) computer_.selectLesson(number-1);
-}
+void HomeRoom::closeComputer() { computerFocused_ = false; computer_.clearInput(); }
 void HomeRoom::computerKey(int key, int action, int mods) {
-    if (computerActive_) computer_.keyInput(key,action,mods);
-}
-void HomeRoom::computerPointer(float u, float v) {
-    if (computerActive_) computer_.pointer(u,v);
-}
-void HomeRoom::computerMouseButton(int button, int action, int mods) {
-    if (computerActive_) computer_.mouseButton(button,action,mods);
+    if (computerFocused_ || action == GLFW_RELEASE) computer_.keyInput(key,action,mods);
 }
 void HomeRoom::computerClearInput() { computer_.clearInput(); }
 
@@ -562,8 +553,9 @@ float HomeRoom::portableVisibility(const glm::vec3& eye, const glm::vec3& direct
     return limit;
 }
 
-bool HomeRoom::aimsAtComputer(const glm::vec3& eye, const glm::vec3& direction) const {
-    return eye.x < monitor.center.x && aimsAt(eye, direction, monitor, visibleRange(eye, direction, reach));
+std::optional<glm::vec2> HomeRoom::computerUv(const glm::vec3& eye, const glm::vec3& direction) const {
+    const float limit = portableVisibility(eye,direction,visibleRange(eye,direction,reach));
+    return ComputerScreen::rayToUv(eye,direction,limit);
 }
 
 bool HomeRoom::portableFits(int index, const PortableObject& object, const glm::vec3& eye) const {
@@ -1016,21 +1008,6 @@ bool HomeRoom::canTakeMiniatureRpg(const glm::vec3& eye, const glm::vec3& direct
 }
 
 void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
-    if (computerActive_) {
-        if (computer_.confirm() == ComputerScreen::Action::TakeCompleteKey &&
-            !portable_[completeKeyObject].active && !completeKeyInserted_) {
-            portable_[completeKeyObject].active = true;
-            portable_[completeKeyObject].loose = true;
-            if (const auto pose = carriedPortable(completeKeyObject,eye,direction)) {
-                portable_[completeKeyObject] = *pose;
-                heldPortable_ = completeKeyObject;
-                held_ = HeldItem::Portable;
-                computer_.consumeKey();
-                closeComputer();
-            } else portable_[completeKeyObject].active = false;
-        }
-        return;
-    }
     if (held_ == HeldItem::Portable && heldPortable_ >= 0) {
         const int index = heldPortable_;
         if (index == socketObject && !socketInstalled_ &&
@@ -1104,9 +1081,22 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
             return;
         }
     }
-    if (held_ == HeldItem::None && aimsAtComputer(eye, direction)) {
-        computerActive_ = true;
-        return;
+    if (held_ == HeldItem::None) {
+        if (const auto uv = computerUv(eye,direction)) {
+            if (computer_.click(uv->x,uv->y) == ComputerScreen::Action::TakeCompleteKey &&
+                !portable_[completeKeyObject].active && !completeKeyInserted_) {
+                portable_[completeKeyObject].active = true;
+                portable_[completeKeyObject].loose = true;
+                if (const auto pose = carriedPortable(completeKeyObject,eye,direction)) {
+                    portable_[completeKeyObject] = *pose;
+                    heldPortable_ = completeKeyObject;
+                    held_ = HeldItem::Portable;
+                    computer_.consumeKey();
+                    closeComputer();
+                } else portable_[completeKeyObject].active = false;
+            }
+            return;
+        }
     }
     const float nearby = visibleRange(eye, direction, reach);
     if (held_ == HeldItem::None && cabinetUnlocked_ && !cabinetOpen_ &&
@@ -1286,10 +1276,6 @@ void HomeRoom::impact(const Projectile& projectile) {
 }
 
 void HomeRoom::scroll(double yOffset) {
-    if (computerActive_) {
-        computer_.scroll(yOffset);
-        return;
-    }
     if (held_ == HeldItem::Portable && heldPortable_ >= schoolObject) {
         const auto previous = portable_[heldPortable_];
         portable_[heldPortable_].yaw = std::remainder(previous.yaw+static_cast<float>(yOffset)*glm::radians(15.0f),6.2831853f);
@@ -1364,7 +1350,10 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
     }
     lastEye_ = eye;
     lastDirection_ = direction;
-    if (computerActive_) computer_.update(elapsed);
+    const bool focused = held_ == HeldItem::None && computerUv(eye,direction).has_value();
+    if (computerFocused_ && !focused) computer_.clearInput();
+    computerFocused_ = focused;
+    if (computerFocused_) computer_.update(elapsed);
     if (heldPortable_ == socketObject && !socketFlat_)
         portable_[socketObject].yaw = std::atan2(direction.x,direction.z);
     updateCube(elapsed, eye, direction);
@@ -1631,10 +1620,6 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
 }
 
 void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
-    if (computerActive_) {
-        computer_.drawWorkspace();
-        return;
-    }
     renderer_.begin(viewProjection);
     drawRoom(glm::mat4{1.0f}, false);
     drawMiniature();

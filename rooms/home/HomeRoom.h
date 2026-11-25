@@ -17,12 +17,8 @@ public:
     void update(float elapsed, const glm::vec3& eye,
                 const glm::vec3& direction = glm::vec3{0.0f, 0.0f, -1.0f});
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded = nullptr);
-    bool computerActive() const;
     void closeComputer();
-    void computerSelect(int number);
     void computerKey(int key, int action, int mods);
-    void computerPointer(float u, float v);
-    void computerMouseButton(int button, int action, int mods);
     void computerClearInput();
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
@@ -30,8 +26,6 @@ public:
     static constexpr float halfSize = 20.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};
     static constexpr float spawnYaw = 0.0f;
-    static constexpr glm::vec3 computerEye{3.25f, 1.85f, 3.0f};
-    static constexpr glm::vec3 computerDirection{1.0f, 0.0f, 0.0f};
 
 private:
     enum class HeldItem { None, Rpg, Door, Cube, Key, Portable };
@@ -92,7 +86,7 @@ private:
     void drawMiniature() const;
     void drawRoom(const glm::mat4& model, bool miniature) const;
     void impact(const Projectile& projectile);
-    bool aimsAtComputer(const glm::vec3& eye, const glm::vec3& direction) const;
+    std::optional<glm::vec2> computerUv(const glm::vec3& eye, const glm::vec3& direction) const;
     bool cubeFits(const ComputerCube& cube, const glm::vec3& eye) const;
     std::optional<ComputerCube> carriedCube(const glm::vec3& eye, const glm::vec3& direction) const;
     void updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
@@ -133,7 +127,7 @@ private:
     bool completeKeyInserted_ = false;
     glm::vec3 lastEye_{0.0f,1.65f,5.0f};
     glm::vec3 lastDirection_{0.0f,0.0f,-1.0f};
-    bool computerActive_ = false;
+    bool computerFocused_ = false;
     bool standingOnCube_ = false;
     bool cabinetUnlocked_ = false;
     bool cabinetOpen_ = false;
