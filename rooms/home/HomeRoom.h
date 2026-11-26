@@ -2,6 +2,7 @@
 
 #include "../shared/BoxRenderer.h"
 #include "ComputerScreen.h"
+#include "HomeLift.h"
 
 #include <array>
 #include <optional>
@@ -83,6 +84,8 @@ private:
     bool canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canReachMiniatureShelf(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canTakeMiniatureRpg(const glm::vec3& eye, const glm::vec3& direction) const;
+    bool canReachLiftLever(const glm::vec3& eye, const glm::vec3& direction) const;
+    void updateLift(float elapsed, const glm::vec3& eye);
     void drawMiniature() const;
     void drawRoom(const glm::mat4& model, bool miniature) const;
     void impact(const Projectile& projectile);
@@ -132,7 +135,11 @@ private:
     glm::vec3 lastEye_{0.0f,1.65f,5.0f};
     glm::vec3 lastDirection_{0.0f,0.0f,-1.0f};
     bool computerFocused_ = false;
-    bool standingOnCube_ = false;
+    bool liftEnabled_ = false;
+    bool standingOnLift_ = false;
+    float liftExtension_ = 0.0f;
+    float liftTop_ = home_lift::loweredTop;
+    float previousLiftTop_ = home_lift::loweredTop;
     bool cabinetUnlocked_ = false;
     bool cabinetOpen_ = false;
     float keyTurn_ = 0.0f;
