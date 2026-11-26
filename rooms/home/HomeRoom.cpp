@@ -1589,6 +1589,11 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
     const bool stepOntoDeck = liftExtension_ >= 1.0f && descending &&
         liftTop_ <= home_lift::loweredTop + .001f && previousFeet >= -.025f;
     const bool canLandOnDeck = descending && (previousFeet >= liftTop_ - .025f || riding);
+    const auto deckClearance = [&](const glm::vec3& position) {
+        return std::max(std::abs(position.x - deck.center.x) - deck.size.x * .5f,
+                        std::abs(position.z - deck.center.z) - deck.size.z * .5f) - playerRadius;
+    };
+    const float previousDeckClearance = deckClearance(previous);
     const auto blocked = [&](const glm::vec3& position) {
         const float left=position.z>secretEntryZ ? secretLeftLimit : -sideLimit;
         const float right=position.z>secretEntryZ ? secretRightLimit : sideLimit;
@@ -1598,8 +1603,12 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
         }
         if (liftPresent && !stepOntoDeck && !canLandOnDeck &&
             position.y - eyeHeight < liftTop_ - .001f &&
-            position.y + headClearance > liftTop_ - home_lift::platformThickness &&
-            overlapsPlayer(position,deck)) return true;
+            position.y + headClearance > liftTop_ - home_lift::platformThickness) {
+            const float clearance = deckClearance(position);
+            // After falling just past the edge, the body can still brush the deck side.
+            if (clearance < 0.0f && !(previousDeckClearance < 0.0f && clearance > previousDeckClearance))
+                return true;
+        }
         for (const auto& obstacle : staticInterior) {
             if (position.y+headClearance > obstacle.center.y-obstacle.size.y*.5f && overlapsPlayer(position, obstacle)) {
                 return true;
