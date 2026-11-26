@@ -93,13 +93,15 @@ private:
     bool keyFits(const KeyPiece& key, const glm::vec3& eye) const;
     std::optional<KeyPiece> carriedKey(const glm::vec3& eye, const glm::vec3& direction) const;
     void updateKey(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
-    glm::mat4 pictureModel() const;
-    bool aimsAtPicture(const glm::vec3& eye, const glm::vec3& direction) const;
+    void updatePicture(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
+    void drawPicture(const glm::mat4& model) const;
     bool portableFits(int index, const PortableObject& object, const glm::vec3& eye) const;
     std::optional<PortableObject> carriedPortable(int index, const glm::vec3& eye, const glm::vec3& direction) const;
     void updatePortables(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
     bool grabPortable(const glm::vec3& eye, const glm::vec3& direction);
-    void tryOpenCabinet(const glm::vec3& eye);
+    void updateDoors(float elapsed, const glm::vec3& eye);
+    bool swingBlocked(const glm::vec3& center, const glm::vec3& size,
+                      const glm::vec3& eye, bool cabinet) const;
     glm::mat4 portableModel(int index) const;
     glm::mat4 homeModel() const;
     float homeRay(const glm::vec3& eye, const glm::vec3& direction,
@@ -113,7 +115,7 @@ private:
     std::optional<ComputerCube> computerCube_{ComputerCube{{2.6f,.5f,-2.0f},1.0f,0.0f}};
     std::optional<KeyPiece> keyPiece_;
     std::array<PortableObject, 6> portable_{{
-        {{-4.48f,1.93f,-6.30f},3.14159265f},
+        {{0.0f,0.0f,0.0f},0.0f,0.0f,false},
         {{0.0f,0.0f,0.0f},0.0f,0.0f,false},
         {{0.40f,.95f,9.30f},0.0f},
         {{5.60f,.95f,9.30f},0.0f},
@@ -122,7 +124,9 @@ private:
     }};
     int heldPortable_ = -1;
     bool socketFlat_ = false;
-    bool pictureOpen_ = false;
+    float pictureHold_ = 0.0f;
+    float pictureReveal_ = 0.0f;
+    float pictureGlow_ = 0.0f;
     bool socketInstalled_ = false;
     bool completeKeyInserted_ = false;
     glm::vec3 lastEye_{0.0f,1.65f,5.0f};
@@ -131,6 +135,10 @@ private:
     bool standingOnCube_ = false;
     bool cabinetUnlocked_ = false;
     bool cabinetOpen_ = false;
+    float keyTurn_ = 0.0f;
+    float cabinetSwing_ = 0.0f;
+    bool doorOpening_ = false;
+    float doorSwing_ = 0.0f;
     ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
     float shelfOffset_ = 0.0f;
