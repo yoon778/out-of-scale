@@ -11,6 +11,18 @@
 
 namespace home_lift_visual {
 
+inline constexpr glm::vec3 leverGripSize{.34f, .105f, .16f};
+inline constexpr float leverStemWidth = .042f;
+inline constexpr float leverStemDepth = .052f;
+
+inline glm::mat4 leverStemModel(const glm::mat4& model, bool enabled) {
+    const auto pivot = home_lift::leverPivot;
+    const auto handle = home_lift::leverHandle(enabled);
+    const auto direction = handle - pivot;
+    auto result = glm::translate(model, (pivot + handle) * .5f);
+    return glm::rotate(result, std::atan2(-direction.x, direction.y), glm::vec3{0, 0, 1});
+}
+
 inline const std::array<MeshVertex, 36>& cubeVertices() {
     static const auto vertices = [] {
         constexpr std::array<glm::vec3, 8> points{{
@@ -90,12 +102,10 @@ inline void draw(const BoxRenderer& renderer, GLint first, const glm::mat4& mode
     part({pivot.x, .025f, pivot.z}, {.22f, .05f, .18f}, rail);
     part({pivot.x, pivot.y * .5f, pivot.z}, {.045f, pivot.y, .055f}, steel);
     part(pivot, {.12f, .09f, .09f}, edge);
-    const glm::vec3 direction = handle - pivot;
-    auto stem = glm::translate(model, (pivot + handle) * .5f);
-    stem = glm::rotate(stem, std::atan2(-direction.x, direction.y), glm::vec3{0, 0, 1});
     renderer.drawMovableMesh(first, 36,
-        glm::scale(stem, {.028f, glm::length(direction), .036f}), steel);
-    part(handle, {.13f, .045f, .07f}, wood);
+        glm::scale(leverStemModel(model,enabled),
+                   {leverStemWidth, glm::length(handle-pivot), leverStemDepth}), {.48f,.52f,.48f});
+    part(handle, leverGripSize, {.73f,.55f,.33f});
 }
 
 } // namespace home_lift_visual

@@ -2,6 +2,7 @@
 
 #include "../shared/BoxRenderer.h"
 #include "ComputerScreen.h"
+#include "HomeEnding.h"
 #include "HomeLift.h"
 
 #include <array>
@@ -23,6 +24,7 @@ public:
     void computerClearInput();
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
+    void drawEndingOverlay() const;
 
     static constexpr float halfSize = 20.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};
@@ -80,6 +82,7 @@ private:
 
     float visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const;
     bool canFitDoor(const glm::vec3& eye, const glm::vec3& direction) const;
+    void notifyDoorFit();
     bool canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canReachMiniatureLatch(const glm::vec3& eye, const glm::vec3& direction) const;
     bool canReachMiniatureShelf(const glm::vec3& eye, const glm::vec3& direction) const;
@@ -113,6 +116,7 @@ private:
     bool overlapsPortable(const glm::vec3& center, const glm::vec3& size, float yaw, int ignore = -1) const;
 
     BoxRenderer renderer_;
+    HomeEnding ending_;
     ComputerScreen computer_;
     // A real room prop; coursework scenes never spawn this crate.
     std::optional<ComputerCube> computerCube_{ComputerCube{{2.6f,.5f,-2.0f},1.0f,0.0f}};
@@ -152,6 +156,10 @@ private:
     bool shelfMoving_ = false;
     float doorRatio_ = 0.0f;
     float doorWheelScale_ = 1.0f;
+    float shelfLatchRelease_ = 0.0f;
+    float doorFitCooldown_ = 0.0f;
+    bool doorFitNotified_ = false;
+    bool doorFitSoundEnabled_ = false;
     bool latchReleased_ = false;
     float latchTravel_ = 0.0f;
     float doorRattleTime_ = 0.0f;

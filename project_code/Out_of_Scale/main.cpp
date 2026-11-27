@@ -124,6 +124,9 @@ void drawFrame(const Player& player, const Room& room, int width, int height) {
         glm::radians(68.0f), static_cast<float>(width) / static_cast<float>(height), 0.05f, 600.0f);
     room.draw(projection * player.view(), player.eyePosition(), player.viewDirection());
     drawAimDot(width, height);
+    if constexpr (std::is_same_v<Room, HomeRoom>) {
+        room.drawEndingOverlay();
+    }
 }
 
 template<class Room>

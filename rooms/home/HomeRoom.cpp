@@ -1,6 +1,7 @@
 #include "HomeRoom.h"
 #include "HomeLiftVisual.h"
 #include "HomePicture.h"
+#include "HomeSound.h"
 
 #include "../shared/PerspectiveCarry.h"
 
@@ -38,6 +39,7 @@ constexpr float debrisDuration = 1.4f;
 constexpr float projectileSpeed = 12.0f;
 constexpr float impactDuration = 0.20f;
 constexpr float latchOpenTravel = 0.27f;
+constexpr float shelfLatchReleaseSeconds = .42f;
 constexpr glm::vec3 latchCenter{0.70f, 1.45f, -6.58f};
 constexpr glm::vec3 plaster{0.856f, 0.837f, 0.777f};
 
@@ -85,7 +87,8 @@ glm::mat4 miniatureRackModel(const glm::mat4& militaryModel) {
 }
 
 glm::mat4 miniatureRpgModel(const glm::mat4& militaryModel) {
-    return glm::scale(glm::translate(militaryModel,{.42075f,.057f,-.364125f}),glm::vec3{roomMiniatureScale});
+    // Bring the grip just beyond the rack front while keeping all ray tests aligned.
+    return glm::scale(glm::translate(militaryModel,{.42075f,.057f,-.344125f}),glm::vec3{roomMiniatureScale});
 }
 
 std::span<const Box> portableParts(int index, bool flatSocket) {
@@ -449,6 +452,21 @@ void drawRpg(const BoxRenderer& renderer, const glm::vec3& center, float scale) 
     drawHomeMesh(renderer, HomeMesh::Rpg, model);
 }
 
+void drawMiniatureShelfCues(const BoxRenderer& renderer, const glm::mat4& model, float shelfOffset) {
+    const auto first = static_cast<GLint>(fractureMesh().vertices.size() +
+        std::size(homeGeometry) + home_picture::art().vertices.size());
+    const auto part = [&](glm::vec3 position, glm::vec3 size, glm::vec3 color) {
+        renderer.drawMovableMesh(first,36,glm::scale(glm::translate(model,position),size),color);
+    };
+    // A worn patch stays on the front upright, backed by the existing pickable shelf.
+    part(shelfAt(shelfOffset).center + glm::vec3{.965f,.05f,.306f},
+         {.078f,.45f,.018f},{.68f,.50f,.31f});
+    // Broken, low-contrast scuffs imply a dragged foot rather than a drawn route.
+    part({-1.31f,.009f,-5.56f},{.32f,.006f,.055f},{.31f,.23f,.15f});
+    part({-2.02f,.009f,-5.54f},{.46f,.006f,.040f},{.28f,.21f,.14f});
+    part({-3.02f,.009f,-5.58f},{.64f,.006f,.060f},{.30f,.22f,.15f});
+}
+
 void drawDoor(const BoxRenderer& renderer, const Box& box, const glm::vec3& tint,
               const glm::mat4& parent = glm::mat4{1.0f}) {
     auto model = glm::translate(parent, box.center);
@@ -498,7 +516,9 @@ bool HomeRoom::initialize() {
     movable.insert(movable.end(), painting.begin(), painting.end());
     const auto& liftCube = home_lift_visual::cubeVertices();
     movable.insert(movable.end(), liftCube.begin(), liftCube.end());
-    return renderer_.initialize({}, movable) && computer_.initialize();
+    if (!renderer_.initialize({}, movable) || !computer_.initialize()) return false;
+    doorFitSoundEnabled_ = true;
+    return true;
 }
 
 void HomeRoom::closeComputer() { computerFocused_ = false; computer_.clearInput(); }
@@ -1054,9 +1074,16 @@ bool HomeRoom::canFitDoor(const glm::vec3& eye, const glm::vec3& direction) cons
     return scale >= 0.72f && scale <= 1.35f;
 }
 
+void HomeRoom::notifyDoorFit() {
+    if (doorFitNotified_ || doorFitCooldown_ > 0.0f) return;
+    doorFitNotified_ = true;
+    doorFitCooldown_ = .22f;
+    if (doorFitSoundEnabled_) home_sound::playDoorFitClick();
+}
+
 bool HomeRoom::canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const {
     if (!cabinetOpen_ || !standingOnLift_ || liftTop_ < home_lift::raisedTop - .001f ||
-        held_ != HeldItem::None) return false;
+        shelfLatchRelease_ < 1.0f || held_ != HeldItem::None) return false;
     const float visible = visibleRange(eye, direction, reach);
     if (std::abs(eye.y - eyeHeight - liftTop_) >= .03f ||
         !home_lift::footOnDeck(eye, home_lift::center(liftExtension_,liftTop_)) ||
@@ -1112,8 +1139,15 @@ bool HomeRoom::canReachLiftLever(const glm::vec3& eye, const glm::vec3& directio
     const auto inverse = glm::inverse(model);
     const auto localEye = glm::vec3{inverse * glm::vec4{eye,1.0f}};
     const auto localRay = glm::vec3{inverse * glm::vec4{direction,0.0f}};
-    const glm::vec3 target = (home_lift::leverHandle(false) + home_lift::leverPivot) * .5f;
-    const auto hit = perspective::rayBoxDistance(localEye,localRay,target,{.21f,.24f,.16f});
+    const auto handle = home_lift::leverHandle(false);
+    auto hit = perspective::rayBoxDistance(localEye,localRay,handle,home_lift_visual::leverGripSize*.5f);
+    const auto stemInverse = glm::inverse(home_lift_visual::leverStemModel(glm::mat4{1.0f},false));
+    const auto stemEye = glm::vec3{stemInverse*glm::vec4{localEye,1.0f}};
+    const auto stemRay = glm::vec3{stemInverse*glm::vec4{localRay,0.0f}};
+    const auto stemHit = perspective::rayBoxDistance(stemEye,stemRay,glm::vec3{0.0f},
+        {home_lift_visual::leverStemWidth*.5f,glm::length(handle-home_lift::leverPivot)*.5f,
+         home_lift_visual::leverStemDepth*.5f});
+    if (stemHit && (!hit || *stemHit < *hit)) hit = stemHit;
     if (!hit || *hit > 2.3f) return false;
     float visible = portableVisibility(eye,direction,visibleRange(eye,direction,2.3f),homeObject);
     visible = visibleMeshRange(HomeMesh::Interior,model,eye,direction,visible);
@@ -1229,6 +1263,7 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         case ExitState::WallBroken:
             if (held_ == HeldItem::Door) {
                 if (canFitDoor(eye, direction)) {
+                    notifyDoorFit();
                     held_ = HeldItem::None;
                     exitState_ = ExitState::DoorPlaced;
                 }
@@ -1269,13 +1304,13 @@ void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
     bool breaksWall = false;
     bool miniature = false;
     // Test the complete flight segment so fast shots cannot skip thin furniture.
-    const auto hit = [&](const Box& obstacle, bool breakable = false, bool small = false) {
-        const auto depth = small ? homeRay(eye,direction,obstacle.center,obstacle.size,distance)
+    const auto hit = [&](const Box& obstacle, bool breakable = false, bool inMiniature = false) {
+        const auto depth = inMiniature ? homeRay(eye,direction,obstacle.center,obstacle.size,distance)
                                  : perspective::rayBoxDistance(eye,direction,obstacle.center,obstacle.size*.5f).value_or(distance);
-        if (depth < distance && !(small && heldPortable_ == homeObject)) {
+        if (depth < distance && !(inMiniature && heldPortable_ == homeObject)) {
             distance = depth;
             breaksWall = breakable;
-            miniature = small;
+            miniature = inMiniature;
         }
     };
     hit(wallPanel, true);
@@ -1490,6 +1525,7 @@ void HomeRoom::updateLift(float elapsed, const glm::vec3& eye) {
 }
 
 void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
+    ending_.update(elapsed, exitState_ == ExitState::Escaped);
     if (elapsed <= 0.0f) {
         return;
     }
@@ -1507,6 +1543,15 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
     updateKey(elapsed,eye,direction);
     updatePortables(elapsed,eye,direction);
     updateDoors(elapsed,eye);
+    if (exitState_ >= ExitState::WallBroken && shelfLatchRelease_ < 1.0f) {
+        shelfLatchRelease_ = std::min(1.0f, shelfLatchRelease_ + elapsed / shelfLatchReleaseSeconds);
+    }
+    doorFitCooldown_ = std::max(0.0f, doorFitCooldown_ - elapsed);
+    if (held_ == HeldItem::Door && canFitDoor(eye, direction)) {
+        notifyDoorFit();
+    } else {
+        doorFitNotified_ = false;
+    }
     if (latchReleased_) {
         latchTravel_ = std::min(latchOpenTravel, latchTravel_ + elapsed * 0.80f);
     }
@@ -1726,11 +1771,12 @@ void HomeRoom::drawMiniature() const {
         drawHomeMesh(renderer_,portableMesh(index),portableModel(index));
     }
     drawRoom(homeModel(), true);
+    drawMiniatureShelfCues(renderer_,homeModel(),shelfOffset_);
     const auto rack = miniatureRackModel(portableModel(militaryObject));
     drawHomeMesh(renderer_,HomeMesh::Rack,rack);
     if ((exitState_ == ExitState::Explore || exitState_ == ExitState::WallRevealed) && held_ != HeldItem::Rpg) {
         const auto rpg = miniatureRpgModel(portableModel(militaryObject));
-        drawHomeMesh(renderer_,HomeMesh::Rpg,rpg);
+        drawHomeMesh(renderer_,HomeMesh::Rpg,rpg,{1.12f,1.09f,1.0f});
     }
 }
 
@@ -1784,6 +1830,14 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
         storedModel = glm::rotate(storedModel, glm::radians(-90.0f), {1.0f, 0.0f, 0.0f});
         storedModel = glm::scale(storedModel, glm::vec3{miniatureScale});
         drawHomeMesh(renderer_, HomeMesh::Door, storedModel);
+
+        const auto latchPart = [&](glm::vec3 center, glm::vec3 size, glm::vec3 tint) {
+            renderer_.drawMovableMesh(liftFirst, 36, glm::scale(glm::translate(model, center), size), tint);
+        };
+        const float retract = .46f * glm::smoothstep(0.0f, 1.0f, shelfLatchRelease_);
+        latchPart({4.98f, 2.245f, -3.69f}, {.14f, .09f, .24f}, {.31f, .26f, .20f});
+        latchPart({4.99f, 2.30f, -3.28f - retract}, {.08f, .06f, .54f}, {.61f, .47f, .25f});
+        latchPart({4.94f, 2.32f, -3.09f - retract}, {.08f, .065f, .08f}, {.77f, .62f, .36f});
     }
     const float rattle = exitState_ == ExitState::DoorPlaced && !doorOpening_
         ? std::sin(doorRattleTime_ * 55.0f) * doorRattleTime_ * 0.04f : 0.0f;
@@ -1792,9 +1846,18 @@ void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
         drawDoor(renderer_, door, glm::vec3{1.0f}, doorParent);
     }
     if (doorSwing_ > 0.0f) {
-        const auto center = glm::vec3{model * glm::vec4{0.0f, 1.35f, -8.38f, 1.0f}};
-        const float scale = miniature ? roomMiniatureScale : 1.0f;
-        renderer_.drawBox(center, glm::vec3{1.87f, 2.65f, 0.02f} * scale, {0.95f, 0.80f, 0.48f});
+        const auto outside = [&](const glm::vec3& center, const glm::vec3& size, const glm::vec3& color) {
+            const auto exteriorModel = glm::scale(glm::translate(model, center), size);
+            renderer_.drawMovableMesh(liftFirst,36,exteriorModel,color);
+        };
+        // The distant morning fills the opening while the door rotates out of it.
+        outside({0.0f,1.35f,-8.40f},{3.60f,2.70f,.025f},{.86f,.93f,1.0f});
+        outside({0.0f,.92f,-8.36f},{3.60f,.85f,.025f},{1.0f,.90f,.68f});
+        outside({-.95f,.58f,-8.31f},{1.70f,.75f,.025f},{.54f,.69f,.55f});
+        outside({1.02f,.51f,-8.30f},{1.60f,.62f,.025f},{.65f,.76f,.56f});
+        outside({.14f,.22f,-8.26f},{.78f,.44f,.025f},{1.0f,.92f,.71f});
+        outside({0.0f,.005f,-7.40f},{1.78f,.01f,2.05f},{.95f,.88f,.67f});
+        outside({.52f,1.85f,-8.24f},{.25f,.25f,.025f},{1.0f,.98f,.82f});
     }
     if (exitState_ >= ExitState::DoorPlaced) {
         auto latchModel = glm::translate(doorParent, latchCenter);
@@ -1881,4 +1944,92 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
         if (cabinetOpen_) computer_.drawCompleteKey(viewProjection,homeModel()*portableModel(completeKeyObject));
     }
     computer_.draw(viewProjection);
+    if (doorSwing_ > 0.0f) {
+        // Thin translucent trapezoids soften the daylight over the existing floor.
+        const GLboolean wasBlending = glIsEnabled(GL_BLEND);
+        GLboolean depthMask;
+        GLint sourceRgb, destinationRgb, sourceAlpha, destinationAlpha;
+        GLfloat blendColor[4];
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &depthMask);
+        glGetIntegerv(GL_BLEND_SRC_RGB,&sourceRgb);
+        glGetIntegerv(GL_BLEND_DST_RGB,&destinationRgb);
+        glGetIntegerv(GL_BLEND_SRC_ALPHA,&sourceAlpha);
+        glGetIntegerv(GL_BLEND_DST_ALPHA,&destinationAlpha);
+        glGetFloatv(GL_BLEND_COLOR,blendColor);
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+        glBlendFunc(GL_CONSTANT_ALPHA, GL_ONE_MINUS_CONSTANT_ALPHA);
+        renderer_.begin(viewProjection);
+        for (int band = 0; band < 4; ++band) {
+            const float reach = 3.50f - .45f * static_cast<float>(band);
+            const float width = 1.80f - .23f * static_cast<float>(band);
+            const std::array<glm::vec2,4> light{{
+                {-.86f,wallZ+.18f},{.86f,wallZ+.18f},
+                {width,wallZ+reach},{-width,wallZ+reach},
+            }};
+            glBlendColor(0.0f,0.0f,0.0f,.09f*doorSwing_);
+            renderer_.drawFlatPolygon(light,.012f+.001f*static_cast<float>(band),{1.0f,.83f,.48f});
+        }
+        glBlendColor(blendColor[0],blendColor[1],blendColor[2],blendColor[3]);
+        glBlendFuncSeparate(sourceRgb,destinationRgb,sourceAlpha,destinationAlpha);
+        glDepthMask(depthMask);
+        if (!wasBlending) glDisable(GL_BLEND);
+    }
+}
+
+void HomeRoom::drawEndingOverlay() const {
+    const float alpha = ending_.fade();
+    if (alpha <= 0.0f) return;
+
+    const GLboolean wasDepth = glIsEnabled(GL_DEPTH_TEST);
+    const GLboolean wasBlend = glIsEnabled(GL_BLEND);
+    const GLboolean wasScissor = glIsEnabled(GL_SCISSOR_TEST);
+    const GLboolean wasCull = glIsEnabled(GL_CULL_FACE);
+    GLboolean depthMask;
+    GLint program, vertexArray, arrayBuffer, sourceRgb, destinationRgb, sourceAlpha, destinationAlpha;
+    GLint equationRgb, equationAlpha;
+    GLfloat blendColor[4];
+    glGetBooleanv(GL_DEPTH_WRITEMASK,&depthMask);
+    glGetIntegerv(GL_CURRENT_PROGRAM,&program);
+    glGetIntegerv(GL_VERTEX_ARRAY_BINDING,&vertexArray);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING,&arrayBuffer);
+    glGetIntegerv(GL_BLEND_SRC_RGB,&sourceRgb);
+    glGetIntegerv(GL_BLEND_DST_RGB,&destinationRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA,&sourceAlpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA,&destinationAlpha);
+    glGetIntegerv(GL_BLEND_EQUATION_RGB,&equationRgb);
+    glGetIntegerv(GL_BLEND_EQUATION_ALPHA,&equationAlpha);
+    glGetFloatv(GL_BLEND_COLOR,blendColor);
+
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_CULL_FACE);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendEquation(GL_FUNC_ADD);
+    glBlendFunc(GL_CONSTANT_ALPHA,GL_ONE_MINUS_CONSTANT_ALPHA);
+    glBlendColor(0.0f,0.0f,0.0f,alpha);
+    // Map the renderer's XZ polygon to clip-space XY for a single blended layer.
+    glm::mat4 screen{1.0f};
+    screen[1][1] = 0.0f;
+    screen[1][2] = 1.0f;
+    screen[2][1] = 1.0f;
+    screen[2][2] = 0.0f;
+    constexpr std::array<glm::vec2,4> fullScreen{{
+        {-1.0f,-1.0f},{1.0f,-1.0f},{1.0f,1.0f},{-1.0f,1.0f},
+    }};
+    renderer_.begin(screen);
+    renderer_.drawFlatPolygon(fullScreen,0.0f,{0.0f,0.0f,0.0f});
+
+    glBlendColor(blendColor[0],blendColor[1],blendColor[2],blendColor[3]);
+    glBlendFuncSeparate(sourceRgb,destinationRgb,sourceAlpha,destinationAlpha);
+    glBlendEquationSeparate(equationRgb,equationAlpha);
+    glDepthMask(depthMask);
+    if (wasDepth) glEnable(GL_DEPTH_TEST);
+    if (!wasBlend) glDisable(GL_BLEND);
+    if (wasScissor) glEnable(GL_SCISSOR_TEST);
+    if (wasCull) glEnable(GL_CULL_FACE);
+    glUseProgram(program);
+    glBindVertexArray(vertexArray);
+    glBindBuffer(GL_ARRAY_BUFFER,arrayBuffer);
 }
