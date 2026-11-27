@@ -1,4 +1,5 @@
 #include "src/core/Audio.h"
+#include "src/core/MovementAudio.h"
 #include "src/core/Player.h"
 #include "src/core/PauseMenu.h"
 #include "../../rooms/home/HomeRoom.h"
@@ -65,6 +66,57 @@ bool updateAudioAndRestoreFullscreen(GLFWwindow* window) {
     Audio::instance().update(elapsed);
     return restoreFullscreen(window);
 }
+
+void playMovement(MovementAudio::Cue cue) {
+    if (cue == MovementAudio::Cue::Step) {
+        Audio::instance().playEffect(SoundEffect::Footstep, 0.7f);
+    } else if (cue == MovementAudio::Cue::Land) {
+        Audio::instance().playEffect(SoundEffect::Land, 0.9f);
+    }
+}
+
+void playCarryChange(bool before, bool after) {
+    if (before != after) {
+        Audio::instance().playEffect(after ? SoundEffect::Grab : SoundEffect::Place);
+    }
+}
+
+struct SchoolAudio {
+    PauseMenu& pause;
+    const school::PreviewState& scene;
+    MovementAudio movement;
+    std::optional<bool> carryingBeforeE;
+
+    void flushCarry() {
+        if (carryingBeforeE.has_value()) {
+            playCarryChange(*carryingBeforeE, scene.room.isCarrying());
+            carryingBeforeE.reset();
+        }
+    }
+
+    bool keyPressed(GLFWwindow* window, int key) {
+        flushCarry();
+        const bool consumed = pause.keyPressed(window, key);
+        if (!consumed && key == GLFW_KEY_E && !pause.isPaused()) {
+            carryingBeforeE = scene.room.isCarrying();
+        }
+        return consumed;
+    }
+
+    void reset() {
+        carryingBeforeE.reset();
+        movement.reset(scene.camera.feet, scene.camera.grounded);
+    }
+
+    void frame(GLFWwindow* window) {
+        if (pause.isPaused() || !glfwGetWindowAttrib(window, GLFW_FOCUSED)) {
+            reset();
+        } else {
+            flushCarry();
+            playMovement(movement.sample(scene.camera.feet, scene.camera.grounded));
+        }
+    }
+};
 
 const char* windowTitle(TestRoom::ExitState state) {
     switch (state) {
@@ -161,6 +213,8 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
     scene.destination.reset();
     scene.pause = &pause;
     scene.player.resetMouseSample();
+    MovementAudio movement;
+    movement.reset(scene.player.eyePosition(), scene.player.isGrounded());
     updatePauseCursor(window,scene,pause.isPaused());
     const auto titleForRoom = [&scene] {
         if constexpr (std::is_same_v<Room, MapPreview>) {
@@ -213,7 +267,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             scene.player.jump();
         } else if constexpr (!std::is_same_v<Room, MapPreview>) {
             if (key == GLFW_KEY_E) {
+                const bool wasCarrying = scene.room.isCarrying();
                 scene.room.interact(scene.player.eyePosition(), scene.player.viewDirection());
+                playCarryChange(wasCarrying, scene.room.isCarrying());
             }
         }
     });
@@ -265,7 +321,8 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         const double now = glfwGetTime();
         const float elapsed = static_cast<float>(std::min(now - previous, 0.05));
         previous = now;
-        if (!wasPaused && !pause.isPaused()) {
+        const bool updating = !wasPaused && !pause.isPaused();
+        if (updating) {
             const glm::vec3 previousEye = scene.player.eyePosition();
             scene.player.update(window, elapsed, Room::halfSize,
                                 std::is_same_v<Room, MilitaryRoom> || std::is_same_v<Room, HomeRoom>);
@@ -285,6 +342,17 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             } else if constexpr (std::is_same_v<Room, TestRoom>) {
                 scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
             }
+        }
+        const bool playRoomAudio = updating && glfwGetWindowAttrib(window, GLFW_FOCUSED);
+        if (playRoomAudio) {
+            playMovement(movement.sample(scene.player.eyePosition(), scene.player.isGrounded()));
+        } else {
+            movement.reset(scene.player.eyePosition(), scene.player.isGrounded());
+        }
+        if constexpr (std::is_same_v<Room, HomeRoom>) {
+            auto& audio = Audio::instance();
+            audio.setMechanismSound(MechanismSound::Bookcase, playRoomAudio ? scene.room.bookcaseSoundGain() : 0.0f);
+            audio.setMechanismSound(MechanismSound::Lift, playRoomAudio ? scene.room.liftSoundGain() : 0.0f);
         }
 
         if (const char* currentTitle = titleForRoom(); currentTitle != title) {
@@ -306,6 +374,10 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         }
     }
 
+    if constexpr (std::is_same_v<Room, HomeRoom>) {
+        Audio::instance().setMechanismSound(MechanismSound::Bookcase, 0.0f);
+        Audio::instance().setMechanismSound(MechanismSound::Lift, 0.0f);
+    }
     glfwSetCursorPosCallback(window, nullptr);
     glfwSetWindowFocusCallback(window, nullptr);
     glfwSetKeyCallback(window, nullptr);
@@ -322,17 +394,22 @@ int runGame(GLFWwindow* window, Map activeMap) {
     if (!pause.initialize()) {
         return 1;
     }
+    school::PreviewState schoolState;
+    SchoolAudio schoolAudio{pause, schoolState};
     const school::PreviewPause schoolPause{
-        &pause,
-        [](const void* context) { return static_cast<const PauseMenu*>(context)->isPaused(); },
-        [](void* context, bool paused) { static_cast<PauseMenu*>(context)->setPaused(paused); },
-        [](void* context, GLFWwindow* target, int key) { return static_cast<PauseMenu*>(context)->keyPressed(target, key); },
-        [](void* context, GLFWwindow* target) { static_cast<PauseMenu*>(context)->click(target); },
+        &schoolAudio,
+        [](const void* context) { return static_cast<const SchoolAudio*>(context)->pause.isPaused(); },
+        [](void* context, bool paused) {
+            auto& adapter = *static_cast<SchoolAudio*>(context);
+            adapter.pause.setPaused(paused);
+            adapter.reset();
+        },
+        [](void* context, GLFWwindow* target, int key) { return static_cast<SchoolAudio*>(context)->keyPressed(target, key); },
+        [](void* context, GLFWwindow* target) { static_cast<SchoolAudio*>(context)->pause.click(target); },
         [](void* context, GLFWwindow* target, int width, int height) {
-            static_cast<PauseMenu*>(context)->draw(target, width, height);
+            static_cast<SchoolAudio*>(context)->pause.draw(target, width, height);
         },
     };
-    school::PreviewState schoolState;
     Scene<MilitaryRoom> military{Player{MilitaryRoom::spawnEye, MilitaryRoom::spawnYaw}, {}};
     Scene<MapPreview> office{Player{}, MapPreview{Theme::Office}};
     Scene<HomeRoom> home{Player{HomeRoom::spawnEye, HomeRoom::spawnYaw}, {}};
@@ -348,7 +425,11 @@ int runGame(GLFWwindow* window, Map activeMap) {
         switch (activeMap) {
         case Map::School: {
             glfwSetWindowTitle(window, "Out of Scale | School");
-            school::PreviewNavigation navigation{0, updateAudioAndRestoreFullscreen, &schoolPause};
+            schoolAudio.reset();
+            school::PreviewNavigation navigation{
+                0, updateAudioAndRestoreFullscreen, &schoolPause, &schoolAudio,
+                [](void* context, GLFWwindow* target) { static_cast<SchoolAudio*>(context)->frame(target); }
+            };
             result = school::runPreview(window, schoolState, {}, &navigation);
             if (const auto map = mapForKey(navigation.requestedKey)) {
                 activeMap = *map;

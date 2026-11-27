@@ -16,6 +16,7 @@ public:
     void interact(const glm::vec3& eye, const glm::vec3& direction);
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired);
     ExitState exitState() const;
+    bool isCarrying() const { return heldSizePerDepth_ > 0.0f; }
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
     static constexpr float halfSize = 20.0f;

@@ -20,6 +20,7 @@ public:
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired,
                               const glm::vec3& facing = {1.0f, 0.0f, 0.0f}, bool* grounded = nullptr);
     ExitState exitState() const;
+    bool isCarrying() const { return heldObject_.has_value() || moonHeld_; }
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
 
     static constexpr float halfSize = 36.0f;

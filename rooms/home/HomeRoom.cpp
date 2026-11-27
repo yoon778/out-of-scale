@@ -1525,10 +1525,15 @@ void HomeRoom::updateLift(float elapsed, const glm::vec3& eye) {
 }
 
 void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
+    bookcaseSoundGain_ = 0.0f;
+    liftSoundGain_ = 0.0f;
     ending_.update(elapsed, exitState_ == ExitState::Escaped);
     if (elapsed <= 0.0f) {
         return;
     }
+    const float previousShelfOffset = shelfOffset_;
+    const float previousLiftExtension = liftExtension_;
+    const float previousLiftTop = liftTop_;
     lastEye_ = eye;
     lastDirection_ = direction;
     updatePicture(elapsed, eye, direction);
@@ -1539,6 +1544,9 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
     if (heldPortable_ == socketObject && !socketFlat_)
         portable_[socketObject].yaw = std::atan2(direction.x,direction.z);
     updateLift(elapsed,eye);
+    const float liftMotion = std::max(std::abs(liftExtension_ - previousLiftExtension) * .9f,
+                                      std::abs(liftTop_ - previousLiftTop) / .64f);
+    liftSoundGain_ = .8f * std::clamp(liftMotion / elapsed, 0.0f, 1.0f);
     updateCube(elapsed, eye, direction);
     updateKey(elapsed,eye,direction);
     updatePortables(elapsed,eye,direction);
@@ -1575,6 +1583,8 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
             }
         }
     }
+    bookcaseSoundGain_ = .8f * std::clamp(std::abs(shelfOffset_ - previousShelfOffset) / (2.1f * elapsed),
+                                        0.0f, 1.0f);
     shotFlashTime_ = std::max(0.0f, shotFlashTime_ - elapsed);
     impactTime_ = std::max(0.0f, impactTime_ - elapsed);
     for (Particle& particle : particles_) {

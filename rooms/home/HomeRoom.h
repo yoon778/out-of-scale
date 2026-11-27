@@ -26,6 +26,9 @@ public:
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
     void drawEndingOverlay() const;
     float endingFade() const { return ending_.fade(); }
+    bool isCarrying() const { return held_ != HeldItem::None; }
+    float bookcaseSoundGain() const { return bookcaseSoundGain_; }
+    float liftSoundGain() const { return liftSoundGain_; }
 
     static constexpr float halfSize = 20.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};
@@ -154,6 +157,8 @@ private:
     ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
     float shelfOffset_ = 0.0f;
+    float bookcaseSoundGain_ = 0.0f;
+    float liftSoundGain_ = 0.0f;
     bool shelfMoving_ = false;
     float doorRatio_ = 0.0f;
     float doorWheelScale_ = 1.0f;

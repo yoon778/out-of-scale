@@ -26,6 +26,12 @@ constexpr float crossfadeSeconds = 1.0f;
 constexpr float duckGain = 0.45f;
 constexpr float duckHoldSeconds = 0.12f;
 constexpr float duckRestoreSeconds = 0.35f;
+constexpr float effectGain = 0.85f;
+constexpr float mechanismGain = 0.85f;
+constexpr float mechanismAttackSeconds = 0.04f;
+constexpr float mechanismReleaseSeconds = 0.06f;
+constexpr float mechanismDuckGain = 0.75f;
+constexpr float mechanismDuckRestoreSeconds = 0.18f;
 constexpr std::size_t maximumWaveBytes = 64u * 1024u * 1024u;
 
 struct WaveData {
@@ -103,7 +109,7 @@ std::filesystem::path musicDirectory() {
     return {};
 }
 
-std::optional<WaveData> readWave(const std::filesystem::path& path) {
+std::optional<WaveData> readWave(const std::filesystem::path& path, bool music = true) {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     const auto length = file.tellg();
     if (!file || length < 12 || length > static_cast<std::streamoff>(maximumWaveBytes)) return std::nullopt;
@@ -111,7 +117,7 @@ std::optional<WaveData> readWave(const std::filesystem::path& path) {
     file.seekg(0);
     if (!file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size())))
         return std::nullopt;
-    return parseWave(bytes, true);
+    return parseWave(bytes, music);
 }
 
 int musicIndex(RoomMusic room) {
@@ -137,32 +143,57 @@ struct Audio::State {
         float sceneGain = 1.0f;
     };
 
+    struct Effect {
+        std::optional<WaveData> wave;
+        IXAudio2SourceVoice* voice = nullptr;
+    };
+
+    struct Mechanism : Effect {
+        float gain = 0.0f;
+        float target = 0.0f;
+        float fromGain = 0.0f;
+        float elapsed = 0.0f;
+    };
+
     IXAudio2* engine = nullptr;
     IXAudio2MasteringVoice* master = nullptr;
     IXAudio2SourceVoice* clickVoice = nullptr;
     std::optional<WaveData> click;
     std::array<Music, 4> tracks;
+    std::array<Effect, 4> effects;
+    std::array<Mechanism, 2> mechanisms;
     int selected = -1;
     float fadeElapsed = crossfadeSeconds;
     float duckElapsed = duckHoldSeconds + duckRestoreSeconds;
+    float mechanismDuck = 1.0f;
     bool ownsCom = false;
 
     ~State() {
         for (auto& track : tracks) destroySource(track.voice);
+        for (auto& effect : effects) destroySource(effect.voice);
+        for (auto& mechanism : mechanisms) destroySource(mechanism.voice);
         destroySource(clickVoice);
         if (master) master->DestroyVoice();
         if (engine) engine->Release();
         if (ownsCom) CoUninitialize();
     }
 
-    bool startVoice(IXAudio2SourceVoice*& voice, const WaveData& wave, bool loop) {
-        if (FAILED(engine->CreateSourceVoice(&voice, &wave.format, XAUDIO2_VOICE_NOPITCH))) return false;
+    bool startVoice(IXAudio2SourceVoice*& voice, const WaveData& wave, bool loop, float volume = -1.0f) {
+        if (voice) {
+            if (FAILED(voice->Stop()) || FAILED(voice->FlushSourceBuffers())) {
+                destroySource(voice);
+                return false;
+            }
+        } else if (FAILED(engine->CreateSourceVoice(&voice, &wave.format, XAUDIO2_VOICE_NOPITCH))) {
+            return false;
+        }
         XAUDIO2_BUFFER buffer{};
         buffer.AudioBytes = static_cast<UINT32>(wave.samples.size());
         buffer.pAudioData = wave.samples.data();
         buffer.Flags = XAUDIO2_END_OF_STREAM;
         buffer.LoopCount = loop ? XAUDIO2_LOOP_INFINITE : 0;
-        if (FAILED(voice->SetVolume(loop ? 0.0f : 1.0f)) ||
+        if (volume < 0.0f) volume = loop ? 0.0f : 1.0f;
+        if (FAILED(voice->SetVolume(volume)) ||
             FAILED(voice->SubmitSourceBuffer(&buffer)) || FAILED(voice->Start())) {
             destroySource(voice);
             return false;
@@ -172,7 +203,7 @@ struct Audio::State {
 
     void applyMusicVolumes() {
         const float restore = std::clamp((duckElapsed - duckHoldSeconds) / duckRestoreSeconds, 0.0f, 1.0f);
-        const float duck = duckGain + (1.0f - duckGain) * restore;
+        const float duck = std::min(duckGain + (1.0f - duckGain) * restore, mechanismDuck);
         for (auto& track : tracks)
             if (track.voice) track.voice->SetVolume(musicGain * track.weight * track.sceneGain * duck);
     }
@@ -198,6 +229,13 @@ bool Audio::initialize() {
     if (!directory.empty()) {
         for (std::size_t index = 0; index < state->tracks.size(); ++index)
             state->tracks[index].wave = readWave(directory / names[index]);
+        const auto effectsDirectory = directory.parent_path() / L"sfx";
+        constexpr const wchar_t* effectNames[]{L"footstep.wav", L"land.wav", L"grab.wav", L"place.wav"};
+        for (std::size_t index = 0; index < state->effects.size(); ++index)
+            state->effects[index].wave = readWave(effectsDirectory / effectNames[index], false);
+        constexpr const wchar_t* mechanismNames[]{L"bookcase.wav", L"lift.wav"};
+        for (std::size_t index = 0; index < state->mechanisms.size(); ++index)
+            state->mechanisms[index].wave = readWave(effectsDirectory / mechanismNames[index], false);
     }
     const auto clickBytes = home_sound::detail::makeDoorFitWave();
     state->click = parseWave(clickBytes, false);
@@ -236,6 +274,25 @@ void Audio::update(float elapsed) {
         track.weight = track.fromWeight + (target - track.fromWeight) * blend;
         if (target == 0.0f && blend >= 1.0f) destroySource(track.voice);
     }
+    bool movingMechanism = false;
+    for (auto& mechanism : state.mechanisms) {
+        const float duration = mechanism.target > mechanism.fromGain
+            ? mechanismAttackSeconds : mechanismReleaseSeconds;
+        mechanism.elapsed = std::min(duration, mechanism.elapsed + elapsed);
+        const float amount = mechanism.elapsed / duration;
+        mechanism.gain = mechanism.fromGain + (mechanism.target - mechanism.fromGain) * amount;
+        if (mechanism.voice) {
+            mechanism.voice->SetVolume(mechanismGain * mechanism.gain);
+            if (mechanism.target == 0.0f && amount >= 1.0f) {
+                destroySource(mechanism.voice);
+            } else {
+                movingMechanism = true;
+            }
+        }
+    }
+    state.mechanismDuck = movingMechanism ? mechanismDuckGain
+        : std::min(1.0f, state.mechanismDuck +
+                         elapsed * (1.0f - mechanismDuckGain) / mechanismDuckRestoreSeconds);
     state.applyMusicVolumes();
 }
 
@@ -246,6 +303,37 @@ void Audio::playDoorFitClick() {
     if (state.startVoice(state.clickVoice, *state.click, false)) {
         state.duckElapsed = 0.0f;
         state.applyMusicVolumes();
+    }
+}
+
+void Audio::playEffect(SoundEffect effect, float gain) {
+    if (!state_ || !std::isfinite(gain)) return;
+    const int index = static_cast<int>(effect);
+    if (index < 0 || index >= static_cast<int>(state_->effects.size())) return;
+    gain = std::clamp(gain, 0.0f, 1.0f);
+    auto& sample = state_->effects[static_cast<std::size_t>(index)];
+    if (gain > 0.0f && sample.wave)
+        state_->startVoice(sample.voice, *sample.wave, false, effectGain * gain);
+}
+
+void Audio::setMechanismSound(MechanismSound mechanism, float gain) {
+    if (!state_) return;
+    const int index = static_cast<int>(mechanism);
+    if (index < 0 || index >= static_cast<int>(state_->mechanisms.size())) return;
+    if (!std::isfinite(gain)) gain = 0.0f;
+    gain = std::clamp(gain, 0.0f, 1.0f);
+    auto& sound = state_->mechanisms[static_cast<std::size_t>(index)];
+    if (gain > 0.0f && !sound.voice) {
+        if (!sound.wave || !state_->startVoice(sound.voice, *sound.wave, true, mechanismGain * sound.gain)) return;
+    }
+    if (sound.target != gain) {
+        sound.fromGain = sound.gain;
+        sound.elapsed = 0.0f;
+        sound.target = gain;
+    }
+    if (sound.voice && gain > 0.0f) {
+        state_->mechanismDuck = mechanismDuckGain;
+        state_->applyMusicVolumes();
     }
 }
 

@@ -714,6 +714,8 @@ int school::runPreview(GLFWwindow* window, PreviewState& preview, const std::str
             if (navigation && !hadEscaped && state.room.escaped())
                 break;
         }
+        if (navigation && navigation->afterUpdate)
+            navigation->afterUpdate(navigation->frameContext, window);
         int width, height;
         glfwGetFramebufferSize(window, &width, &height);
         if (width <= 0 || height <= 0) {

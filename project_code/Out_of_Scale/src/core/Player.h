@@ -18,6 +18,7 @@ public:
     void setHorizontalPosition(const glm::vec3& position);
     void setRoomPosition(const glm::vec3& position, bool roomGrounded);
     glm::vec3 eyePosition() const;
+    bool isGrounded() const { return grounded; }
     glm::vec3 viewDirection() const;
     glm::mat4 view() const;
 

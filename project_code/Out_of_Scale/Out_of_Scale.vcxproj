@@ -130,6 +130,7 @@
   <ItemGroup>
     <ClInclude Include="src\core\Player.h" />
     <ClInclude Include="src\core\Audio.h" />
+    <ClInclude Include="src\core\MovementAudio.h" />
     <ClInclude Include="src\core\PauseMenu.h" />
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\home\HomeRoom.h" />
@@ -167,5 +168,16 @@
       <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\home.wav" />
     </ItemGroup>
     <Copy SourceFiles="@(RoomMusic)" DestinationFolder="$(TargetDir)assets\audio\music\" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopySoundEffects" AfterTargets="Build">
+    <ItemGroup>
+      <SoundEffect Include="$(ProjectDir)..\..\assets\audio\sfx\footstep.wav" />
+      <SoundEffect Include="$(ProjectDir)..\..\assets\audio\sfx\land.wav" />
+      <SoundEffect Include="$(ProjectDir)..\..\assets\audio\sfx\grab.wav" />
+      <SoundEffect Include="$(ProjectDir)..\..\assets\audio\sfx\place.wav" />
+      <SoundEffect Include="$(ProjectDir)..\..\assets\audio\sfx\bookcase.wav" />
+      <SoundEffect Include="$(ProjectDir)..\..\assets\audio\sfx\lift.wav" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SoundEffect)" DestinationFolder="$(TargetDir)assets\audio\sfx\" SkipUnchangedFiles="true" />
   </Target>
 </Project>

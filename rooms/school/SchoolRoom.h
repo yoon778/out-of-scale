@@ -53,6 +53,7 @@ class SchoolRoom {
     bool toggleNotebook(const Camera& camera);
     static constexpr glm::vec3 notebookStart{-6.27f, 1.328f, 3.80f};
     glm::vec3 notebookCenter() const { return notebook_.center; }
+    bool isCarrying() const { return notebookRatio_ > 0.0f || corridor_.holdingClassroomKey(); }
     bool boardsReady() const;
     static constexpr std::array<float, 4> boardX{-3.04f, -1.58f, -.12f, 1.34f};
     static constexpr std::array<int, 4> boardStart{1, 0, 1, 1}, boardGoal{1, 3, 0, 2};
