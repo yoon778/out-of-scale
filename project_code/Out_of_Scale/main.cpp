@@ -1,3 +1,4 @@
+#include "src/core/Audio.h"
 #include "src/core/Player.h"
 #include "src/core/PauseMenu.h"
 #include "../../rooms/home/HomeRoom.h"
@@ -31,6 +32,17 @@ std::optional<Map> mapForKey(int key) {
     }
 }
 
+RoomMusic musicForMap(Map map) {
+    switch (map) {
+    case Map::School: return RoomMusic::School;
+    case Map::Military: return RoomMusic::Military;
+    case Map::Office: return RoomMusic::Office;
+    case Map::Home: return RoomMusic::Home;
+    case Map::Test: return RoomMusic::None;
+    }
+    return RoomMusic::None;
+}
+
 bool restoreFullscreen(GLFWwindow* window) {
     // GLFW makes a fullscreen window windowed when its monitor disconnects.
     if (glfwGetWindowMonitor(window)) {
@@ -43,6 +55,15 @@ bool restoreFullscreen(GLFWwindow* window) {
     }
     glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
     return glfwGetWindowMonitor(window) == monitor;
+}
+
+bool updateAudioAndRestoreFullscreen(GLFWwindow* window) {
+    const double now = glfwGetTime();
+    static double previous = now;
+    const auto elapsed = static_cast<float>(std::clamp(now - previous, 0.0, 0.10));
+    previous = now;
+    Audio::instance().update(elapsed);
+    return restoreFullscreen(window);
 }
 
 const char* windowTitle(TestRoom::ExitState state) {
@@ -226,7 +247,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         if (glfwWindowShouldClose(window)) {
             break;
         }
-        if (restoreFullscreen(window)) {
+        if (updateAudioAndRestoreFullscreen(window)) {
             scene.player.resetMouseSample();
         }
         // F2 can return from the training ground within the military map.
@@ -260,6 +281,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
                 bool grounded = false;
                 const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye, &grounded);
                 scene.player.setRoomPosition(resolved, grounded);
+                Audio::instance().setSceneMusicGain(1.0f - scene.room.endingFade());
             } else if constexpr (std::is_same_v<Room, TestRoom>) {
                 scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
             }
@@ -318,12 +340,15 @@ int runGame(GLFWwindow* window, Map activeMap) {
 
     glEnable(GL_DEPTH_TEST);
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    auto& audio = Audio::instance();
     while (!glfwWindowShouldClose(window)) {
+        audio.selectMusic(musicForMap(activeMap));
+        audio.setSceneMusicGain(activeMap == Map::Home ? 1.0f - home.room.endingFade() : 1.0f);
         int result = 0;
         switch (activeMap) {
         case Map::School: {
             glfwSetWindowTitle(window, "Out of Scale | School");
-            school::PreviewNavigation navigation{0, restoreFullscreen, &schoolPause};
+            school::PreviewNavigation navigation{0, updateAudioAndRestoreFullscreen, &schoolPause};
             result = school::runPreview(window, schoolState, {}, &navigation);
             if (const auto map = mapForKey(navigation.requestedKey)) {
                 activeMap = *map;
@@ -390,7 +415,12 @@ int main(int argc, char* argv[]) {
     const GLenum status = glewInit();
     int result = 1;
     if (status == GLEW_OK) {
+        auto& audio = Audio::instance();
+        if (!audio.initialize()) {
+            std::cerr << "Audio initialization failed; continuing without audio\n";
+        }
         result = runGame(window, startMap);
+        audio.shutdown();
     } else {
         std::cerr << glewGetErrorString(status) << '\n';
     }

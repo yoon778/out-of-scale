@@ -1,7 +1,7 @@
 #include "HomeRoom.h"
 #include "HomeLiftVisual.h"
 #include "HomePicture.h"
-#include "HomeSound.h"
+#include "../../project_code/Out_of_Scale/src/core/Audio.h"
 
 #include "../shared/PerspectiveCarry.h"
 
@@ -1078,7 +1078,7 @@ void HomeRoom::notifyDoorFit() {
     if (doorFitNotified_ || doorFitCooldown_ > 0.0f) return;
     doorFitNotified_ = true;
     doorFitCooldown_ = .22f;
-    if (doorFitSoundEnabled_) home_sound::playDoorFitClick();
+    if (doorFitSoundEnabled_) Audio::instance().playDoorFitClick();
 }
 
 bool HomeRoom::canTakeShelvedDoor(const glm::vec3& eye, const glm::vec3& direction) const {

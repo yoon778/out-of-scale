@@ -1,0 +1,856 @@
+{
+  "schema": "music-production/v1",
+  "title": "Out of Scale / school",
+  "version": "1.0",
+  "clock": {
+    "bars": 16,
+    "meter": [
+      4,
+      4
+    ],
+    "tail_seconds": 12,
+    "tempo": [
+      [
+        0,
+        80
+      ]
+    ]
+  },
+  "sections": [
+    {
+      "id": "memory",
+      "start_bar": 0,
+      "bars": 8,
+      "intent": "Sparse first phrase and space for exploration"
+    },
+    {
+      "id": "return",
+      "start_bar": 8,
+      "bars": 8,
+      "intent": "A small register or voicing change; no climax or final cadence"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "piano",
+      "role": "melody",
+      "engine": "soundfont",
+      "notes": [
+        {
+          "id": "piano_b001_t000_p74",
+          "on": 0.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b001_t072_p76",
+          "on": 1.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b001_t120_p81",
+          "on": 2.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b003_t000_p74",
+          "on": 8.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b003_t072_p76",
+          "on": 9.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b003_t120_p81",
+          "on": 10.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b005_t000_p74",
+          "on": 16.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b005_t072_p76",
+          "on": 17.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b005_t120_p81",
+          "on": 18.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b007_t000_p74",
+          "on": 24.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b007_t072_p76",
+          "on": 25.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b007_t120_p81",
+          "on": 26.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b009_t000_p74",
+          "on": 32.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b009_t072_p76",
+          "on": 33.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b009_t120_p81",
+          "on": 34.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b011_t000_p74",
+          "on": 40.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b011_t072_p76",
+          "on": 41.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b011_t120_p81",
+          "on": 42.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b013_t000_p74",
+          "on": 48.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b013_t072_p76",
+          "on": 49.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b013_t120_p81",
+          "on": 50.5,
+          "duration": 0.85,
+          "pitch": 81
+        },
+        {
+          "id": "piano_b015_t000_p74",
+          "on": 56.0,
+          "duration": 1.05,
+          "pitch": 74
+        },
+        {
+          "id": "piano_b015_t072_p76",
+          "on": 57.5,
+          "duration": 0.65,
+          "pitch": 76
+        },
+        {
+          "id": "piano_b015_t120_p81",
+          "on": 58.5,
+          "duration": 0.85,
+          "pitch": 81
+        }
+      ],
+      "performance": {
+        "notes": {
+          "piano_b001_t000_p74": {
+            "velocity": 51,
+            "gate": 0.985,
+            "timing_ms": 0
+          },
+          "piano_b001_t072_p76": {
+            "velocity": 53,
+            "gate": 0.965,
+            "timing_ms": 1.1
+          },
+          "piano_b001_t120_p81": {
+            "velocity": 55,
+            "gate": 0.9292,
+            "timing_ms": 8.02
+          },
+          "piano_b003_t000_p74": {
+            "velocity": 49,
+            "gate": 0.9295,
+            "timing_ms": -5.71
+          },
+          "piano_b003_t072_p76": {
+            "velocity": 49,
+            "gate": 0.9222,
+            "timing_ms": 4.76
+          },
+          "piano_b003_t120_p81": {
+            "velocity": 55,
+            "gate": 0.9329,
+            "timing_ms": 6.84
+          },
+          "piano_b005_t000_p74": {
+            "velocity": 52,
+            "gate": 0.9098,
+            "timing_ms": 2.68
+          },
+          "piano_b005_t072_p76": {
+            "velocity": 51,
+            "gate": 0.9163,
+            "timing_ms": -2.26
+          },
+          "piano_b005_t120_p81": {
+            "velocity": 55,
+            "gate": 0.9151,
+            "timing_ms": 0.72
+          },
+          "piano_b007_t000_p74": {
+            "velocity": 47,
+            "gate": 0.9188,
+            "timing_ms": 1.19
+          },
+          "piano_b007_t072_p76": {
+            "velocity": 48,
+            "gate": 0.9152,
+            "timing_ms": -0.43
+          },
+          "piano_b007_t120_p81": {
+            "velocity": 53,
+            "gate": 0.9323,
+            "timing_ms": -1.06
+          },
+          "piano_b009_t000_p74": {
+            "velocity": 52,
+            "gate": 0.9562,
+            "timing_ms": 9.36
+          },
+          "piano_b009_t072_p76": {
+            "velocity": 52,
+            "gate": 0.9545,
+            "timing_ms": 5.61
+          },
+          "piano_b009_t120_p81": {
+            "velocity": 56,
+            "gate": 0.9536,
+            "timing_ms": 5.31
+          },
+          "piano_b011_t000_p74": {
+            "velocity": 53,
+            "gate": 0.9368,
+            "timing_ms": -1.71
+          },
+          "piano_b011_t072_p76": {
+            "velocity": 55,
+            "gate": 0.9527,
+            "timing_ms": -11.95
+          },
+          "piano_b011_t120_p81": {
+            "velocity": 60,
+            "gate": 0.9452,
+            "timing_ms": -4.79
+          },
+          "piano_b013_t000_p74": {
+            "velocity": 53,
+            "gate": 0.935,
+            "timing_ms": 5.65
+          },
+          "piano_b013_t072_p76": {
+            "velocity": 55,
+            "gate": 0.9548,
+            "timing_ms": -5.66
+          },
+          "piano_b013_t120_p81": {
+            "velocity": 57,
+            "gate": 0.952,
+            "timing_ms": 7.3
+          },
+          "piano_b015_t000_p74": {
+            "velocity": 52,
+            "gate": 0.9356,
+            "timing_ms": 5.72
+          },
+          "piano_b015_t072_p76": {
+            "velocity": 51,
+            "gate": 0.935,
+            "timing_ms": 7.42
+          },
+          "piano_b015_t120_p81": {
+            "velocity": 56,
+            "gate": 0.948,
+            "timing_ms": 11.71
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -25,
+        "reverb_db": -24,
+        "highpass": 120,
+        "lowpass": 4100,
+        "pan": -0.08
+      },
+      "patch": {
+        "bank": 0,
+        "program": 0
+      },
+      "program": 0,
+      "range": [
+        24,
+        100
+      ]
+    },
+    {
+      "id": "low_piano",
+      "role": "harmony",
+      "engine": "soundfont",
+      "notes": [
+        {
+          "id": "low_piano_b001_t000_p57",
+          "on": 0.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b001_t096_p62",
+          "on": 2.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b002_t000_p57",
+          "on": 4.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b002_t096_p62",
+          "on": 6.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b003_t000_p54",
+          "on": 8.0,
+          "duration": 1.8,
+          "pitch": 54
+        },
+        {
+          "id": "low_piano_b003_t096_p57",
+          "on": 10.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b004_t000_p54",
+          "on": 12.0,
+          "duration": 1.8,
+          "pitch": 54
+        },
+        {
+          "id": "low_piano_b004_t096_p57",
+          "on": 14.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b005_t000_p55",
+          "on": 16.0,
+          "duration": 1.8,
+          "pitch": 55
+        },
+        {
+          "id": "low_piano_b005_t096_p62",
+          "on": 18.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b006_t000_p55",
+          "on": 20.0,
+          "duration": 1.8,
+          "pitch": 55
+        },
+        {
+          "id": "low_piano_b006_t096_p62",
+          "on": 22.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b007_t000_p57",
+          "on": 24.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b007_t096_p62",
+          "on": 26.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b008_t000_p57",
+          "on": 28.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b008_t096_p62",
+          "on": 30.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b009_t000_p54",
+          "on": 32.0,
+          "duration": 1.8,
+          "pitch": 54
+        },
+        {
+          "id": "low_piano_b009_t096_p57",
+          "on": 34.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b010_t000_p54",
+          "on": 36.0,
+          "duration": 1.8,
+          "pitch": 54
+        },
+        {
+          "id": "low_piano_b010_t096_p57",
+          "on": 38.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b011_t000_p54",
+          "on": 40.0,
+          "duration": 1.8,
+          "pitch": 54
+        },
+        {
+          "id": "low_piano_b011_t096_p57",
+          "on": 42.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b012_t000_p54",
+          "on": 44.0,
+          "duration": 1.8,
+          "pitch": 54
+        },
+        {
+          "id": "low_piano_b012_t096_p57",
+          "on": 46.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b013_t000_p55",
+          "on": 48.0,
+          "duration": 1.8,
+          "pitch": 55
+        },
+        {
+          "id": "low_piano_b013_t096_p62",
+          "on": 50.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b014_t000_p55",
+          "on": 52.0,
+          "duration": 1.8,
+          "pitch": 55
+        },
+        {
+          "id": "low_piano_b014_t096_p62",
+          "on": 54.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b015_t000_p57",
+          "on": 56.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b015_t096_p62",
+          "on": 58.0,
+          "duration": 1.8,
+          "pitch": 62
+        },
+        {
+          "id": "low_piano_b016_t000_p57",
+          "on": 60.0,
+          "duration": 1.8,
+          "pitch": 57
+        },
+        {
+          "id": "low_piano_b016_t096_p62",
+          "on": 62.0,
+          "duration": 1.8,
+          "pitch": 62
+        }
+      ],
+      "performance": {
+        "notes": {
+          "low_piano_b001_t000_p57": {
+            "velocity": 42,
+            "gate": 0.9135,
+            "timing_ms": 0
+          },
+          "low_piano_b001_t096_p62": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": -4.99
+          },
+          "low_piano_b002_t000_p57": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": -7.74
+          },
+          "low_piano_b002_t096_p62": {
+            "velocity": 45,
+            "gate": 0.9135,
+            "timing_ms": -5.58
+          },
+          "low_piano_b003_t000_p54": {
+            "velocity": 47,
+            "gate": 0.9135,
+            "timing_ms": -1.36
+          },
+          "low_piano_b003_t096_p57": {
+            "velocity": 47,
+            "gate": 0.9135,
+            "timing_ms": 5.24
+          },
+          "low_piano_b004_t000_p54": {
+            "velocity": 48,
+            "gate": 0.9135,
+            "timing_ms": 8.73
+          },
+          "low_piano_b004_t096_p57": {
+            "velocity": 44,
+            "gate": 0.9135,
+            "timing_ms": 4.17
+          },
+          "low_piano_b005_t000_p55": {
+            "velocity": 42,
+            "gate": 0.9135,
+            "timing_ms": -5.04
+          },
+          "low_piano_b005_t096_p62": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": 0.75
+          },
+          "low_piano_b006_t000_p55": {
+            "velocity": 42,
+            "gate": 0.9135,
+            "timing_ms": 0.13
+          },
+          "low_piano_b006_t096_p62": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": -2.04
+          },
+          "low_piano_b007_t000_p57": {
+            "velocity": 44,
+            "gate": 0.9135,
+            "timing_ms": 0.92
+          },
+          "low_piano_b007_t096_p62": {
+            "velocity": 46,
+            "gate": 0.9135,
+            "timing_ms": 5.66
+          },
+          "low_piano_b008_t000_p57": {
+            "velocity": 45,
+            "gate": 0.9135,
+            "timing_ms": -0.13
+          },
+          "low_piano_b008_t096_p62": {
+            "velocity": 44,
+            "gate": 0.9135,
+            "timing_ms": 0.62
+          },
+          "low_piano_b009_t000_p54": {
+            "velocity": 42,
+            "gate": 0.9135,
+            "timing_ms": -1.62
+          },
+          "low_piano_b009_t096_p57": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": -8.3
+          },
+          "low_piano_b010_t000_p54": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": -12.69
+          },
+          "low_piano_b010_t096_p57": {
+            "velocity": 44,
+            "gate": 0.9135,
+            "timing_ms": -5.87
+          },
+          "low_piano_b011_t000_p54": {
+            "velocity": 45,
+            "gate": 0.9135,
+            "timing_ms": -2.11
+          },
+          "low_piano_b011_t096_p57": {
+            "velocity": 45,
+            "gate": 0.9135,
+            "timing_ms": 0.09
+          },
+          "low_piano_b012_t000_p54": {
+            "velocity": 48,
+            "gate": 0.9135,
+            "timing_ms": 8.56
+          },
+          "low_piano_b012_t096_p57": {
+            "velocity": 41,
+            "gate": 0.9135,
+            "timing_ms": -0.22
+          },
+          "low_piano_b013_t000_p55": {
+            "velocity": 41,
+            "gate": 0.9135,
+            "timing_ms": 7.36
+          },
+          "low_piano_b013_t096_p62": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": 2.74
+          },
+          "low_piano_b014_t000_p55": {
+            "velocity": 44,
+            "gate": 0.9135,
+            "timing_ms": 12.1
+          },
+          "low_piano_b014_t096_p62": {
+            "velocity": 48,
+            "gate": 0.9135,
+            "timing_ms": -3.26
+          },
+          "low_piano_b015_t000_p57": {
+            "velocity": 47,
+            "gate": 0.9135,
+            "timing_ms": 0.32
+          },
+          "low_piano_b015_t096_p62": {
+            "velocity": 48,
+            "gate": 0.9135,
+            "timing_ms": -2.86
+          },
+          "low_piano_b016_t000_p57": {
+            "velocity": 45,
+            "gate": 0.9135,
+            "timing_ms": -4.57
+          },
+          "low_piano_b016_t096_p62": {
+            "velocity": 43,
+            "gate": 0.9135,
+            "timing_ms": 5.62
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -34,
+        "reverb_db": -25,
+        "highpass": 90,
+        "lowpass": 3000,
+        "pan": 0.1
+      },
+      "patch": {
+        "bank": 0,
+        "program": 0
+      },
+      "program": 0,
+      "range": [
+        24,
+        100
+      ]
+    }
+  ],
+  "mix": {
+    "chain": "bus",
+    "rules": 2,
+    "target_lufs": -20,
+    "dynamics": "wide",
+    "mono_below_hz": 140
+  },
+  "brief": "Original soft 48-second school background loop; three-note D-E-A family motif; no vocals.",
+  "loop": {
+    "start_bar": 0
+  },
+  "style": {
+    "primary": "game/town"
+  },
+  "association": {
+    "source": "draw",
+    "seed": 3900,
+    "words": [
+      "plum",
+      "clog",
+      "shears",
+      "apricot",
+      "seesaw",
+      "crease",
+      "footstool",
+      "anemone",
+      "clipboard",
+      "sneaker",
+      "exhale",
+      "churn"
+    ],
+    "whole": "A sneaker and a clog rest beneath a footstool while a clipboard holds a crease-marked paper anemone. Shears beside a plum and apricot sketch a small seesaw; after an exhale the classroom stops its churn. Paired falling/rising phrases, soft high piano, warm major ninth harmony leave space around the shared motif.",
+    "gives": [
+      {
+        "level": "form",
+        "what": "Two eight-bar phrases, with second-phrase voicing change",
+        "where": "all16bars"
+      },
+      {
+        "level": "rhythm",
+        "what": "Breathing motifs over a sparse steady pulse",
+        "where": "all16bars"
+      },
+      {
+        "level": "timbre",
+        "what": "Softened sampled piano",
+        "where": "all16bars"
+      }
+    ]
+  },
+  "decisions": [
+    "The D-E-A motif is original and shared; its major/minor contexts distinguish the rooms.",
+    "Only installed MS Basic and built-in synths; the softened MS Basic piano deliberately supplies the felt-like direction, no claim of a true felt-piano sample.",
+    "Sparse phrase returns and parallel chord support are intentional underscore; no foreground climax.",
+    "Render and measurements are technical checks; human listening is pending.",
+    "sections_alike:memory+return: Dynamic consistency is intentional for exploration; the second half has small voicing, pitch, articulation or harmony changes rather than new loud layers.",
+    "melody_durations:pluck: The short regular durations deliberately act as the office clock, with a longer articulation in the second eight bars."
+  ],
+  "harmony": [
+    {
+      "bar": 1,
+      "symbol": "Dadd9"
+    },
+    {
+      "bar": 2,
+      "symbol": "Dadd9"
+    },
+    {
+      "bar": 3,
+      "symbol": "Gmaj9"
+    },
+    {
+      "bar": 4,
+      "symbol": "Gmaj9"
+    },
+    {
+      "bar": 5,
+      "symbol": "A7sus4"
+    },
+    {
+      "bar": 6,
+      "symbol": "A7sus4"
+    },
+    {
+      "bar": 7,
+      "symbol": "Dadd9"
+    },
+    {
+      "bar": 8,
+      "symbol": "Dadd9"
+    },
+    {
+      "bar": 9,
+      "symbol": "Bm7"
+    },
+    {
+      "bar": 10,
+      "symbol": "Bm7"
+    },
+    {
+      "bar": 11,
+      "symbol": "Gmaj9"
+    },
+    {
+      "bar": 12,
+      "symbol": "Gmaj9"
+    },
+    {
+      "bar": 13,
+      "symbol": "A7sus4"
+    },
+    {
+      "bar": 14,
+      "symbol": "A7sus4"
+    },
+    {
+      "bar": 15,
+      "symbol": "Dadd9"
+    },
+    {
+      "bar": 16,
+      "symbol": "Dadd9"
+    }
+  ],
+  "plan": {
+    "identity": "Three-note D-E-A memory heard through school instrumentation",
+    "high_point": {
+      "section": "return",
+      "means": "One small voicing lift instead of louder foreground music"
+    },
+    "sections": [
+      {
+        "section": "memory",
+        "sounds": [
+          "piano",
+          "low_piano"
+        ],
+        "leads": "piano"
+      },
+      {
+        "section": "return",
+        "sounds": [
+          "piano",
+          "low_piano"
+        ],
+        "leads": "piano"
+      }
+    ]
+  }
+}

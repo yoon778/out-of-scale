@@ -1,0 +1,1083 @@
+{
+  "schema": "music-production/v1",
+  "title": "Out of Scale / military",
+  "version": "1.0",
+  "clock": {
+    "bars": 16,
+    "meter": [
+      4,
+      4
+    ],
+    "tail_seconds": 12,
+    "tempo": [
+      [
+        0,
+        80
+      ]
+    ]
+  },
+  "sections": [
+    {
+      "id": "memory",
+      "start_bar": 0,
+      "bars": 8,
+      "intent": "Sparse first phrase and space for exploration"
+    },
+    {
+      "id": "return",
+      "start_bar": 8,
+      "bars": 8,
+      "intent": "A small register or voicing change; no climax or final cadence"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "memory",
+      "role": "melody",
+      "engine": "synth",
+      "notes": [
+        {
+          "id": "memory_b001_t000_p62",
+          "on": 0.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b001_t072_p64",
+          "on": 1.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b001_t120_p69",
+          "on": 2.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        },
+        {
+          "id": "memory_b003_t000_p62",
+          "on": 8.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b003_t072_p64",
+          "on": 9.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b003_t120_p69",
+          "on": 10.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        },
+        {
+          "id": "memory_b005_t000_p62",
+          "on": 16.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b005_t072_p64",
+          "on": 17.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b005_t120_p69",
+          "on": 18.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        },
+        {
+          "id": "memory_b007_t000_p62",
+          "on": 24.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b007_t072_p64",
+          "on": 25.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b007_t120_p69",
+          "on": 26.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        },
+        {
+          "id": "memory_b009_t000_p62",
+          "on": 32.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b009_t072_p64",
+          "on": 33.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b009_t120_p69",
+          "on": 34.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        },
+        {
+          "id": "memory_b011_t000_p62",
+          "on": 40.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b011_t072_p64",
+          "on": 41.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b011_t120_p74",
+          "on": 42.5,
+          "duration": 0.9520000000000001,
+          "pitch": 74
+        },
+        {
+          "id": "memory_b013_t000_p62",
+          "on": 48.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b013_t072_p64",
+          "on": 49.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b013_t120_p69",
+          "on": 50.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        },
+        {
+          "id": "memory_b015_t000_p62",
+          "on": 56.0,
+          "duration": 1.1760000000000002,
+          "pitch": 62
+        },
+        {
+          "id": "memory_b015_t072_p64",
+          "on": 57.5,
+          "duration": 0.7280000000000001,
+          "pitch": 64
+        },
+        {
+          "id": "memory_b015_t120_p69",
+          "on": 58.5,
+          "duration": 0.9520000000000001,
+          "pitch": 69
+        }
+      ],
+      "performance": {
+        "notes": {
+          "memory_b001_t000_p62": {
+            "velocity": 42,
+            "gate": 0.9456,
+            "timing_ms": 0
+          },
+          "memory_b001_t072_p64": {
+            "velocity": 41,
+            "gate": 0.9534,
+            "timing_ms": 6.4
+          },
+          "memory_b001_t120_p69": {
+            "velocity": 46,
+            "gate": 0.9602,
+            "timing_ms": 1.19
+          },
+          "memory_b003_t000_p62": {
+            "velocity": 41,
+            "gate": 0.923,
+            "timing_ms": -4.57
+          },
+          "memory_b003_t072_p64": {
+            "velocity": 43,
+            "gate": 0.9149,
+            "timing_ms": 5.85
+          },
+          "memory_b003_t120_p69": {
+            "velocity": 46,
+            "gate": 0.9301,
+            "timing_ms": -3.03
+          },
+          "memory_b005_t000_p62": {
+            "velocity": 41,
+            "gate": 0.9294,
+            "timing_ms": -0.68
+          },
+          "memory_b005_t072_p64": {
+            "velocity": 41,
+            "gate": 0.9475,
+            "timing_ms": 4.76
+          },
+          "memory_b005_t120_p69": {
+            "velocity": 48,
+            "gate": 0.9572,
+            "timing_ms": -4.77
+          },
+          "memory_b007_t000_p62": {
+            "velocity": 43,
+            "gate": 0.9166,
+            "timing_ms": 16.21
+          },
+          "memory_b007_t072_p64": {
+            "velocity": 41,
+            "gate": 0.9557,
+            "timing_ms": 11.91
+          },
+          "memory_b007_t120_p69": {
+            "velocity": 47,
+            "gate": 0.9601,
+            "timing_ms": 4.19
+          },
+          "memory_b009_t000_p62": {
+            "velocity": 46,
+            "gate": 0.9591,
+            "timing_ms": -0.25
+          },
+          "memory_b009_t072_p64": {
+            "velocity": 44,
+            "gate": 0.9548,
+            "timing_ms": 4.76
+          },
+          "memory_b009_t120_p69": {
+            "velocity": 46,
+            "gate": 0.9439,
+            "timing_ms": -5.47
+          },
+          "memory_b011_t000_p62": {
+            "velocity": 43,
+            "gate": 0.9149,
+            "timing_ms": -3.07
+          },
+          "memory_b011_t072_p64": {
+            "velocity": 41,
+            "gate": 0.9535,
+            "timing_ms": 4.02
+          },
+          "memory_b011_t120_p74": {
+            "velocity": 48,
+            "gate": 0.948,
+            "timing_ms": -1.76
+          },
+          "memory_b013_t000_p62": {
+            "velocity": 41,
+            "gate": 0.9296,
+            "timing_ms": -9.12
+          },
+          "memory_b013_t072_p64": {
+            "velocity": 43,
+            "gate": 0.92,
+            "timing_ms": -8.59
+          },
+          "memory_b013_t120_p69": {
+            "velocity": 44,
+            "gate": 0.9385,
+            "timing_ms": -13.35
+          },
+          "memory_b015_t000_p62": {
+            "velocity": 43,
+            "gate": 0.9906,
+            "timing_ms": -7.68
+          },
+          "memory_b015_t072_p64": {
+            "velocity": 43,
+            "gate": 0.9305,
+            "timing_ms": -14.3
+          },
+          "memory_b015_t120_p69": {
+            "velocity": 48,
+            "gate": 0.921,
+            "timing_ms": -2.1
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -34,
+        "reverb_db": -24,
+        "highpass": 160,
+        "lowpass": 2100,
+        "pan": 0
+      },
+      "synth": {
+        "preset": "warm_pad"
+      },
+      "range": [
+        24,
+        96
+      ]
+    },
+    {
+      "id": "bass",
+      "role": "bass",
+      "engine": "soundfont",
+      "notes": [
+        {
+          "id": "bass_b001_t000_p38",
+          "on": 0.0,
+          "duration": 2.5,
+          "pitch": 38
+        },
+        {
+          "id": "bass_b002_t000_p38",
+          "on": 4.0,
+          "duration": 2.5,
+          "pitch": 38
+        },
+        {
+          "id": "bass_b002_t120_p50",
+          "on": 6.5,
+          "duration": 0.4,
+          "pitch": 50
+        },
+        {
+          "id": "bass_b003_t000_p34",
+          "on": 8.0,
+          "duration": 2.5,
+          "pitch": 34
+        },
+        {
+          "id": "bass_b004_t000_p34",
+          "on": 12.0,
+          "duration": 2.5,
+          "pitch": 34
+        },
+        {
+          "id": "bass_b004_t120_p46",
+          "on": 14.5,
+          "duration": 0.4,
+          "pitch": 46
+        },
+        {
+          "id": "bass_b005_t000_p31",
+          "on": 16.0,
+          "duration": 2.5,
+          "pitch": 31
+        },
+        {
+          "id": "bass_b006_t000_p31",
+          "on": 20.0,
+          "duration": 2.5,
+          "pitch": 31
+        },
+        {
+          "id": "bass_b006_t120_p43",
+          "on": 22.5,
+          "duration": 0.4,
+          "pitch": 43
+        },
+        {
+          "id": "bass_b007_t000_p33",
+          "on": 24.0,
+          "duration": 2.5,
+          "pitch": 33
+        },
+        {
+          "id": "bass_b008_t000_p38",
+          "on": 28.0,
+          "duration": 2.5,
+          "pitch": 38
+        },
+        {
+          "id": "bass_b008_t120_p50",
+          "on": 30.5,
+          "duration": 0.4,
+          "pitch": 50
+        },
+        {
+          "id": "bass_b009_t000_p38",
+          "on": 32.0,
+          "duration": 2.5,
+          "pitch": 38
+        },
+        {
+          "id": "bass_b010_t000_p38",
+          "on": 36.0,
+          "duration": 2.5,
+          "pitch": 38
+        },
+        {
+          "id": "bass_b010_t120_p50",
+          "on": 38.5,
+          "duration": 0.4,
+          "pitch": 50
+        },
+        {
+          "id": "bass_b011_t000_p34",
+          "on": 40.0,
+          "duration": 2.5,
+          "pitch": 34
+        },
+        {
+          "id": "bass_b012_t000_p34",
+          "on": 44.0,
+          "duration": 2.5,
+          "pitch": 34
+        },
+        {
+          "id": "bass_b012_t120_p46",
+          "on": 46.5,
+          "duration": 0.4,
+          "pitch": 46
+        },
+        {
+          "id": "bass_b013_t000_p31",
+          "on": 48.0,
+          "duration": 2.5,
+          "pitch": 31
+        },
+        {
+          "id": "bass_b014_t000_p31",
+          "on": 52.0,
+          "duration": 2.5,
+          "pitch": 31
+        },
+        {
+          "id": "bass_b014_t120_p43",
+          "on": 54.5,
+          "duration": 0.4,
+          "pitch": 43
+        },
+        {
+          "id": "bass_b015_t000_p33",
+          "on": 56.0,
+          "duration": 2.5,
+          "pitch": 33
+        },
+        {
+          "id": "bass_b016_t000_p38",
+          "on": 60.0,
+          "duration": 2.5,
+          "pitch": 38
+        },
+        {
+          "id": "bass_b016_t120_p50",
+          "on": 62.5,
+          "duration": 0.4,
+          "pitch": 50
+        }
+      ],
+      "performance": {
+        "notes": {
+          "bass_b001_t000_p38": {
+            "velocity": 48,
+            "gate": 0.9271,
+            "timing_ms": 0
+          },
+          "bass_b002_t000_p38": {
+            "velocity": 54,
+            "gate": 0.9317,
+            "timing_ms": -3.29
+          },
+          "bass_b002_t120_p50": {
+            "velocity": 42,
+            "gate": 0.713,
+            "timing_ms": 1.9
+          },
+          "bass_b003_t000_p34": {
+            "velocity": 52,
+            "gate": 0.9155,
+            "timing_ms": 5.2
+          },
+          "bass_b004_t000_p34": {
+            "velocity": 53,
+            "gate": 0.9415,
+            "timing_ms": 2.0
+          },
+          "bass_b004_t120_p46": {
+            "velocity": 44,
+            "gate": 0.697,
+            "timing_ms": 6.48
+          },
+          "bass_b005_t000_p31": {
+            "velocity": 54,
+            "gate": 0.9596,
+            "timing_ms": 11.23
+          },
+          "bass_b006_t000_p31": {
+            "velocity": 50,
+            "gate": 0.9545,
+            "timing_ms": -1.23
+          },
+          "bass_b006_t120_p43": {
+            "velocity": 42,
+            "gate": 0.6928,
+            "timing_ms": 9.79
+          },
+          "bass_b007_t000_p33": {
+            "velocity": 49,
+            "gate": 0.9533,
+            "timing_ms": -0.9
+          },
+          "bass_b008_t000_p38": {
+            "velocity": 57,
+            "gate": 0.9478,
+            "timing_ms": 7.75
+          },
+          "bass_b008_t120_p50": {
+            "velocity": 39,
+            "gate": 0.6873,
+            "timing_ms": 3.57
+          },
+          "bass_b009_t000_p38": {
+            "velocity": 50,
+            "gate": 0.9124,
+            "timing_ms": 6.2
+          },
+          "bass_b010_t000_p38": {
+            "velocity": 55,
+            "gate": 0.9198,
+            "timing_ms": 12.14
+          },
+          "bass_b010_t120_p50": {
+            "velocity": 42,
+            "gate": 0.7159,
+            "timing_ms": 10.08
+          },
+          "bass_b011_t000_p34": {
+            "velocity": 53,
+            "gate": 0.9488,
+            "timing_ms": -0.95
+          },
+          "bass_b012_t000_p34": {
+            "velocity": 50,
+            "gate": 0.9198,
+            "timing_ms": 3.21
+          },
+          "bass_b012_t120_p46": {
+            "velocity": 42,
+            "gate": 0.6931,
+            "timing_ms": 7.65
+          },
+          "bass_b013_t000_p31": {
+            "velocity": 54,
+            "gate": 0.9573,
+            "timing_ms": 4.62
+          },
+          "bass_b014_t000_p31": {
+            "velocity": 55,
+            "gate": 0.9334,
+            "timing_ms": 1.43
+          },
+          "bass_b014_t120_p43": {
+            "velocity": 43,
+            "gate": 0.7135,
+            "timing_ms": -4.0
+          },
+          "bass_b015_t000_p33": {
+            "velocity": 51,
+            "gate": 0.9516,
+            "timing_ms": 0.02
+          },
+          "bass_b016_t000_p38": {
+            "velocity": 53,
+            "gate": 0.9425,
+            "timing_ms": -0.49
+          },
+          "bass_b016_t120_p50": {
+            "velocity": 40,
+            "gate": 0.7183,
+            "timing_ms": 2.99
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -26,
+        "reverb_db": -34,
+        "highpass": 36,
+        "lowpass": 650,
+        "pan": 0
+      },
+      "patch": {
+        "bank": 0,
+        "program": 33
+      },
+      "program": 33,
+      "range": [
+        24,
+        100
+      ]
+    },
+    {
+      "id": "low_drums",
+      "role": "drums",
+      "engine": "soundfont",
+      "notes": [
+        {
+          "id": "low_drums_b001_t000_p36",
+          "on": 0.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b002_t000_p36",
+          "on": 4.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b002_t096_p43",
+          "on": 6.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b003_t000_p36",
+          "on": 8.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b004_t000_p36",
+          "on": 12.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b004_t096_p43",
+          "on": 14.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b005_t000_p36",
+          "on": 16.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b006_t000_p36",
+          "on": 20.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b006_t096_p43",
+          "on": 22.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b006_t168_p45",
+          "on": 23.5,
+          "duration": 0.16,
+          "pitch": 45
+        },
+        {
+          "id": "low_drums_b007_t000_p36",
+          "on": 24.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b008_t000_p36",
+          "on": 28.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b008_t096_p43",
+          "on": 30.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b009_t000_p36",
+          "on": 32.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b010_t000_p36",
+          "on": 36.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b010_t096_p43",
+          "on": 38.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b011_t000_p36",
+          "on": 40.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b012_t000_p36",
+          "on": 44.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b012_t096_p43",
+          "on": 46.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b013_t000_p36",
+          "on": 48.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b014_t000_p36",
+          "on": 52.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b014_t096_p43",
+          "on": 54.0,
+          "duration": 0.25,
+          "pitch": 43
+        },
+        {
+          "id": "low_drums_b014_t168_p45",
+          "on": 55.5,
+          "duration": 0.16,
+          "pitch": 45
+        },
+        {
+          "id": "low_drums_b015_t000_p36",
+          "on": 56.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b016_t000_p36",
+          "on": 60.0,
+          "duration": 0.18,
+          "pitch": 36
+        },
+        {
+          "id": "low_drums_b016_t096_p43",
+          "on": 62.0,
+          "duration": 0.25,
+          "pitch": 43
+        }
+      ],
+      "performance": {
+        "notes": {
+          "low_drums_b001_t000_p36": {
+            "velocity": 45,
+            "gate": 0.6,
+            "timing_ms": 0
+          },
+          "low_drums_b002_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": -8.11
+          },
+          "low_drums_b002_t096_p43": {
+            "velocity": 40,
+            "gate": 0.5,
+            "timing_ms": -0.71
+          },
+          "low_drums_b003_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": -2.84
+          },
+          "low_drums_b004_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": 4.49
+          },
+          "low_drums_b004_t096_p43": {
+            "velocity": 39,
+            "gate": 0.5,
+            "timing_ms": 0.86
+          },
+          "low_drums_b005_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": -1.09
+          },
+          "low_drums_b006_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": 4.44
+          },
+          "low_drums_b006_t096_p43": {
+            "velocity": 41,
+            "gate": 0.5,
+            "timing_ms": 0.17
+          },
+          "low_drums_b006_t168_p45": {
+            "velocity": 34,
+            "gate": 0.5,
+            "timing_ms": 3.18
+          },
+          "low_drums_b007_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": 1.01
+          },
+          "low_drums_b008_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": -2.58
+          },
+          "low_drums_b008_t096_p43": {
+            "velocity": 37,
+            "gate": 0.5,
+            "timing_ms": 0.53
+          },
+          "low_drums_b009_t000_p36": {
+            "velocity": 46,
+            "gate": 0.6,
+            "timing_ms": 1.39
+          },
+          "low_drums_b010_t000_p36": {
+            "velocity": 45,
+            "gate": 0.6,
+            "timing_ms": 2.33
+          },
+          "low_drums_b010_t096_p43": {
+            "velocity": 37,
+            "gate": 0.5,
+            "timing_ms": -0.96
+          },
+          "low_drums_b011_t000_p36": {
+            "velocity": 48,
+            "gate": 0.6,
+            "timing_ms": -4.54
+          },
+          "low_drums_b012_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": -4.66
+          },
+          "low_drums_b012_t096_p43": {
+            "velocity": 39,
+            "gate": 0.5,
+            "timing_ms": 0.1
+          },
+          "low_drums_b013_t000_p36": {
+            "velocity": 46,
+            "gate": 0.6,
+            "timing_ms": 0.4
+          },
+          "low_drums_b014_t000_p36": {
+            "velocity": 48,
+            "gate": 0.6,
+            "timing_ms": -3.68
+          },
+          "low_drums_b014_t096_p43": {
+            "velocity": 42,
+            "gate": 0.5,
+            "timing_ms": -1.48
+          },
+          "low_drums_b014_t168_p45": {
+            "velocity": 34,
+            "gate": 0.5,
+            "timing_ms": -5.03
+          },
+          "low_drums_b015_t000_p36": {
+            "velocity": 47,
+            "gate": 0.6,
+            "timing_ms": -6.03
+          },
+          "low_drums_b016_t000_p36": {
+            "velocity": 46,
+            "gate": 0.6,
+            "timing_ms": 4.8
+          },
+          "low_drums_b016_t096_p43": {
+            "velocity": 39,
+            "gate": 0.5,
+            "timing_ms": 1.43
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -31,
+        "reverb_db": -34,
+        "highpass": 36,
+        "lowpass": 2200,
+        "pan": 0
+      },
+      "patch": {
+        "bank": 128,
+        "program": 0
+      },
+      "program": 0,
+      "range": [
+        24,
+        100
+      ],
+      "drums": true
+    }
+  ],
+  "mix": {
+    "chain": "bus",
+    "rules": 2,
+    "target_lufs": -20,
+    "dynamics": "wide",
+    "mono_below_hz": 140
+  },
+  "brief": "Original soft 48-second military background loop; three-note D-E-A family motif; no vocals.",
+  "loop": {
+    "start_bar": 0
+  },
+  "style": {
+    "primary": "game/dungeon"
+  },
+  "association": {
+    "source": "draw",
+    "seed": 3901,
+    "words": [
+      "pinwheel",
+      "tweed",
+      "cufflink",
+      "crawl",
+      "banister",
+      "skewer",
+      "herringbone",
+      "mushroom",
+      "heron",
+      "awning",
+      "whittle",
+      "twirl"
+    ],
+    "whole": "Under an awning a heron passes a mushroom; a patrol crawls beside a banister. Tweed and a cufflink hold a herringbone keepsake, a skewer whittles a pinwheel that begins to twirl. Quiet circular low pulses, open minor harmony and a restrained answering motif suggest watchfulness rather than combat.",
+    "gives": [
+      {
+        "level": "form",
+        "what": "Two eight-bar phrases, with second-phrase voicing change",
+        "where": "all16bars"
+      },
+      {
+        "level": "rhythm",
+        "what": "Breathing motifs over a sparse steady pulse",
+        "where": "all16bars"
+      },
+      {
+        "level": "timbre",
+        "what": "Low bass and muted low drums",
+        "where": "all16bars"
+      }
+    ]
+  },
+  "decisions": [
+    "The D-E-A motif is original and shared; its major/minor contexts distinguish the rooms.",
+    "Only installed MS Basic and built-in synths; the softened MS Basic piano deliberately supplies the felt-like direction, no claim of a true felt-piano sample.",
+    "Sparse phrase returns and parallel chord support are intentional underscore; no foreground climax.",
+    "Render and measurements are technical checks; human listening is pending.",
+    "sections_alike:memory+return: Dynamic consistency is intentional for exploration; the second half has small voicing, pitch, articulation or harmony changes rather than new loud layers.",
+    "melody_durations:pluck: The short regular durations deliberately act as the office clock, with a longer articulation in the second eight bars."
+  ],
+  "harmony": [
+    {
+      "bar": 1,
+      "symbol": "Dm9"
+    },
+    {
+      "bar": 2,
+      "symbol": "Dm9"
+    },
+    {
+      "bar": 3,
+      "symbol": "Bbmaj7"
+    },
+    {
+      "bar": 4,
+      "symbol": "Bbmaj7"
+    },
+    {
+      "bar": 5,
+      "symbol": "Gm9"
+    },
+    {
+      "bar": 6,
+      "symbol": "Gm9"
+    },
+    {
+      "bar": 7,
+      "symbol": "Am11"
+    },
+    {
+      "bar": 8,
+      "symbol": "Dm9"
+    },
+    {
+      "bar": 9,
+      "symbol": "Dm9"
+    },
+    {
+      "bar": 10,
+      "symbol": "Dm9"
+    },
+    {
+      "bar": 11,
+      "symbol": "Bbmaj7"
+    },
+    {
+      "bar": 12,
+      "symbol": "Bbmaj7"
+    },
+    {
+      "bar": 13,
+      "symbol": "Gm9"
+    },
+    {
+      "bar": 14,
+      "symbol": "Gm9"
+    },
+    {
+      "bar": 15,
+      "symbol": "Am11"
+    },
+    {
+      "bar": 16,
+      "symbol": "Dm9"
+    }
+  ],
+  "plan": {
+    "identity": "Three-note D-E-A memory heard through military instrumentation",
+    "high_point": {
+      "section": "return",
+      "means": "One small voicing lift instead of louder foreground music"
+    },
+    "sections": [
+      {
+        "section": "memory",
+        "sounds": [
+          "memory",
+          "bass",
+          "low_drums"
+        ],
+        "leads": "memory"
+      },
+      {
+        "section": "return",
+        "sounds": [
+          "memory",
+          "bass",
+          "low_drums"
+        ],
+        "leads": "memory"
+      }
+    ]
+  }
+}

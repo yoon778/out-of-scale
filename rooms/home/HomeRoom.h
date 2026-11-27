@@ -25,6 +25,7 @@ public:
     ExitState exitState() const;
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
     void drawEndingOverlay() const;
+    float endingFade() const { return ending_.fade(); }
 
     static constexpr float halfSize = 20.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};

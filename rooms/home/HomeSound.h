@@ -1,14 +1,9 @@
 #pragma once
 
-#include <windows.h>
-#include <mmsystem.h>
-
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-
-#pragma comment(lib, "winmm.lib")
 
 namespace home_sound {
 namespace detail {
@@ -68,12 +63,5 @@ inline DoorFitWave makeDoorFitWave() {
 }
 
 }  // namespace detail
-
-inline void playDoorFitClick() {
-    // SND_ASYNC requires the in-memory WAV to outlive playback.
-    static const auto wave = detail::makeDoorFitWave();
-    (void)::PlaySoundA(reinterpret_cast<LPCSTR>(wave.data()), nullptr,
-                       SND_MEMORY | SND_ASYNC | SND_NODEFAULT | SND_NOSTOP);
-}
 
 }  // namespace home_sound

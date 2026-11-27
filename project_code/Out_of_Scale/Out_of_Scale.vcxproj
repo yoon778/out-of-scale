@@ -94,6 +94,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="src\core\Audio.cpp" />
     <ClCompile Include="src\core\Player.cpp" />
     <ClCompile Include="src\core\PauseMenu.cpp">
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
@@ -128,6 +129,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\Player.h" />
+    <ClInclude Include="src\core\Audio.h" />
     <ClInclude Include="src\core\PauseMenu.h" />
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\home\HomeRoom.h" />
@@ -156,5 +158,14 @@
   <Target Name="CopyHomeCourseworkModel" AfterTargets="Build">
     <MakeDir Directories="$(TargetDir)rooms\home\coursework\" />
     <Copy SourceFiles="$(ProjectDir)..\..\rooms\home\coursework\sphere.obj" DestinationFolder="$(TargetDir)rooms\home\coursework\" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyRoomMusic" AfterTargets="Build">
+    <ItemGroup>
+      <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\school.wav" />
+      <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\military.wav" />
+      <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\office.wav" />
+      <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\home.wav" />
+    </ItemGroup>
+    <Copy SourceFiles="@(RoomMusic)" DestinationFolder="$(TargetDir)assets\audio\music\" SkipUnchangedFiles="true" />
   </Target>
 </Project>
