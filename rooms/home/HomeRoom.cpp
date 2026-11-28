@@ -541,38 +541,16 @@ glm::mat4 HomeRoom::homeModel() const {
     return glm::translate(glm::scale(portableModel(homeObject),glm::vec3{roomMiniatureScale}),{-.945f,0.0f,-3.895f});
 }
 
-void HomeRoom::updatePicture(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
+void HomeRoom::updatePicture(float elapsed) {
     using namespace home_picture;
-    if (pictureReveal_ >= 1.0f) return;
-    if (pictureHold_ >= holdSeconds) {
-        pictureReveal_ = std::min(1.0f, pictureReveal_ + elapsed / revealSeconds);
-        pictureGlow_ = 1.0f - pictureReveal_;
-        if (pictureReveal_ >= 1.0f) {
-            auto& socket = portable_[socketObject];
-            socket.center = plateEnd;
-            socket.active = true;
-        }
-        return;
+    if (!pictureOpening_) return;
+    pictureReveal_ = std::min(1.0f, pictureReveal_ + elapsed / revealSeconds);
+    if (pictureReveal_ >= 1.0f) {
+        pictureOpening_ = false;
+        auto& socket = portable_[socketObject];
+        socket.center = plateEnd;
+        socket.active = true;
     }
-
-    auto error = alignmentError(eye, direction);
-    if (error) {
-        const glm::vec3 towardPicture = focus - eye;
-        const float distance = glm::length(towardPicture);
-        const glm::vec3 ray = towardPicture / distance;
-        if (portableVisibility(eye, ray, visibleRange(eye, ray, distance)) < distance - .005f) {
-            error.reset();
-        }
-    }
-
-    if (error && *error <= seamTolerance) {
-        pictureHold_ = std::min(holdSeconds, pictureHold_ + elapsed);
-    } else {
-        pictureHold_ = 0.0f;
-    }
-    const float alignment = error ? std::clamp(1.0f - *error / .15f, 0.0f, 1.0f) : 0.0f;
-    const float glow = .38f * alignment + .62f * (pictureHold_ / holdSeconds);
-    pictureGlow_ = glm::mix(pictureGlow_, glow, std::min(1.0f, 9.0f * elapsed));
 }
 
 float HomeRoom::homeRay(const glm::vec3& eye, const glm::vec3& direction,
@@ -1226,6 +1204,15 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         }
     }
     if (held_ == HeldItem::None) {
+        if (pictureReveal_ < 1.0f && eye.z > home_picture::canvasCenter.z && direction.z < 0.0f) {
+            const auto hit = perspective::rayBoxDistance(eye, direction, home_picture::canvasCenter,
+                glm::vec3{home_picture::canvasSize * .5f, .009f});
+            if (hit && *hit <= reach &&
+                *hit <= portableVisibility(eye, direction, visibleRange(eye, direction, reach))) {
+                pictureOpening_ = true;
+                return;
+            }
+        }
         if (const auto uv = computerUv(eye,direction)) {
             if (computer_.click(uv->x,uv->y) == ComputerScreen::Action::TakeCompleteKey &&
                 !portable_[completeKeyObject].active && !completeKeyInserted_) {
@@ -1536,7 +1523,7 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
     const float previousLiftTop = liftTop_;
     lastEye_ = eye;
     lastDirection_ = direction;
-    updatePicture(elapsed, eye, direction);
+    updatePicture(elapsed);
     const bool focused = held_ == HeldItem::None && computerUv(eye,direction).has_value();
     if (computerFocused_ && !focused) computer_.clearInput();
     computerFocused_ = focused;
@@ -1790,17 +1777,15 @@ void HomeRoom::drawMiniature() const {
     }
 }
 
-void HomeRoom::drawPicture(const glm::mat4& model) const {
+void HomeRoom::drawPicture(const glm::mat4& model, bool miniature) const {
     using namespace home_picture;
     drawHomeMesh(renderer_, HomeMesh::PictureDoor, glm::translate(model, framePosition));
     const auto& painting = art();
     const auto first = static_cast<GLint>(fractureMesh().vertices.size() + std::size(homeGeometry));
-    const auto outlineCount = static_cast<GLsizei>(painting.vertices.size()) - painting.outlineFirst;
-    renderer_.drawMovableMesh(first, painting.outlineFirst, model, glm::vec3{1.0f});
-    const glm::vec3 ink{.65f, .52f, .36f};
-    const glm::vec3 glint{.97f, .86f, .62f};
-    renderer_.drawMovableMesh(first + painting.outlineFirst, outlineCount, model,
-                              glm::mix(ink, glint, pictureGlow_));
+    renderer_.drawMovableMesh(first, painting.backdropCount, model, glm::vec3{1.0f});
+    const auto pupilCount = static_cast<GLsizei>(painting.vertices.size()) - painting.backdropCount;
+    const auto pupils = miniature ? model : glm::translate(model, gazeOffset(lastEye_));
+    renderer_.drawMovableMesh(first + painting.backdropCount, pupilCount, pupils, glm::vec3{1.0f});
 
     if (pictureReveal_ > 0.0f && pictureReveal_ < 1.0f) {
         const float progress = glm::smoothstep(0.0f, 1.0f, pictureReveal_);
@@ -1812,7 +1797,7 @@ void HomeRoom::drawPicture(const glm::mat4& model) const {
 
 void HomeRoom::drawRoom(const glm::mat4& model, bool miniature) const {
     drawHomeMesh(renderer_, HomeMesh::Interior, model);
-    drawPicture(model);
+    drawPicture(model, miniature);
     const auto liftFirst = static_cast<GLint>(fractureMesh().vertices.size() +
         std::size(homeGeometry) + home_picture::art().vertices.size());
     home_lift_visual::draw(renderer_,liftFirst,model,liftExtension_,liftTop_,liftEnabled_,miniature);

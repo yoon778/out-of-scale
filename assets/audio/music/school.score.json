@@ -1,6 +1,6 @@
 {
   "schema": "music-production/v1",
-  "title": "Out of Scale / school",
+  "title": "Out of Scale / Paper Turns",
   "version": "1.0",
   "clock": {
     "bars": 16,
@@ -8,696 +8,1721 @@
       4,
       4
     ],
-    "tail_seconds": 12,
+    "tail_seconds": 8,
     "tempo": [
       [
         0,
-        80
+        104
       ]
     ]
   },
   "sections": [
     {
-      "id": "memory",
+      "id": "arrival",
       "start_bar": 0,
-      "bars": 8,
-      "intent": "Sparse first phrase and space for exploration"
+      "bars": 4,
+      "intent": "Opening five-note idea, with room to look around"
+    },
+    {
+      "id": "shift",
+      "start_bar": 4,
+      "bars": 4,
+      "intent": "Same idea with a different answer and accompaniment"
+    },
+    {
+      "id": "discovery",
+      "start_bar": 8,
+      "bars": 4,
+      "intent": "Reach the upper register and change the supporting color"
     },
     {
       "id": "return",
-      "start_bar": 8,
-      "bars": 8,
-      "intent": "A small register or voicing change; no climax or final cadence"
+      "start_bar": 12,
+      "bars": 4,
+      "intent": "Shorter answers carry the pulse around the loop"
     }
   ],
   "tracks": [
     {
-      "id": "piano",
+      "id": "keys",
       "role": "melody",
       "engine": "soundfont",
       "notes": [
         {
-          "id": "piano_b001_t000_p74",
+          "id": "keys_b001_t000_p78",
           "on": 0.0,
-          "duration": 1.05,
-          "pitch": 74
+          "duration": 0.75,
+          "pitch": 78
         },
         {
-          "id": "piano_b001_t072_p76",
+          "id": "keys_b001_t036_p81",
+          "on": 0.75,
+          "duration": 0.75,
+          "pitch": 81
+        },
+        {
+          "id": "keys_b001_t072_p83",
           "on": 1.5,
-          "duration": 0.65,
-          "pitch": 76
+          "duration": 0.5,
+          "pitch": 83
         },
         {
-          "id": "piano_b001_t120_p81",
-          "on": 2.5,
-          "duration": 0.85,
+          "id": "keys_b001_t096_p81",
+          "on": 2.0,
+          "duration": 1.0,
           "pitch": 81
         },
         {
-          "id": "piano_b003_t000_p74",
+          "id": "keys_b001_t144_p76",
+          "on": 3.0,
+          "duration": 0.9000000000000004,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b002_t024_p74",
+          "on": 4.5,
+          "duration": 1.25,
+          "pitch": 74
+        },
+        {
+          "id": "keys_b002_t084_p78",
+          "on": 5.75,
+          "duration": 0.75,
+          "pitch": 78
+        },
+        {
+          "id": "keys_b002_t120_p76",
+          "on": 6.5,
+          "duration": 1.25,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b003_t000_p74",
           "on": 8.0,
-          "duration": 1.05,
+          "duration": 1.25,
           "pitch": 74
         },
         {
-          "id": "piano_b003_t072_p76",
-          "on": 9.5,
-          "duration": 0.65,
-          "pitch": 76
+          "id": "keys_b003_t060_p78",
+          "on": 9.25,
+          "duration": 0.75,
+          "pitch": 78
         },
         {
-          "id": "piano_b003_t120_p81",
-          "on": 10.5,
-          "duration": 0.85,
+          "id": "keys_b003_t096_p81",
+          "on": 10.0,
+          "duration": 0.75,
           "pitch": 81
         },
         {
-          "id": "piano_b005_t000_p74",
+          "id": "keys_b003_t132_p78",
+          "on": 10.75,
+          "duration": 1.1500000000000004,
+          "pitch": 78
+        },
+        {
+          "id": "keys_b004_t024_p76",
+          "on": 12.5,
+          "duration": 1.25,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b004_t084_p74",
+          "on": 13.75,
+          "duration": 0.75,
+          "pitch": 74
+        },
+        {
+          "id": "keys_b004_t120_p69",
+          "on": 14.5,
+          "duration": 1.25,
+          "pitch": 69
+        },
+        {
+          "id": "keys_b005_t000_p78",
           "on": 16.0,
-          "duration": 1.05,
-          "pitch": 74
+          "duration": 0.75,
+          "pitch": 78
         },
         {
-          "id": "piano_b005_t072_p76",
+          "id": "keys_b005_t036_p81",
+          "on": 16.75,
+          "duration": 0.75,
+          "pitch": 81
+        },
+        {
+          "id": "keys_b005_t072_p83",
           "on": 17.5,
-          "duration": 0.65,
-          "pitch": 76
+          "duration": 0.5,
+          "pitch": 83
         },
         {
-          "id": "piano_b005_t120_p81",
-          "on": 18.5,
-          "duration": 0.85,
+          "id": "keys_b005_t096_p81",
+          "on": 18.0,
+          "duration": 1.0,
           "pitch": 81
         },
         {
-          "id": "piano_b007_t000_p74",
-          "on": 24.0,
-          "duration": 1.05,
-          "pitch": 74
+          "id": "keys_b005_t144_p78",
+          "on": 19.0,
+          "duration": 0.9000000000000004,
+          "pitch": 78
         },
         {
-          "id": "piano_b007_t072_p76",
-          "on": 25.5,
-          "duration": 0.65,
+          "id": "keys_b006_t000_p76",
+          "on": 20.0,
+          "duration": 1.25,
           "pitch": 76
         },
         {
-          "id": "piano_b007_t120_p81",
+          "id": "keys_b006_t060_p79",
+          "on": 21.25,
+          "duration": 0.75,
+          "pitch": 79
+        },
+        {
+          "id": "keys_b006_t096_p83",
+          "on": 22.0,
+          "duration": 0.75,
+          "pitch": 83
+        },
+        {
+          "id": "keys_b006_t132_p81",
+          "on": 22.75,
+          "duration": 1.1500000000000004,
+          "pitch": 81
+        },
+        {
+          "id": "keys_b007_t024_p78",
+          "on": 24.5,
+          "duration": 1.25,
+          "pitch": 78
+        },
+        {
+          "id": "keys_b007_t084_p74",
+          "on": 25.75,
+          "duration": 0.75,
+          "pitch": 74
+        },
+        {
+          "id": "keys_b007_t120_p71",
           "on": 26.5,
-          "duration": 0.85,
-          "pitch": 81
+          "duration": 1.25,
+          "pitch": 71
         },
         {
-          "id": "piano_b009_t000_p74",
+          "id": "keys_b008_t000_p73",
+          "on": 28.0,
+          "duration": 1.25,
+          "pitch": 73
+        },
+        {
+          "id": "keys_b008_t060_p76",
+          "on": 29.25,
+          "duration": 0.75,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b008_t096_p79",
+          "on": 30.0,
+          "duration": 0.75,
+          "pitch": 79
+        },
+        {
+          "id": "keys_b008_t132_p76",
+          "on": 30.75,
+          "duration": 1.1500000000000004,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b009_t000_p81",
           "on": 32.0,
-          "duration": 1.05,
-          "pitch": 74
-        },
-        {
-          "id": "piano_b009_t072_p76",
-          "on": 33.5,
-          "duration": 0.65,
-          "pitch": 76
-        },
-        {
-          "id": "piano_b009_t120_p81",
-          "on": 34.5,
-          "duration": 0.85,
+          "duration": 1.25,
           "pitch": 81
         },
         {
-          "id": "piano_b011_t000_p74",
+          "id": "keys_b009_t060_p83",
+          "on": 33.25,
+          "duration": 0.75,
+          "pitch": 83
+        },
+        {
+          "id": "keys_b009_t096_p86",
+          "on": 34.0,
+          "duration": 0.75,
+          "pitch": 86
+        },
+        {
+          "id": "keys_b009_t132_p83",
+          "on": 34.75,
+          "duration": 1.1500000000000004,
+          "pitch": 83
+        },
+        {
+          "id": "keys_b010_t000_p85",
+          "on": 36.0,
+          "duration": 1.25,
+          "pitch": 85
+        },
+        {
+          "id": "keys_b010_t060_p81",
+          "on": 37.25,
+          "duration": 0.75,
+          "pitch": 81
+        },
+        {
+          "id": "keys_b010_t096_p78",
+          "on": 38.0,
+          "duration": 0.75,
+          "pitch": 78
+        },
+        {
+          "id": "keys_b010_t132_p76",
+          "on": 38.75,
+          "duration": 1.1500000000000004,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b011_t000_p78",
           "on": 40.0,
-          "duration": 1.05,
-          "pitch": 74
+          "duration": 0.75,
+          "pitch": 78
         },
         {
-          "id": "piano_b011_t072_p76",
+          "id": "keys_b011_t036_p81",
+          "on": 40.75,
+          "duration": 0.75,
+          "pitch": 81
+        },
+        {
+          "id": "keys_b011_t072_p83",
           "on": 41.5,
-          "duration": 0.65,
-          "pitch": 76
+          "duration": 0.5,
+          "pitch": 83
         },
         {
-          "id": "piano_b011_t120_p81",
-          "on": 42.5,
-          "duration": 0.85,
-          "pitch": 81
+          "id": "keys_b011_t096_p86",
+          "on": 42.0,
+          "duration": 1.0,
+          "pitch": 86
         },
         {
-          "id": "piano_b013_t000_p74",
+          "id": "keys_b011_t144_p83",
+          "on": 43.0,
+          "duration": 0.9000000000000004,
+          "pitch": 83
+        },
+        {
+          "id": "keys_b012_t024_p79",
+          "on": 44.5,
+          "duration": 1.25,
+          "pitch": 79
+        },
+        {
+          "id": "keys_b012_t084_p83",
+          "on": 45.75,
+          "duration": 0.75,
+          "pitch": 83
+        },
+        {
+          "id": "keys_b012_t120_p86",
+          "on": 46.5,
+          "duration": 1.25,
+          "pitch": 86
+        },
+        {
+          "id": "keys_b013_t000_p78",
           "on": 48.0,
-          "duration": 1.05,
-          "pitch": 74
+          "duration": 0.75,
+          "pitch": 78
         },
         {
-          "id": "piano_b013_t072_p76",
+          "id": "keys_b013_t036_p81",
+          "on": 48.75,
+          "duration": 0.75,
+          "pitch": 81
+        },
+        {
+          "id": "keys_b013_t072_p83",
           "on": 49.5,
-          "duration": 0.65,
-          "pitch": 76
+          "duration": 0.5,
+          "pitch": 83
         },
         {
-          "id": "piano_b013_t120_p81",
-          "on": 50.5,
-          "duration": 0.85,
+          "id": "keys_b013_t096_p81",
+          "on": 50.0,
+          "duration": 1.0,
           "pitch": 81
         },
         {
-          "id": "piano_b015_t000_p74",
-          "on": 56.0,
-          "duration": 1.05,
+          "id": "keys_b013_t144_p76",
+          "on": 51.0,
+          "duration": 0.9000000000000004,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b014_t024_p79",
+          "on": 52.5,
+          "duration": 1.25,
+          "pitch": 79
+        },
+        {
+          "id": "keys_b014_t084_p76",
+          "on": 53.75,
+          "duration": 0.75,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b014_t120_p74",
+          "on": 54.5,
+          "duration": 1.25,
           "pitch": 74
         },
         {
-          "id": "piano_b015_t072_p76",
-          "on": 57.5,
-          "duration": 0.65,
+          "id": "keys_b015_t024_p76",
+          "on": 56.5,
+          "duration": 1.25,
           "pitch": 76
         },
         {
-          "id": "piano_b015_t120_p81",
+          "id": "keys_b015_t084_p74",
+          "on": 57.75,
+          "duration": 0.75,
+          "pitch": 74
+        },
+        {
+          "id": "keys_b015_t120_p69",
           "on": 58.5,
-          "duration": 0.85,
-          "pitch": 81
+          "duration": 1.25,
+          "pitch": 69
+        },
+        {
+          "id": "keys_b016_t024_p74",
+          "on": 60.5,
+          "duration": 1.25,
+          "pitch": 74
+        },
+        {
+          "id": "keys_b016_t084_p76",
+          "on": 61.75,
+          "duration": 0.75,
+          "pitch": 76
+        },
+        {
+          "id": "keys_b016_t120_p78",
+          "on": 62.5,
+          "duration": 1.25,
+          "pitch": 78
         }
       ],
       "performance": {
         "notes": {
-          "piano_b001_t000_p74": {
-            "velocity": 51,
-            "gate": 0.985,
+          "keys_b001_t000_p78": {
+            "velocity": 66,
+            "gate": 0.7333,
             "timing_ms": 0
           },
-          "piano_b001_t072_p76": {
-            "velocity": 53,
-            "gate": 0.965,
-            "timing_ms": 1.1
+          "keys_b001_t036_p81": {
+            "velocity": 65,
+            "gate": 0.737,
+            "timing_ms": -4.95
           },
-          "piano_b001_t120_p81": {
-            "velocity": 55,
-            "gate": 0.9292,
-            "timing_ms": 8.02
+          "keys_b001_t072_p83": {
+            "velocity": 65,
+            "gate": 0.711,
+            "timing_ms": -6.39
           },
-          "piano_b003_t000_p74": {
-            "velocity": 49,
-            "gate": 0.9295,
-            "timing_ms": -5.71
+          "keys_b001_t096_p81": {
+            "velocity": 57,
+            "gate": 0.7252,
+            "timing_ms": -1.32
           },
-          "piano_b003_t072_p76": {
-            "velocity": 49,
-            "gate": 0.9222,
-            "timing_ms": 4.76
+          "keys_b001_t144_p76": {
+            "velocity": 58,
+            "gate": 0.725,
+            "timing_ms": 3.92
           },
-          "piano_b003_t120_p81": {
-            "velocity": 55,
-            "gate": 0.9329,
-            "timing_ms": 6.84
+          "keys_b002_t024_p74": {
+            "velocity": 68,
+            "gate": 0.742,
+            "timing_ms": -1.12
           },
-          "piano_b005_t000_p74": {
-            "velocity": 52,
-            "gate": 0.9098,
-            "timing_ms": 2.68
+          "keys_b002_t084_p78": {
+            "velocity": 66,
+            "gate": 0.739,
+            "timing_ms": 3.95
           },
-          "piano_b005_t072_p76": {
-            "velocity": 51,
-            "gate": 0.9163,
-            "timing_ms": -2.26
+          "keys_b002_t120_p76": {
+            "velocity": 65,
+            "gate": 0.7325,
+            "timing_ms": -13.56
           },
-          "piano_b005_t120_p81": {
-            "velocity": 55,
-            "gate": 0.9151,
-            "timing_ms": 0.72
+          "keys_b003_t000_p74": {
+            "velocity": 63,
+            "gate": 0.7397,
+            "timing_ms": -11.71
           },
-          "piano_b007_t000_p74": {
-            "velocity": 47,
-            "gate": 0.9188,
-            "timing_ms": 1.19
+          "keys_b003_t060_p78": {
+            "velocity": 66,
+            "gate": 0.7387,
+            "timing_ms": -2.4
           },
-          "piano_b007_t072_p76": {
-            "velocity": 48,
-            "gate": 0.9152,
-            "timing_ms": -0.43
+          "keys_b003_t096_p81": {
+            "velocity": 68,
+            "gate": 0.7448,
+            "timing_ms": 0.41
           },
-          "piano_b007_t120_p81": {
-            "velocity": 53,
-            "gate": 0.9323,
-            "timing_ms": -1.06
+          "keys_b003_t132_p78": {
+            "velocity": 63,
+            "gate": 0.7676,
+            "timing_ms": -5.79
           },
-          "piano_b009_t000_p74": {
-            "velocity": 52,
-            "gate": 0.9562,
-            "timing_ms": 9.36
+          "keys_b004_t024_p76": {
+            "velocity": 65,
+            "gate": 0.7531,
+            "timing_ms": 4.36
           },
-          "piano_b009_t072_p76": {
-            "velocity": 52,
-            "gate": 0.9545,
-            "timing_ms": 5.61
+          "keys_b004_t084_p74": {
+            "velocity": 62,
+            "gate": 0.7234,
+            "timing_ms": 7.19
           },
-          "piano_b009_t120_p81": {
-            "velocity": 56,
-            "gate": 0.9536,
-            "timing_ms": 5.31
+          "keys_b004_t120_p69": {
+            "velocity": 61,
+            "gate": 0.7354,
+            "timing_ms": -3.74
           },
-          "piano_b011_t000_p74": {
-            "velocity": 53,
-            "gate": 0.9368,
+          "keys_b005_t000_p78": {
+            "velocity": 71,
+            "gate": 0.736,
+            "timing_ms": -2.82
+          },
+          "keys_b005_t036_p81": {
+            "velocity": 69,
+            "gate": 0.7238,
+            "timing_ms": -4.75
+          },
+          "keys_b005_t072_p83": {
+            "velocity": 68,
+            "gate": 0.6828,
+            "timing_ms": -4.72
+          },
+          "keys_b005_t096_p81": {
+            "velocity": 67,
+            "gate": 0.7174,
+            "timing_ms": -6.28
+          },
+          "keys_b005_t144_p78": {
+            "velocity": 64,
+            "gate": 0.709,
+            "timing_ms": -3.47
+          },
+          "keys_b006_t000_p76": {
+            "velocity": 67,
+            "gate": 0.7236,
+            "timing_ms": 0.45
+          },
+          "keys_b006_t060_p79": {
+            "velocity": 70,
+            "gate": 0.7215,
+            "timing_ms": -9.04
+          },
+          "keys_b006_t096_p83": {
+            "velocity": 71,
+            "gate": 0.7203,
+            "timing_ms": -5.26
+          },
+          "keys_b006_t132_p81": {
+            "velocity": 67,
+            "gate": 0.728,
+            "timing_ms": -2.15
+          },
+          "keys_b007_t024_p78": {
+            "velocity": 71,
+            "gate": 0.7374,
+            "timing_ms": 6.41
+          },
+          "keys_b007_t084_p74": {
+            "velocity": 68,
+            "gate": 0.7194,
+            "timing_ms": -3.37
+          },
+          "keys_b007_t120_p71": {
+            "velocity": 68,
+            "gate": 0.7279,
+            "timing_ms": -8.1
+          },
+          "keys_b008_t000_p73": {
+            "velocity": 73,
+            "gate": 0.732,
+            "timing_ms": -2.46
+          },
+          "keys_b008_t060_p76": {
+            "velocity": 72,
+            "gate": 0.7162,
+            "timing_ms": 6.66
+          },
+          "keys_b008_t096_p79": {
+            "velocity": 69,
+            "gate": 0.7349,
+            "timing_ms": 12.11
+          },
+          "keys_b008_t132_p76": {
+            "velocity": 67,
+            "gate": 0.7157,
+            "timing_ms": 5.02
+          },
+          "keys_b009_t000_p81": {
+            "velocity": 80,
+            "gate": 0.7417,
+            "timing_ms": -1.34
+          },
+          "keys_b009_t060_p83": {
+            "velocity": 73,
+            "gate": 0.7484,
+            "timing_ms": -1.14
+          },
+          "keys_b009_t096_p86": {
+            "velocity": 76,
+            "gate": 0.7511,
+            "timing_ms": -3.45
+          },
+          "keys_b009_t132_p83": {
+            "velocity": 72,
+            "gate": 0.7386,
+            "timing_ms": 6.82
+          },
+          "keys_b010_t000_p85": {
+            "velocity": 82,
+            "gate": 0.7476,
+            "timing_ms": 16.34
+          },
+          "keys_b010_t060_p81": {
+            "velocity": 75,
+            "gate": 0.7356,
+            "timing_ms": 10.73
+          },
+          "keys_b010_t096_p78": {
+            "velocity": 76,
+            "gate": 0.7267,
+            "timing_ms": 2.74
+          },
+          "keys_b010_t132_p76": {
+            "velocity": 71,
+            "gate": 0.7316,
+            "timing_ms": 10.52
+          },
+          "keys_b011_t000_p78": {
+            "velocity": 80,
+            "gate": 0.7144,
+            "timing_ms": 1.77
+          },
+          "keys_b011_t036_p81": {
+            "velocity": 78,
+            "gate": 0.7113,
+            "timing_ms": 5.15
+          },
+          "keys_b011_t072_p83": {
+            "velocity": 78,
+            "gate": 0.6937,
+            "timing_ms": 8.49
+          },
+          "keys_b011_t096_p86": {
+            "velocity": 72,
+            "gate": 0.7359,
+            "timing_ms": -4.31
+          },
+          "keys_b011_t144_p83": {
+            "velocity": 69,
+            "gate": 0.7174,
+            "timing_ms": 3.83
+          },
+          "keys_b012_t024_p79": {
+            "velocity": 77,
+            "gate": 0.7357,
+            "timing_ms": -6.3
+          },
+          "keys_b012_t084_p83": {
+            "velocity": 77,
+            "gate": 0.721,
+            "timing_ms": -3.41
+          },
+          "keys_b012_t120_p86": {
+            "velocity": 77,
+            "gate": 0.7211,
             "timing_ms": -1.71
           },
-          "piano_b011_t072_p76": {
-            "velocity": 55,
-            "gate": 0.9527,
-            "timing_ms": -11.95
+          "keys_b013_t000_p78": {
+            "velocity": 77,
+            "gate": 0.6987,
+            "timing_ms": -1.95
           },
-          "piano_b011_t120_p81": {
+          "keys_b013_t036_p81": {
+            "velocity": 72,
+            "gate": 0.6962,
+            "timing_ms": -2.66
+          },
+          "keys_b013_t072_p83": {
+            "velocity": 69,
+            "gate": 0.6783,
+            "timing_ms": -9.58
+          },
+          "keys_b013_t096_p81": {
+            "velocity": 70,
+            "gate": 0.7074,
+            "timing_ms": -10.17
+          },
+          "keys_b013_t144_p76": {
+            "velocity": 63,
+            "gate": 0.7497,
+            "timing_ms": -10.08
+          },
+          "keys_b014_t024_p79": {
+            "velocity": 68,
+            "gate": 0.7525,
+            "timing_ms": -2.87
+          },
+          "keys_b014_t084_p76": {
+            "velocity": 69,
+            "gate": 0.7227,
+            "timing_ms": 1.02
+          },
+          "keys_b014_t120_p74": {
+            "velocity": 64,
+            "gate": 0.7066,
+            "timing_ms": 3.75
+          },
+          "keys_b015_t024_p76": {
+            "velocity": 69,
+            "gate": 0.7225,
+            "timing_ms": 6.75
+          },
+          "keys_b015_t084_p74": {
+            "velocity": 63,
+            "gate": 0.7558,
+            "timing_ms": 4.32
+          },
+          "keys_b015_t120_p69": {
+            "velocity": 61,
+            "gate": 0.7404,
+            "timing_ms": 4.22
+          },
+          "keys_b016_t024_p74": {
+            "velocity": 65,
+            "gate": 0.7405,
+            "timing_ms": 15.93
+          },
+          "keys_b016_t084_p76": {
+            "velocity": 62,
+            "gate": 0.7407,
+            "timing_ms": 12.25
+          },
+          "keys_b016_t120_p78": {
             "velocity": 60,
-            "gate": 0.9452,
-            "timing_ms": -4.79
-          },
-          "piano_b013_t000_p74": {
-            "velocity": 53,
-            "gate": 0.935,
-            "timing_ms": 5.65
-          },
-          "piano_b013_t072_p76": {
-            "velocity": 55,
-            "gate": 0.9548,
-            "timing_ms": -5.66
-          },
-          "piano_b013_t120_p81": {
-            "velocity": 57,
-            "gate": 0.952,
-            "timing_ms": 7.3
-          },
-          "piano_b015_t000_p74": {
-            "velocity": 52,
-            "gate": 0.9356,
-            "timing_ms": 5.72
-          },
-          "piano_b015_t072_p76": {
-            "velocity": 51,
-            "gate": 0.935,
-            "timing_ms": 7.42
-          },
-          "piano_b015_t120_p81": {
-            "velocity": 56,
-            "gate": 0.948,
-            "timing_ms": 11.71
+            "gate": 0.7315,
+            "timing_ms": 7.7
           }
         },
         "cc": []
       },
       "mix": {
-        "level_dbfs": -25,
-        "reverb_db": -24,
-        "highpass": 120,
-        "lowpass": 4100,
+        "level_dbfs": -21,
+        "reverb_db": -26,
+        "highpass": 130,
+        "lowpass": 6750,
         "pan": -0.08
       },
       "patch": {
         "bank": 0,
-        "program": 0
+        "program": 4
       },
-      "program": 0,
+      "program": 4,
       "range": [
         24,
         100
       ]
     },
     {
-      "id": "low_piano",
+      "id": "pizzicato",
       "role": "harmony",
       "engine": "soundfont",
       "notes": [
         {
-          "id": "low_piano_b001_t000_p57",
-          "on": 0.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b001_t024_p64",
+          "on": 0.5,
+          "duration": 0.5,
+          "pitch": 64
         },
         {
-          "id": "low_piano_b001_t096_p62",
-          "on": 2.0,
-          "duration": 1.8,
+          "id": "pizzicato_b001_t084_p66",
+          "on": 1.75,
+          "duration": 0.5,
+          "pitch": 66
+        },
+        {
+          "id": "pizzicato_b001_t132_p69",
+          "on": 2.75,
+          "duration": 0.5,
+          "pitch": 69
+        },
+        {
+          "id": "pizzicato_b002_t024_p59",
+          "on": 4.5,
+          "duration": 0.5,
+          "pitch": 59
+        },
+        {
+          "id": "pizzicato_b002_t084_p66",
+          "on": 5.75,
+          "duration": 0.5,
+          "pitch": 66
+        },
+        {
+          "id": "pizzicato_b002_t132_p67",
+          "on": 6.75,
+          "duration": 0.5,
+          "pitch": 67
+        },
+        {
+          "id": "pizzicato_b003_t024_p62",
+          "on": 8.5,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b002_t000_p57",
-          "on": 4.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b003_t084_p66",
+          "on": 9.75,
+          "duration": 0.5,
+          "pitch": 66
         },
         {
-          "id": "low_piano_b002_t096_p62",
-          "on": 6.0,
-          "duration": 1.8,
+          "id": "pizzicato_b003_t132_p69",
+          "on": 10.75,
+          "duration": 0.5,
+          "pitch": 69
+        },
+        {
+          "id": "pizzicato_b004_t024_p62",
+          "on": 12.5,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b003_t000_p54",
-          "on": 8.0,
-          "duration": 1.8,
-          "pitch": 54
+          "id": "pizzicato_b004_t084_p64",
+          "on": 13.75,
+          "duration": 0.5,
+          "pitch": 64
         },
         {
-          "id": "low_piano_b003_t096_p57",
-          "on": 10.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b004_t132_p67",
+          "on": 14.75,
+          "duration": 0.5,
+          "pitch": 67
         },
         {
-          "id": "low_piano_b004_t000_p54",
-          "on": 12.0,
-          "duration": 1.8,
-          "pitch": 54
-        },
-        {
-          "id": "low_piano_b004_t096_p57",
-          "on": 14.0,
-          "duration": 1.8,
-          "pitch": 57
-        },
-        {
-          "id": "low_piano_b005_t000_p55",
-          "on": 16.0,
-          "duration": 1.8,
-          "pitch": 55
-        },
-        {
-          "id": "low_piano_b005_t096_p62",
-          "on": 18.0,
-          "duration": 1.8,
+          "id": "pizzicato_b005_t024_p62",
+          "on": 16.5,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b006_t000_p55",
-          "on": 20.0,
-          "duration": 1.8,
-          "pitch": 55
+          "id": "pizzicato_b005_t084_p66",
+          "on": 17.75,
+          "duration": 0.5,
+          "pitch": 66
         },
         {
-          "id": "low_piano_b006_t096_p62",
-          "on": 22.0,
-          "duration": 1.8,
+          "id": "pizzicato_b005_t132_p69",
+          "on": 18.75,
+          "duration": 0.5,
+          "pitch": 69
+        },
+        {
+          "id": "pizzicato_b006_t024_p59",
+          "on": 20.5,
+          "duration": 0.5,
+          "pitch": 59
+        },
+        {
+          "id": "pizzicato_b006_t084_p62",
+          "on": 21.75,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b007_t000_p57",
-          "on": 24.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b006_t132_p67",
+          "on": 22.75,
+          "duration": 0.5,
+          "pitch": 67
         },
         {
-          "id": "low_piano_b007_t096_p62",
-          "on": 26.0,
-          "duration": 1.8,
+          "id": "pizzicato_b007_t024_p59",
+          "on": 24.5,
+          "duration": 0.5,
+          "pitch": 59
+        },
+        {
+          "id": "pizzicato_b007_t084_p66",
+          "on": 25.75,
+          "duration": 0.5,
+          "pitch": 66
+        },
+        {
+          "id": "pizzicato_b007_t132_p67",
+          "on": 26.75,
+          "duration": 0.5,
+          "pitch": 67
+        },
+        {
+          "id": "pizzicato_b008_t024_p61",
+          "on": 28.5,
+          "duration": 0.5,
+          "pitch": 61
+        },
+        {
+          "id": "pizzicato_b008_t084_p64",
+          "on": 29.75,
+          "duration": 0.5,
+          "pitch": 64
+        },
+        {
+          "id": "pizzicato_b008_t132_p67",
+          "on": 30.75,
+          "duration": 0.5,
+          "pitch": 67
+        },
+        {
+          "id": "pizzicato_b009_t024_p62",
+          "on": 32.5,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b008_t000_p57",
-          "on": 28.0,
-          "duration": 1.8,
+          "id": "pizzicato_b009_t084_p66",
+          "on": 33.75,
+          "duration": 0.5,
+          "pitch": 66
+        },
+        {
+          "id": "pizzicato_b009_t132_p69",
+          "on": 34.75,
+          "duration": 0.5,
+          "pitch": 69
+        },
+        {
+          "id": "pizzicato_b010_t024_p57",
+          "on": 36.5,
+          "duration": 0.5,
           "pitch": 57
         },
         {
-          "id": "low_piano_b008_t096_p62",
-          "on": 30.0,
-          "duration": 1.8,
+          "id": "pizzicato_b010_t084_p61",
+          "on": 37.75,
+          "duration": 0.5,
+          "pitch": 61
+        },
+        {
+          "id": "pizzicato_b010_t132_p64",
+          "on": 38.75,
+          "duration": 0.5,
+          "pitch": 64
+        },
+        {
+          "id": "pizzicato_b011_t024_p59",
+          "on": 40.5,
+          "duration": 0.5,
+          "pitch": 59
+        },
+        {
+          "id": "pizzicato_b011_t084_p66",
+          "on": 41.75,
+          "duration": 0.5,
+          "pitch": 66
+        },
+        {
+          "id": "pizzicato_b011_t132_p67",
+          "on": 42.75,
+          "duration": 0.5,
+          "pitch": 67
+        },
+        {
+          "id": "pizzicato_b012_t024_p59",
+          "on": 44.5,
+          "duration": 0.5,
+          "pitch": 59
+        },
+        {
+          "id": "pizzicato_b012_t084_p62",
+          "on": 45.75,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b009_t000_p54",
-          "on": 32.0,
-          "duration": 1.8,
-          "pitch": 54
+          "id": "pizzicato_b012_t132_p67",
+          "on": 46.75,
+          "duration": 0.5,
+          "pitch": 67
         },
         {
-          "id": "low_piano_b009_t096_p57",
-          "on": 34.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b013_t024_p64",
+          "on": 48.5,
+          "duration": 0.5,
+          "pitch": 64
         },
         {
-          "id": "low_piano_b010_t000_p54",
-          "on": 36.0,
-          "duration": 1.8,
-          "pitch": 54
+          "id": "pizzicato_b013_t084_p66",
+          "on": 49.75,
+          "duration": 0.5,
+          "pitch": 66
         },
         {
-          "id": "low_piano_b010_t096_p57",
-          "on": 38.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b013_t132_p69",
+          "on": 50.75,
+          "duration": 0.5,
+          "pitch": 69
         },
         {
-          "id": "low_piano_b011_t000_p54",
-          "on": 40.0,
-          "duration": 1.8,
-          "pitch": 54
+          "id": "pizzicato_b014_t024_p59",
+          "on": 52.5,
+          "duration": 0.5,
+          "pitch": 59
         },
         {
-          "id": "low_piano_b011_t096_p57",
-          "on": 42.0,
-          "duration": 1.8,
-          "pitch": 57
-        },
-        {
-          "id": "low_piano_b012_t000_p54",
-          "on": 44.0,
-          "duration": 1.8,
-          "pitch": 54
-        },
-        {
-          "id": "low_piano_b012_t096_p57",
-          "on": 46.0,
-          "duration": 1.8,
-          "pitch": 57
-        },
-        {
-          "id": "low_piano_b013_t000_p55",
-          "on": 48.0,
-          "duration": 1.8,
-          "pitch": 55
-        },
-        {
-          "id": "low_piano_b013_t096_p62",
-          "on": 50.0,
-          "duration": 1.8,
+          "id": "pizzicato_b014_t084_p62",
+          "on": 53.75,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b014_t000_p55",
-          "on": 52.0,
-          "duration": 1.8,
-          "pitch": 55
+          "id": "pizzicato_b014_t132_p67",
+          "on": 54.75,
+          "duration": 0.5,
+          "pitch": 67
         },
         {
-          "id": "low_piano_b014_t096_p62",
-          "on": 54.0,
-          "duration": 1.8,
+          "id": "pizzicato_b015_t024_p62",
+          "on": 56.5,
+          "duration": 0.5,
           "pitch": 62
         },
         {
-          "id": "low_piano_b015_t000_p57",
-          "on": 56.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b015_t084_p64",
+          "on": 57.75,
+          "duration": 0.5,
+          "pitch": 64
         },
         {
-          "id": "low_piano_b015_t096_p62",
-          "on": 58.0,
-          "duration": 1.8,
-          "pitch": 62
+          "id": "pizzicato_b015_t132_p67",
+          "on": 58.75,
+          "duration": 0.5,
+          "pitch": 67
         },
         {
-          "id": "low_piano_b016_t000_p57",
-          "on": 60.0,
-          "duration": 1.8,
-          "pitch": 57
+          "id": "pizzicato_b016_t024_p64",
+          "on": 60.5,
+          "duration": 0.5,
+          "pitch": 64
         },
         {
-          "id": "low_piano_b016_t096_p62",
-          "on": 62.0,
-          "duration": 1.8,
-          "pitch": 62
+          "id": "pizzicato_b016_t084_p66",
+          "on": 61.75,
+          "duration": 0.5,
+          "pitch": 66
+        },
+        {
+          "id": "pizzicato_b016_t132_p69",
+          "on": 62.75,
+          "duration": 0.5,
+          "pitch": 69
         }
       ],
       "performance": {
         "notes": {
-          "low_piano_b001_t000_p57": {
-            "velocity": 42,
-            "gate": 0.9135,
-            "timing_ms": 0
+          "pizzicato_b001_t024_p64": {
+            "velocity": 58,
+            "gate": 0.679,
+            "timing_ms": 3.78
           },
-          "low_piano_b001_t096_p62": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": -4.99
+          "pizzicato_b001_t084_p66": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": -2.55
           },
-          "low_piano_b002_t000_p57": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": -7.74
+          "pizzicato_b001_t132_p69": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": 1.58
           },
-          "low_piano_b002_t096_p62": {
-            "velocity": 45,
-            "gate": 0.9135,
-            "timing_ms": -5.58
+          "pizzicato_b002_t024_p59": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": 8.69
           },
-          "low_piano_b003_t000_p54": {
-            "velocity": 47,
-            "gate": 0.9135,
-            "timing_ms": -1.36
+          "pizzicato_b002_t084_p66": {
+            "velocity": 64,
+            "gate": 0.679,
+            "timing_ms": 10.36
           },
-          "low_piano_b003_t096_p57": {
-            "velocity": 47,
-            "gate": 0.9135,
-            "timing_ms": 5.24
+          "pizzicato_b002_t132_p67": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": 6.21
           },
-          "low_piano_b004_t000_p54": {
-            "velocity": 48,
-            "gate": 0.9135,
-            "timing_ms": 8.73
+          "pizzicato_b003_t024_p62": {
+            "velocity": 64,
+            "gate": 0.679,
+            "timing_ms": 5.25
           },
-          "low_piano_b004_t096_p57": {
-            "velocity": 44,
-            "gate": 0.9135,
-            "timing_ms": 4.17
+          "pizzicato_b003_t084_p66": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": 2.31
           },
-          "low_piano_b005_t000_p55": {
-            "velocity": 42,
-            "gate": 0.9135,
-            "timing_ms": -5.04
+          "pizzicato_b003_t132_p69": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": 1.12
           },
-          "low_piano_b005_t096_p62": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": 0.75
+          "pizzicato_b004_t024_p62": {
+            "velocity": 59,
+            "gate": 0.679,
+            "timing_ms": 1.25
           },
-          "low_piano_b006_t000_p55": {
-            "velocity": 42,
-            "gate": 0.9135,
-            "timing_ms": 0.13
+          "pizzicato_b004_t084_p64": {
+            "velocity": 59,
+            "gate": 0.679,
+            "timing_ms": 2.76
           },
-          "low_piano_b006_t096_p62": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": -2.04
+          "pizzicato_b004_t132_p67": {
+            "velocity": 57,
+            "gate": 0.679,
+            "timing_ms": 5.46
           },
-          "low_piano_b007_t000_p57": {
-            "velocity": 44,
-            "gate": 0.9135,
-            "timing_ms": 0.92
+          "pizzicato_b005_t024_p62": {
+            "velocity": 59,
+            "gate": 0.679,
+            "timing_ms": 1.17
           },
-          "low_piano_b007_t096_p62": {
-            "velocity": 46,
-            "gate": 0.9135,
-            "timing_ms": 5.66
+          "pizzicato_b005_t084_p66": {
+            "velocity": 58,
+            "gate": 0.679,
+            "timing_ms": 6.08
           },
-          "low_piano_b008_t000_p57": {
-            "velocity": 45,
-            "gate": 0.9135,
-            "timing_ms": -0.13
+          "pizzicato_b005_t132_p69": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": -1.78
           },
-          "low_piano_b008_t096_p62": {
-            "velocity": 44,
-            "gate": 0.9135,
-            "timing_ms": 0.62
+          "pizzicato_b006_t024_p59": {
+            "velocity": 60,
+            "gate": 0.679,
+            "timing_ms": -2.79
           },
-          "low_piano_b009_t000_p54": {
-            "velocity": 42,
-            "gate": 0.9135,
-            "timing_ms": -1.62
+          "pizzicato_b006_t084_p62": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": -7.16
           },
-          "low_piano_b009_t096_p57": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": -8.3
+          "pizzicato_b006_t132_p67": {
+            "velocity": 62,
+            "gate": 0.679,
+            "timing_ms": -9.81
           },
-          "low_piano_b010_t000_p54": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": -12.69
+          "pizzicato_b007_t024_p59": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": -4.5
           },
-          "low_piano_b010_t096_p57": {
-            "velocity": 44,
-            "gate": 0.9135,
-            "timing_ms": -5.87
+          "pizzicato_b007_t084_p66": {
+            "velocity": 65,
+            "gate": 0.679,
+            "timing_ms": 0.16
           },
-          "low_piano_b011_t000_p54": {
-            "velocity": 45,
-            "gate": 0.9135,
-            "timing_ms": -2.11
+          "pizzicato_b007_t132_p67": {
+            "velocity": 65,
+            "gate": 0.679,
+            "timing_ms": -5.26
           },
-          "low_piano_b011_t096_p57": {
-            "velocity": 45,
-            "gate": 0.9135,
-            "timing_ms": 0.09
+          "pizzicato_b008_t024_p61": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": -4.25
           },
-          "low_piano_b012_t000_p54": {
-            "velocity": 48,
-            "gate": 0.9135,
+          "pizzicato_b008_t084_p64": {
+            "velocity": 62,
+            "gate": 0.679,
+            "timing_ms": -6.06
+          },
+          "pizzicato_b008_t132_p67": {
+            "velocity": 60,
+            "gate": 0.679,
+            "timing_ms": 1.27
+          },
+          "pizzicato_b009_t024_p62": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": 1.02
+          },
+          "pizzicato_b009_t084_p66": {
+            "velocity": 57,
+            "gate": 0.679,
+            "timing_ms": -0.74
+          },
+          "pizzicato_b009_t132_p69": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": -7.29
+          },
+          "pizzicato_b010_t024_p57": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": -3.89
+          },
+          "pizzicato_b010_t084_p61": {
+            "velocity": 64,
+            "gate": 0.679,
+            "timing_ms": -4.66
+          },
+          "pizzicato_b010_t132_p64": {
+            "velocity": 62,
+            "gate": 0.679,
+            "timing_ms": -2.0
+          },
+          "pizzicato_b011_t024_p59": {
+            "velocity": 66,
+            "gate": 0.679,
+            "timing_ms": -1.21
+          },
+          "pizzicato_b011_t084_p66": {
+            "velocity": 66,
+            "gate": 0.679,
+            "timing_ms": 0.25
+          },
+          "pizzicato_b011_t132_p67": {
+            "velocity": 65,
+            "gate": 0.679,
+            "timing_ms": -1.05
+          },
+          "pizzicato_b012_t024_p59": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": 1.26
+          },
+          "pizzicato_b012_t084_p62": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": -4.56
+          },
+          "pizzicato_b012_t132_p67": {
+            "velocity": 58,
+            "gate": 0.679,
+            "timing_ms": 0.8
+          },
+          "pizzicato_b013_t024_p64": {
+            "velocity": 60,
+            "gate": 0.679,
             "timing_ms": 8.56
           },
-          "low_piano_b012_t096_p57": {
-            "velocity": 41,
-            "gate": 0.9135,
-            "timing_ms": -0.22
+          "pizzicato_b013_t084_p66": {
+            "velocity": 61,
+            "gate": 0.679,
+            "timing_ms": 5.47
           },
-          "low_piano_b013_t000_p55": {
-            "velocity": 41,
-            "gate": 0.9135,
-            "timing_ms": 7.36
+          "pizzicato_b013_t132_p69": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": 2.25
           },
-          "low_piano_b013_t096_p62": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": 2.74
+          "pizzicato_b014_t024_p59": {
+            "velocity": 60,
+            "gate": 0.679,
+            "timing_ms": -8.47
           },
-          "low_piano_b014_t000_p55": {
-            "velocity": 44,
-            "gate": 0.9135,
-            "timing_ms": 12.1
+          "pizzicato_b014_t084_p62": {
+            "velocity": 64,
+            "gate": 0.679,
+            "timing_ms": 2.23
           },
-          "low_piano_b014_t096_p62": {
-            "velocity": 48,
-            "gate": 0.9135,
-            "timing_ms": -3.26
+          "pizzicato_b014_t132_p67": {
+            "velocity": 63,
+            "gate": 0.679,
+            "timing_ms": -5.82
           },
-          "low_piano_b015_t000_p57": {
-            "velocity": 47,
-            "gate": 0.9135,
-            "timing_ms": 0.32
+          "pizzicato_b015_t024_p62": {
+            "velocity": 66,
+            "gate": 0.679,
+            "timing_ms": -3.7
           },
-          "low_piano_b015_t096_p62": {
-            "velocity": 48,
-            "gate": 0.9135,
-            "timing_ms": -2.86
+          "pizzicato_b015_t084_p64": {
+            "velocity": 64,
+            "gate": 0.679,
+            "timing_ms": -6.26
           },
-          "low_piano_b016_t000_p57": {
-            "velocity": 45,
-            "gate": 0.9135,
-            "timing_ms": -4.57
+          "pizzicato_b015_t132_p67": {
+            "velocity": 65,
+            "gate": 0.679,
+            "timing_ms": -5.04
           },
-          "low_piano_b016_t096_p62": {
-            "velocity": 43,
-            "gate": 0.9135,
-            "timing_ms": 5.62
+          "pizzicato_b016_t024_p64": {
+            "velocity": 60,
+            "gate": 0.679,
+            "timing_ms": -1.99
+          },
+          "pizzicato_b016_t084_p66": {
+            "velocity": 57,
+            "gate": 0.679,
+            "timing_ms": 1.61
+          },
+          "pizzicato_b016_t132_p69": {
+            "velocity": 60,
+            "gate": 0.679,
+            "timing_ms": 6.42
           }
         },
         "cc": []
       },
       "mix": {
-        "level_dbfs": -34,
-        "reverb_db": -25,
-        "highpass": 90,
-        "lowpass": 3000,
-        "pan": 0.1
+        "level_dbfs": -29,
+        "reverb_db": -29,
+        "highpass": 120,
+        "lowpass": 4250,
+        "pan": 0.11
       },
       "patch": {
         "bank": 0,
-        "program": 0
+        "program": 45
       },
-      "program": 0,
+      "program": 45,
+      "range": [
+        24,
+        100
+      ]
+    },
+    {
+      "id": "bass",
+      "role": "bass",
+      "engine": "soundfont",
+      "notes": [
+        {
+          "id": "bass_b001_t000_p62",
+          "on": 0.0,
+          "duration": 1.32,
+          "pitch": 62
+        },
+        {
+          "id": "bass_b001_t108_p57",
+          "on": 2.25,
+          "duration": 0.62,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b002_t000_p55",
+          "on": 4.0,
+          "duration": 1.32,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b003_t000_p59",
+          "on": 8.0,
+          "duration": 1.32,
+          "pitch": 59
+        },
+        {
+          "id": "bass_b003_t108_p57",
+          "on": 10.25,
+          "duration": 0.62,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b004_t000_p57",
+          "on": 12.0,
+          "duration": 1.32,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b005_t000_p54",
+          "on": 16.0,
+          "duration": 1.32,
+          "pitch": 54
+        },
+        {
+          "id": "bass_b005_t108_p57",
+          "on": 18.25,
+          "duration": 0.62,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b006_t000_p52",
+          "on": 20.0,
+          "duration": 1.32,
+          "pitch": 52
+        },
+        {
+          "id": "bass_b007_t000_p55",
+          "on": 24.0,
+          "duration": 1.32,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b007_t108_p55",
+          "on": 26.25,
+          "duration": 0.62,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b008_t000_p57",
+          "on": 28.0,
+          "duration": 1.32,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b009_t000_p59",
+          "on": 32.0,
+          "duration": 1.32,
+          "pitch": 59
+        },
+        {
+          "id": "bass_b009_t108_p57",
+          "on": 34.25,
+          "duration": 0.62,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b010_t000_p54",
+          "on": 36.0,
+          "duration": 1.32,
+          "pitch": 54
+        },
+        {
+          "id": "bass_b011_t000_p55",
+          "on": 40.0,
+          "duration": 1.32,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b011_t108_p55",
+          "on": 42.25,
+          "duration": 0.62,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b012_t000_p52",
+          "on": 44.0,
+          "duration": 1.32,
+          "pitch": 52
+        },
+        {
+          "id": "bass_b012_t108_p55",
+          "on": 46.25,
+          "duration": 0.62,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b013_t000_p62",
+          "on": 48.0,
+          "duration": 1.32,
+          "pitch": 62
+        },
+        {
+          "id": "bass_b013_t108_p57",
+          "on": 50.25,
+          "duration": 0.62,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b014_t000_p52",
+          "on": 52.0,
+          "duration": 1.32,
+          "pitch": 52
+        },
+        {
+          "id": "bass_b015_t000_p57",
+          "on": 56.0,
+          "duration": 1.32,
+          "pitch": 57
+        },
+        {
+          "id": "bass_b015_t108_p55",
+          "on": 58.25,
+          "duration": 0.62,
+          "pitch": 55
+        },
+        {
+          "id": "bass_b016_t000_p62",
+          "on": 60.0,
+          "duration": 1.32,
+          "pitch": 62
+        },
+        {
+          "id": "bass_b016_t108_p57",
+          "on": 62.25,
+          "duration": 0.62,
+          "pitch": 57
+        }
+      ],
+      "performance": {
+        "notes": {
+          "bass_b001_t000_p62": {
+            "velocity": 53,
+            "gate": 0.7409,
+            "timing_ms": 0
+          },
+          "bass_b001_t108_p57": {
+            "velocity": 55,
+            "gate": 0.736,
+            "timing_ms": 1.56
+          },
+          "bass_b002_t000_p55": {
+            "velocity": 53,
+            "gate": 0.7335,
+            "timing_ms": 3.86
+          },
+          "bass_b003_t000_p59": {
+            "velocity": 54,
+            "gate": 0.7464,
+            "timing_ms": 0.72
+          },
+          "bass_b003_t108_p57": {
+            "velocity": 55,
+            "gate": 0.7121,
+            "timing_ms": 8.57
+          },
+          "bass_b004_t000_p57": {
+            "velocity": 53,
+            "gate": 0.7585,
+            "timing_ms": 1.26
+          },
+          "bass_b005_t000_p54": {
+            "velocity": 53,
+            "gate": 0.7423,
+            "timing_ms": 2.51
+          },
+          "bass_b005_t108_p57": {
+            "velocity": 54,
+            "gate": 0.7296,
+            "timing_ms": -1.52
+          },
+          "bass_b006_t000_p52": {
+            "velocity": 53,
+            "gate": 0.73,
+            "timing_ms": 9.26
+          },
+          "bass_b007_t000_p55": {
+            "velocity": 56,
+            "gate": 0.7588,
+            "timing_ms": 4.74
+          },
+          "bass_b007_t108_p55": {
+            "velocity": 53,
+            "gate": 0.7181,
+            "timing_ms": 7.42
+          },
+          "bass_b008_t000_p57": {
+            "velocity": 55,
+            "gate": 0.7465,
+            "timing_ms": 7.05
+          },
+          "bass_b009_t000_p59": {
+            "velocity": 50,
+            "gate": 0.7456,
+            "timing_ms": 7.64
+          },
+          "bass_b009_t108_p57": {
+            "velocity": 54,
+            "gate": 0.7394,
+            "timing_ms": 12.02
+          },
+          "bass_b010_t000_p54": {
+            "velocity": 54,
+            "gate": 0.7489,
+            "timing_ms": 5.82
+          },
+          "bass_b011_t000_p55": {
+            "velocity": 55,
+            "gate": 0.7332,
+            "timing_ms": 5.67
+          },
+          "bass_b011_t108_p55": {
+            "velocity": 54,
+            "gate": 0.7477,
+            "timing_ms": 10.32
+          },
+          "bass_b012_t000_p52": {
+            "velocity": 54,
+            "gate": 0.786,
+            "timing_ms": 4.82
+          },
+          "bass_b012_t108_p55": {
+            "velocity": 50,
+            "gate": 0.7218,
+            "timing_ms": -0.81
+          },
+          "bass_b013_t000_p62": {
+            "velocity": 54,
+            "gate": 0.7493,
+            "timing_ms": 5.18
+          },
+          "bass_b013_t108_p57": {
+            "velocity": 51,
+            "gate": 0.7334,
+            "timing_ms": 4.74
+          },
+          "bass_b014_t000_p52": {
+            "velocity": 54,
+            "gate": 0.7792,
+            "timing_ms": 8.92
+          },
+          "bass_b015_t000_p57": {
+            "velocity": 57,
+            "gate": 0.7603,
+            "timing_ms": 2.84
+          },
+          "bass_b015_t108_p55": {
+            "velocity": 55,
+            "gate": 0.747,
+            "timing_ms": -1.75
+          },
+          "bass_b016_t000_p62": {
+            "velocity": 53,
+            "gate": 0.7702,
+            "timing_ms": 5.76
+          },
+          "bass_b016_t108_p57": {
+            "velocity": 54,
+            "gate": 0.7605,
+            "timing_ms": 10.25
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -32,
+        "reverb_db": -29,
+        "highpass": 67,
+        "lowpass": 900,
+        "pan": 0
+      },
+      "patch": {
+        "bank": 0,
+        "program": 32
+      },
+      "program": 32,
+      "range": [
+        24,
+        100
+      ]
+    },
+    {
+      "id": "mallets",
+      "role": "countermelody",
+      "engine": "soundfont",
+      "notes": [
+        {
+          "id": "mallets_b002_t156_p71",
+          "on": 7.25,
+          "duration": 0.48,
+          "pitch": 71
+        },
+        {
+          "id": "mallets_b004_t156_p74",
+          "on": 15.25,
+          "duration": 0.48,
+          "pitch": 74
+        },
+        {
+          "id": "mallets_b006_t156_p71",
+          "on": 23.25,
+          "duration": 0.48,
+          "pitch": 71
+        },
+        {
+          "id": "mallets_b008_t156_p73",
+          "on": 31.25,
+          "duration": 0.48,
+          "pitch": 73
+        },
+        {
+          "id": "mallets_b010_t156_p69",
+          "on": 39.25,
+          "duration": 0.48,
+          "pitch": 69
+        },
+        {
+          "id": "mallets_b012_t156_p71",
+          "on": 47.25,
+          "duration": 0.48,
+          "pitch": 71
+        },
+        {
+          "id": "mallets_b014_t156_p71",
+          "on": 55.25,
+          "duration": 0.48,
+          "pitch": 71
+        },
+        {
+          "id": "mallets_b016_t156_p76",
+          "on": 63.25,
+          "duration": 0.48,
+          "pitch": 76
+        }
+      ],
+      "performance": {
+        "notes": {
+          "mallets_b002_t156_p71": {
+            "velocity": 53,
+            "gate": 0.84,
+            "timing_ms": -3.1
+          },
+          "mallets_b004_t156_p74": {
+            "velocity": 54,
+            "gate": 0.84,
+            "timing_ms": 4.39
+          },
+          "mallets_b006_t156_p71": {
+            "velocity": 53,
+            "gate": 0.84,
+            "timing_ms": -2.98
+          },
+          "mallets_b008_t156_p73": {
+            "velocity": 52,
+            "gate": 0.84,
+            "timing_ms": 3.95
+          },
+          "mallets_b010_t156_p69": {
+            "velocity": 50,
+            "gate": 0.84,
+            "timing_ms": 14.73
+          },
+          "mallets_b012_t156_p71": {
+            "velocity": 56,
+            "gate": 0.84,
+            "timing_ms": -2.45
+          },
+          "mallets_b014_t156_p71": {
+            "velocity": 49,
+            "gate": 0.84,
+            "timing_ms": 4.15
+          },
+          "mallets_b016_t156_p76": {
+            "velocity": 54,
+            "gate": 0.84,
+            "timing_ms": -0.63
+          }
+        },
+        "cc": []
+      },
+      "mix": {
+        "level_dbfs": -30,
+        "reverb_db": -29,
+        "highpass": 230,
+        "lowpass": 6300,
+        "pan": 0.17
+      },
+      "patch": {
+        "bank": 0,
+        "program": 11
+      },
+      "program": 11,
       "range": [
         24,
         100
@@ -709,9 +1734,9 @@
     "rules": 2,
     "target_lufs": -20,
     "dynamics": "wide",
-    "mono_below_hz": 140
+    "mono_below_hz": 150
   },
-  "brief": "Original soft 48-second school background loop; three-note D-E-A family motif; no vocals.",
+  "brief": "Original exploration music, school; a full-file loop with a distinct five-note contour.",
   "loop": {
     "start_bar": 0
   },
@@ -720,47 +1745,92 @@
   },
   "association": {
     "source": "draw",
-    "seed": 3900,
+    "seed": 4100,
     "words": [
-      "plum",
-      "clog",
-      "shears",
-      "apricot",
-      "seesaw",
-      "crease",
-      "footstool",
-      "anemone",
-      "clipboard",
-      "sneaker",
-      "exhale",
-      "churn"
+      "junkyard",
+      "balloon",
+      "hem",
+      "paperclip",
+      "yawn",
+      "propeller",
+      "alley",
+      "squishy",
+      "mesh",
+      "stitch",
+      "rice",
+      "faucet"
     ],
-    "whole": "A sneaker and a clog rest beneath a footstool while a clipboard holds a crease-marked paper anemone. Shears beside a plum and apricot sketch a small seesaw; after an exhale the classroom stops its churn. Paired falling/rising phrases, soft high piano, warm major ninth harmony leave space around the shared motif.",
+    "whole": "A paperclip fixes the hem of a balloon in the classroom's junkyard model. A rice-grain propeller stitches a mesh alley, while a faucet's squishy yawn marks the beat.",
     "gives": [
       {
         "level": "form",
-        "what": "Two eight-bar phrases, with second-phrase voicing change",
-        "where": "all16bars"
+        "what": "A repeated object recolored at each return",
+        "where": "four four-bar sections"
       },
       {
         "level": "rhythm",
-        "what": "Breathing motifs over a sparse steady pulse",
-        "where": "all16bars"
+        "what": "Asymmetric five-note idea with a breath",
+        "where": "opening and return"
       },
       {
         "level": "timbre",
-        "what": "Softened sampled piano",
-        "where": "all16bars"
+        "what": "Electric piano and mallets, light plucked accompaniment",
+        "where": "lead and answering voice"
+      }
+    ]
+  },
+  "plan": {
+    "identity": "Five-note rising-and-folding phrase in electric piano and mallets, light plucked accompaniment",
+    "high_point": {
+      "section": "discovery",
+      "means": "A single higher answer without raising background volume"
+    },
+    "sections": [
+      {
+        "section": "arrival",
+        "sounds": [
+          "keys",
+          "pizzicato",
+          "bass",
+          "mallets"
+        ],
+        "leads": "keys"
+      },
+      {
+        "section": "shift",
+        "sounds": [
+          "keys",
+          "pizzicato",
+          "bass",
+          "mallets"
+        ],
+        "leads": "keys"
+      },
+      {
+        "section": "discovery",
+        "sounds": [
+          "keys",
+          "pizzicato",
+          "bass",
+          "mallets"
+        ],
+        "leads": "keys"
+      },
+      {
+        "section": "return",
+        "sounds": [
+          "keys",
+          "pizzicato",
+          "bass",
+          "mallets"
+        ],
+        "leads": "keys"
       }
     ]
   },
   "decisions": [
-    "The D-E-A motif is original and shared; its major/minor contexts distinguish the rooms.",
-    "Only installed MS Basic and built-in synths; the softened MS Basic piano deliberately supplies the felt-like direction, no claim of a true felt-piano sample.",
-    "Sparse phrase returns and parallel chord support are intentional underscore; no foreground climax.",
-    "Render and measurements are technical checks; human listening is pending.",
-    "sections_alike:memory+return: Dynamic consistency is intentional for exploration; the second half has small voicing, pitch, articulation or harmony changes rather than new loud layers.",
-    "melody_durations:pluck: The short regular durations deliberately act as the office clock, with a longer articulation in the second eight bars."
+    "Keep a clear light lead and let beds leave room for game effects.",
+    "Use installed sample bank and synths. Last bar shares the opening harmony at the loop join."
   ],
   "harmony": [
     {
@@ -769,31 +1839,31 @@
     },
     {
       "bar": 2,
-      "symbol": "Dadd9"
+      "symbol": "Gmaj7"
     },
     {
       "bar": 3,
-      "symbol": "Gmaj9"
+      "symbol": "Bm7"
     },
     {
       "bar": 4,
-      "symbol": "Gmaj9"
+      "symbol": "A7sus4"
     },
     {
       "bar": 5,
-      "symbol": "A7sus4"
+      "symbol": "D/F#"
     },
     {
       "bar": 6,
-      "symbol": "A7sus4"
+      "symbol": "Em7"
     },
     {
       "bar": 7,
-      "symbol": "Dadd9"
+      "symbol": "Gmaj7"
     },
     {
       "bar": 8,
-      "symbol": "Dadd9"
+      "symbol": "A7"
     },
     {
       "bar": 9,
@@ -801,56 +1871,31 @@
     },
     {
       "bar": 10,
-      "symbol": "Bm7"
+      "symbol": "F#m7"
     },
     {
       "bar": 11,
-      "symbol": "Gmaj9"
+      "symbol": "Gmaj7"
     },
     {
       "bar": 12,
-      "symbol": "Gmaj9"
+      "symbol": "Em7"
     },
     {
       "bar": 13,
-      "symbol": "A7sus4"
+      "symbol": "Dadd9"
     },
     {
       "bar": 14,
-      "symbol": "A7sus4"
+      "symbol": "Em7"
     },
     {
       "bar": 15,
-      "symbol": "Dadd9"
+      "symbol": "A7sus4"
     },
     {
       "bar": 16,
       "symbol": "Dadd9"
     }
-  ],
-  "plan": {
-    "identity": "Three-note D-E-A memory heard through school instrumentation",
-    "high_point": {
-      "section": "return",
-      "means": "One small voicing lift instead of louder foreground music"
-    },
-    "sections": [
-      {
-        "section": "memory",
-        "sounds": [
-          "piano",
-          "low_piano"
-        ],
-        "leads": "piano"
-      },
-      {
-        "section": "return",
-        "sounds": [
-          "piano",
-          "low_piano"
-        ],
-        "leads": "piano"
-      }
-    ]
-  }
+  ]
 }
