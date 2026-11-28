@@ -12,7 +12,6 @@ namespace home_picture {
 inline constexpr glm::vec3 framePosition{-5.13f, 2.00f, -6.26f};
 inline constexpr glm::vec3 canvasCenter{-4.48f, 2.00f, -6.25f};
 inline constexpr glm::vec2 canvasSize{1.068f, 1.148f};
-inline constexpr float revealSeconds = .57f;
 
 inline glm::vec3 paintPoint(glm::vec2 point, float layer) {
     return canvasCenter + glm::vec3{(point - glm::vec2{.5f}) * canvasSize, layer * .0012f};
@@ -30,8 +29,6 @@ inline constexpr glm::vec3 hiddenTarget{
     canvasCenter.y + (keyholeCap.y - .5f) * canvasSize.y,
     canvasCenter.z + keyholeLayer * .0012f,
 };
-inline constexpr glm::vec3 plateStart{hiddenTarget.x, hiddenTarget.y - .024f, hiddenTarget.z + .012f};
-inline constexpr glm::vec3 plateEnd{plateStart.x, plateStart.y, -5.64f};
 
 inline std::optional<float> hiddenKeyholeHit(glm::vec3 eye, glm::vec3 direction, float reach) {
     if (eye.z <= hiddenTarget.z || direction.z >= -.0001f) return std::nullopt;
@@ -62,6 +59,7 @@ inline glm::vec3 gazeOffset(const glm::vec3& eye) {
 struct Art {
     std::vector<MeshVertex> vertices;
     GLsizei backdropCount = 0;
+    GLsizei pupilCount = 0;
 };
 
 inline const Art& art() {
@@ -120,12 +118,6 @@ inline const Art& art() {
             ellipse(knot + glm::vec2{.016f,.004f}, {.018f,.004f}, 8, {.34f,.24f,.16f});
         }
         ellipse(keyholeCap - glm::vec2{0.0f,.014f}, {.043f,.046f}, 7, {.38f,.27f,.18f});
-        constexpr glm::vec3 keyholeShadow{.22f,.145f,.10f};
-        ellipse(keyholeCap, keyholeRadius, keyholeLayer, keyholeShadow);
-        quad({keyholeCap.x - keyholeStemTopHalf,keyholeStemTop},
-             {keyholeCap.x + keyholeStemTopHalf,keyholeStemTop},
-             {keyholeCap.x + keyholeStemBottomHalf,keyholeStemBottom},
-             {keyholeCap.x - keyholeStemBottomHalf,keyholeStemBottom}, keyholeLayer, keyholeShadow);
 
         // Ear tufts, layered plumage, and distinct facial disks.
         const glm::vec3 wing{.28f,.21f,.17f};
@@ -159,6 +151,13 @@ inline const Art& art() {
             ellipse({x,.648f}, {.026f,.030f}, 9, {.11f,.088f,.068f});
             ellipse({x-.007f,.658f}, {.008f,.008f}, 10, {.94f,.81f,.58f});
         }
+        result.pupilCount = static_cast<GLsizei>(result.vertices.size()) - result.backdropCount;
+        constexpr glm::vec3 keyholeShadow{.22f,.145f,.10f};
+        ellipse(keyholeCap, keyholeRadius, keyholeLayer, keyholeShadow);
+        quad({keyholeCap.x - keyholeStemTopHalf,keyholeStemTop},
+             {keyholeCap.x + keyholeStemTopHalf,keyholeStemTop},
+             {keyholeCap.x + keyholeStemBottomHalf,keyholeStemBottom},
+             {keyholeCap.x - keyholeStemBottomHalf,keyholeStemBottom}, keyholeLayer, keyholeShadow);
         return result;
     }();
     return painting;

@@ -338,18 +338,6 @@ glm::mat4 HomeRoom::portableModel(int index) const {
     return model;
 }
 
-void HomeRoom::updatePicture(float elapsed) {
-    using namespace home_picture;
-    if (!pictureOpening_) return;
-    pictureReveal_ = std::min(1.0f, pictureReveal_ + elapsed / revealSeconds);
-    if (pictureReveal_ >= 1.0f) {
-        pictureOpening_ = false;
-        auto& socket = portable_[socketObject];
-        socket.center = plateEnd;
-        socket.active = true;
-    }
-}
-
 std::optional<glm::vec2> HomeRoom::computerUv(const glm::vec3& eye, const glm::vec3& direction) const {
     if (!ComputerScreen::rayToUv(eye, direction, reach)) return std::nullopt;
     return ComputerScreen::rayToUv(eye, direction, visibleRange(eye, direction, reach));
@@ -821,10 +809,15 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         }
     }
     if (held_ == HeldItem::None) {
-        if (!pictureOpening_ && pictureReveal_ == 0.0f) {
+        if (!portable_[socketObject].active) {
             const auto hit = home_picture::hiddenKeyholeHit(eye, direction, reach);
             if (hit && *hit <= visibleRange(eye, direction, reach)) {
-                pictureOpening_ = true;
+                if (auto pose = carriedPortable(socketObject, eye, direction)) {
+                    pose->active = true;
+                    portable_[socketObject] = *pose;
+                    heldPortable_ = socketObject;
+                    held_ = HeldItem::Portable;
+                }
                 return;
             }
         }
@@ -906,7 +899,6 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
     ending_.update(elapsed, finale_.escaped());
     if (elapsed <= 0.0f) return;
     lastEye_ = eye;
-    updatePicture(elapsed);
     const bool focused = held_ == HeldItem::None && computerUv(eye,direction).has_value();
     if (computerFocused_ && !focused) computer_.clearInput();
     computerFocused_ = focused;
@@ -1035,15 +1027,12 @@ void HomeRoom::drawPicture(const glm::mat4& model) const {
     const auto& painting = art();
     const auto first = static_cast<GLint>(bedroomMesh().vertices.size());
     renderer_.drawMovableMesh(first, painting.backdropCount, model, glm::vec3{1.0f});
-    const auto pupilCount = static_cast<GLsizei>(painting.vertices.size()) - painting.backdropCount;
     const auto pupils = glm::translate(model, gazeOffset(lastEye_));
-    renderer_.drawMovableMesh(first + painting.backdropCount, pupilCount, pupils, glm::vec3{1.0f});
-
-    if (pictureReveal_ > 0.0f && pictureReveal_ < 1.0f) {
-        const float progress = glm::smoothstep(0.0f, 1.0f, pictureReveal_);
-        const auto pose = glm::translate(model, glm::mix(plateStart, plateEnd, progress));
-        drawHomeMesh(renderer_, HomeMesh::LockSocket,
-                     glm::scale(pose, glm::vec3{glm::mix(.12f, 1.0f, progress)}));
+    renderer_.drawMovableMesh(first + painting.backdropCount, painting.pupilCount, pupils, glm::vec3{1.0f});
+    if (!portable_[socketObject].active) {
+        const auto markStart = painting.backdropCount + painting.pupilCount;
+        const auto markCount = static_cast<GLsizei>(painting.vertices.size()) - markStart;
+        renderer_.drawMovableMesh(first + markStart, markCount, model, glm::vec3{1.0f});
     }
 }
 

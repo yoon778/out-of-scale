@@ -65,7 +65,6 @@ private:
     bool keyFits(const KeyPiece& key, const glm::vec3& eye) const;
     std::optional<KeyPiece> carriedKey(const glm::vec3& eye, const glm::vec3& direction) const;
     void updateKey(float elapsed, const glm::vec3& eye, const glm::vec3& direction);
-    void updatePicture(float elapsed);
     void drawPicture(const glm::mat4& model) const;
     bool portableFits(int index, const PortableObject& object, const glm::vec3& eye) const;
     std::optional<PortableObject> carriedPortable(int index, const glm::vec3& eye, const glm::vec3& direction) const;
@@ -91,8 +90,6 @@ private:
     }};
     int heldPortable_ = -1;
     bool socketFlat_ = false;
-    bool pictureOpening_ = false;
-    float pictureReveal_ = 0.0f;
     bool socketInstalled_ = false;
     bool completeKeyInserted_ = false;
     glm::vec3 lastEye_{0.0f,1.65f,5.0f};
