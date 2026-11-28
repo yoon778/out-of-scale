@@ -925,11 +925,9 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         }
     }
     if (held_ == HeldItem::None) {
-        if (pictureReveal_ < 1.0f && eye.z > home_picture::canvasCenter.z && direction.z < 0.0f) {
-            const auto hit = perspective::rayBoxDistance(eye, direction, home_picture::canvasCenter,
-                glm::vec3{home_picture::canvasSize * .5f, .009f});
-            if (hit && *hit <= reach &&
-                *hit <= visibleRange(eye, direction, reach)) {
+        if (!pictureOpening_ && pictureReveal_ == 0.0f) {
+            const auto hit = home_picture::hiddenKeyholeHit(eye, direction, reach);
+            if (hit && *hit <= visibleRange(eye, direction, reach)) {
                 pictureOpening_ = true;
                 return;
             }
@@ -951,7 +949,7 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
         }
     }
     if (held_ == HeldItem::Rpg) return;
-    if (cabinetOpen_ && !rotatingRoom_.wallBroken() && eye.z > secretEntryZ &&
+    if (cabinetOpen_ && rackOpening_ >= 1.0f && !rotatingRoom_.wallBroken() && eye.z > secretEntryZ &&
         aimsAt(eye, direction, rpgRack, visibleRange(eye, direction, reach))) {
         held_ = HeldItem::Rpg;
         return;
@@ -1092,7 +1090,10 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
         const float turn = atControls ? static_cast<float>(turnRight_ - turnLeft_) : 0.0f;
         const float previousAngle = rotatingRoom_.angle();
         const float previousBoardAngle = rotatingRoom_.boardAngle();
+        const auto capturedBefore = rotatingRoom_.capturedWeights();
         rotatingRoom_.update(elapsed, turn);
+        if (capturedBefore != rotatingRoom_.capturedWeights()) Audio::instance().playDoorFitClick();
+        if (rotatingRoom_.rackUnlocked()) rackOpening_ = std::min(1.0f, rackOpening_ + elapsed / .55f);
         rotationSoundGain_ = std::abs(std::remainder(rotatingRoom_.angle() - previousAngle, glm::two_pi<float>()))
             > 1e-5f ? .70f : 0.0f;
         boardSoundGain_ = std::min(.72f, std::abs(rotatingRoom_.boardAngle() - previousBoardAngle) / elapsed);
@@ -1279,9 +1280,24 @@ void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const
     drawBedroom();
     if (cabinetSwing_ > 0.0f || eye.z > secretEntryZ) {
         home_rotate::draw(renderer_, rotatingVisualFirst_, rotatingRoom_);
-        const glm::vec3 wood{.30f, .25f, .20f};
-        renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.61f, 0.0f}, {.72f, .15f, .56f}, wood);
-        renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.27f, .225f}, {.72f, .83f, .08f}, wood);
+        constexpr glm::vec3 frame{.25f, .29f, .27f};
+        constexpr glm::vec3 trim{.48f, .45f, .36f};
+        for (const float side : {-1.0f, 1.0f}) {
+            renderer_.drawBox(rpgRack.center + glm::vec3{side * .33f, -.37f, 0.0f},
+                              {.075f, 1.56f, .54f}, frame);
+        }
+        renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.61f, 0.0f}, {.72f, .13f, .56f}, frame);
+        renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.11f, .25f}, {.72f, .91f, .07f}, frame);
+        const float shutter = .69f * glm::smoothstep(0.0f, 1.0f, rackOpening_);
+        for (int slat = 0; slat < 4; ++slat) {
+            renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.27f + slat * .13f + shutter, -.27f},
+                              {.67f, .065f, .065f}, trim);
+        }
+        const auto& captured = rotatingRoom_.capturedWeights();
+        renderer_.drawBox(rpgRack.center + glm::vec3{-.07f, .46f, -.03f}, {.073f, .047f, .06f},
+                          captured[0] ? glm::vec3{.96f, .58f, .20f} : frame);
+        renderer_.drawBox(rpgRack.center + glm::vec3{.07f, .46f, -.03f}, {.073f, .047f, .06f},
+                          captured[1] ? glm::vec3{.29f, .82f, .74f} : frame);
         if (held_ != HeldItem::Rpg && !rotatingRoom_.wallBroken())
             drawRpg(renderer_, rpgRack.center, .85f);
     }

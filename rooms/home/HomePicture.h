@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 namespace home_picture {
@@ -17,8 +18,39 @@ inline glm::vec3 paintPoint(glm::vec2 point, float layer) {
     return canvasCenter + glm::vec3{(point - glm::vec2{.5f}) * canvasSize, layer * .0012f};
 }
 
-inline constexpr glm::vec3 plateEnd{-4.48f, 1.83f, -5.64f};
-inline constexpr glm::vec3 plateStart{plateEnd.x, plateEnd.y, canvasCenter.z + .016f};
+inline constexpr glm::vec2 keyholeCap{.237f, .231f};
+inline constexpr glm::vec2 keyholeRadius{.026f, .024f};
+inline constexpr float keyholeLayer = 8.0f;
+inline constexpr float keyholeStemTop = .228f;
+inline constexpr float keyholeStemBottom = .164f;
+inline constexpr float keyholeStemTopHalf = .010f;
+inline constexpr float keyholeStemBottomHalf = .019f;
+inline constexpr glm::vec3 hiddenTarget{
+    canvasCenter.x + (keyholeCap.x - .5f) * canvasSize.x,
+    canvasCenter.y + (keyholeCap.y - .5f) * canvasSize.y,
+    canvasCenter.z + keyholeLayer * .0012f,
+};
+inline constexpr glm::vec3 plateStart{hiddenTarget.x, hiddenTarget.y - .024f, hiddenTarget.z + .012f};
+inline constexpr glm::vec3 plateEnd{plateStart.x, plateStart.y, -5.64f};
+
+inline std::optional<float> hiddenKeyholeHit(glm::vec3 eye, glm::vec3 direction, float reach) {
+    if (eye.z <= hiddenTarget.z || direction.z >= -.0001f) return std::nullopt;
+    const float distance = (hiddenTarget.z - eye.z) / direction.z;
+    if (distance > reach) return std::nullopt;
+
+    const glm::vec2 uv = (glm::vec2{eye + direction * distance} - glm::vec2{canvasCenter}) /
+        canvasSize + glm::vec2{.5f};
+    // A small aiming margin follows the painted silhouette, even from an oblique view.
+    constexpr glm::vec2 aimMargin{.012f, .011f};
+    const auto cap = (uv - keyholeCap) / (keyholeRadius + aimMargin);
+    if (glm::dot(cap, cap) <= 1.0f) return distance;
+
+    if (uv.y < keyholeStemBottom - aimMargin.y || uv.y > keyholeStemTop + aimMargin.y) return std::nullopt;
+    const float stemFraction = std::clamp((uv.y - keyholeStemBottom) /
+        (keyholeStemTop - keyholeStemBottom), 0.0f, 1.0f);
+    const float halfWidth = glm::mix(keyholeStemBottomHalf, keyholeStemTopHalf, stemFraction);
+    return std::abs(uv.x - keyholeCap.x) <= halfWidth + aimMargin.x ? std::optional{distance} : std::nullopt;
+}
 
 inline glm::vec3 gazeOffset(const glm::vec3& eye) {
     const auto offset = eye - canvasCenter;
@@ -73,13 +105,27 @@ inline const Art& art() {
             triangle({x-.030f,height*.35f}, {x+.034f,height*.35f}, {x,height*1.13f}, 2, green);
         }
 
-        // The keyhole silhouette reads as a knot against the branch's grain.
+        // Bark ridges and ordinary knots give the hidden silhouette a place in the painting.
         quad({0,.08f}, {1,.25f}, {1,.34f}, {0,.32f}, 3, {.33f,.24f,.17f});
         quad({0,.26f}, {1,.31f}, {1,.34f}, {0,.32f}, 4, {.54f,.40f,.27f});
         quad({.09f,.22f}, {.91f,.28f}, {.77f,.27f}, {.44f,.23f}, 5, {.41f,.30f,.21f});
-        ellipse({.5f,.269f}, {.043f,.023f}, 6, {.29f,.20f,.14f});
-        quad({.493f,.270f}, {.507f,.270f}, {.511f,.235f}, {.489f,.235f},
-             6, {.29f,.20f,.14f});
+        const glm::vec3 barkHighlight{.47f,.33f,.22f};
+        const glm::vec3 barkShadow{.26f,.18f,.13f};
+        quad({.01f,.14f}, {.33f,.183f}, {.51f,.229f}, {.28f,.192f}, 6, barkHighlight);
+        quad({.00f,.20f}, {.11f,.213f}, {.17f,.254f}, {.10f,.224f}, 6, barkShadow);
+        quad({.33f,.272f}, {.66f,.258f}, {.90f,.296f}, {.61f,.272f}, 6, barkHighlight);
+        for (const auto& knot : {glm::vec2{.111f,.185f}, glm::vec2{.431f,.213f}, glm::vec2{.800f,.287f}}) {
+            ellipse(knot, {.055f,.018f}, 7, barkHighlight);
+            ellipse(knot + glm::vec2{.009f,.002f}, {.036f,.011f}, 7.5f, barkShadow);
+            ellipse(knot + glm::vec2{.016f,.004f}, {.018f,.004f}, 8, {.34f,.24f,.16f});
+        }
+        ellipse(keyholeCap - glm::vec2{0.0f,.014f}, {.043f,.046f}, 7, {.38f,.27f,.18f});
+        constexpr glm::vec3 keyholeShadow{.22f,.145f,.10f};
+        ellipse(keyholeCap, keyholeRadius, keyholeLayer, keyholeShadow);
+        quad({keyholeCap.x - keyholeStemTopHalf,keyholeStemTop},
+             {keyholeCap.x + keyholeStemTopHalf,keyholeStemTop},
+             {keyholeCap.x + keyholeStemBottomHalf,keyholeStemBottom},
+             {keyholeCap.x - keyholeStemBottomHalf,keyholeStemBottom}, keyholeLayer, keyholeShadow);
 
         // Ear tufts, layered plumage, and distinct facial disks.
         const glm::vec3 wing{.28f,.21f,.17f};

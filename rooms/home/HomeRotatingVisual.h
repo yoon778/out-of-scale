@@ -25,7 +25,7 @@ struct Range {
 
 struct VisualMesh {
     std::vector<MeshVertex> vertices;
-    Range fixed, chamber, wall, chalkboard, wheel, lamp, prop;
+    Range fixed, chamber, wall, chalkboard, wheel, lamp, weightLens, prop;
 };
 
 inline constexpr float pi = std::numbers::pi_v<float>;
@@ -34,6 +34,11 @@ inline constexpr glm::vec3 ironEdge{.36f, .42f, .39f};
 inline constexpr glm::vec3 recess{.096f, .12f, .125f};
 inline constexpr glm::vec3 brass{.78f, .58f, .30f};
 inline constexpr glm::vec3 timber{.55f, .39f, .24f};
+inline constexpr std::array<glm::vec3, 2> weightTints{{{.95f,.57f,.19f},{.20f,.79f,.73f}}};
+
+inline constexpr glm::vec3 lensCenter(std::size_t index) {
+    return handwheelCenter + glm::vec3{index == 0 ? .185f : -.185f, .377f, .003f};
+}
 
 inline void box(std::vector<MeshVertex>& values, glm::vec3 position, glm::vec3 size, glm::vec3 color,
                 float roll = 0.0f) {
@@ -99,9 +104,19 @@ inline void addFixed(std::vector<MeshVertex>& v) {
     for (const float z : {frontZ - .05f, farZ + .20f}) {
         ring(v, {center.x,center.y,z}, 3.83f, .15f, .32f, 20, iron);
         ring(v, {center.x,center.y,z - .16f}, 3.83f, .062f, .024f, 20, ironEdge);
-        for (const float sign : {-1.0f, 1.0f}) {
-            box(v, {center.x + sign * 3.93f,center.y,z}, {.43f,1.02f,.56f}, iron);
-            box(v, {center.x + sign * 3.93f,center.y-.08f,z-.30f}, {.29f,.73f,.053f}, ironEdge);
+        for (int side = 0; side < 4; ++side) {
+            const float angle = pi * .5f * static_cast<float>(side);
+            const glm::vec3 radial{std::cos(angle),std::sin(angle),0};
+            const glm::vec3 base{center.x,center.y,z};
+            const auto bearing = base + radial * 3.95f;
+            box(v, bearing, {.54f,1.04f,.64f}, iron, angle);
+            box(v, bearing - glm::vec3{0,0,.342f}, {.40f,.78f,.057f}, ironEdge, angle);
+            box(v, bearing - glm::vec3{0,0,.377f}, {.23f,.39f,.052f}, brass, angle);
+            const glm::vec3 tangent{-radial.y,radial.x,0};
+            for (const float sign : {-1.0f,1.0f}) {
+                box(v, bearing + tangent * (sign * .316f) - glm::vec3{0,0,.385f},
+                    {.105f,.108f,.060f}, recess, angle);
+            }
         }
     }
     for (const float z : {frontZ - .15f, landingZ + .13f}) {
@@ -130,6 +145,11 @@ inline void addFixed(std::vector<MeshVertex>& v) {
     box(v, {p.x,p.y,p.z+.10f}, {.68f,.69f,.15f}, iron);
     box(v, {p.x,p.y,p.z+.017f}, {.60f,.60f,.023f}, recess);
     ring(v, {p.x,p.y,p.z-.005f}, .279f, .012f, .020f, 16, ironEdge);
+    box(v, p + glm::vec3{0,.409f,.088f}, {.58f,.212f,.13f}, iron);
+    box(v, p + glm::vec3{0,.432f,.017f}, {.52f,.143f,.022f}, recess);
+    for (std::size_t i = 0; i < weightTints.size(); ++i) {
+        box(v, lensCenter(i) + glm::vec3{0,0,-.006f}, {.132f,.094f,.037f}, weightTints[i] * .57f);
+    }
     // Short, engraved arrows match the two direction keys.
     for (const float sign : {-1.0f, 1.0f}) {
         const glm::vec3 tip{p.x+sign*.26f,p.y-.37f,p.z-.058f};
@@ -161,6 +181,28 @@ inline void addChamber(std::vector<MeshVertex>& v) {
         for (const float side : {-1.0f, 1.0f}) {
             box(v, {side*bound,0,z}, {.15f,2*bound,.21f}, iron);
             box(v, {0,side*bound,z}, {2*bound,.15f,.21f}, iron);
+        }
+    }
+    for (std::size_t i = 0; i < weightRails.size(); ++i) {
+        const auto& rail = weightRails[i];
+        const auto tint = weightTints[i];
+        const float sign = rail.center.x > 0.0f ? 1.0f : -1.0f;
+        const float inside = rail.center.x - sign * rail.half.x;
+        box(v, rail.center, rail.half * 2.0f, tint * .45f);
+        for (const float strip : {-1.0f,1.0f}) {
+            box(v, {inside - sign * .008f, rail.center.y,
+                    rail.center.z + strip * (rail.half.z - .03f)},
+                {.02f,2.0f*rail.half.y,.055f}, tint * .87f);
+        }
+        for (int rib = -4; rib <= 4; ++rib) {
+            box(v, {inside - sign * .010f, rail.center.y + .47f*static_cast<float>(rib), rail.center.z},
+                {.024f,.064f,2.0f*rail.half.z - .16f}, tint * .67f);
+        }
+        // Matching plates on the rim remain readable while the lane itself is nearly edge-on.
+        box(v, {sign*(outer + .075f),0,frontZ+.034f}, {.062f,.85f,.075f}, tint * .82f);
+        for (const float end : {-1.0f,1.0f}) {
+            box(v, {inside - sign * .018f, rail.center.y + end * (rail.half.y - .055f), rail.center.z},
+                {.037f,.112f,rail.half.z*2.0f - .08f}, ironEdge);
         }
     }
     // Each surface has a different finish so a half-turn remains legible at a glance.
@@ -254,7 +296,10 @@ inline const VisualMesh& mesh() {
         result.chalkboard = add(addChalkboard);
         result.wheel = add(addWheel);
         result.lamp = add([](auto& vertices) {
-            box(vertices, handwheelCenter + glm::vec3{0,.396f,.053f}, {.087f,.058f,.10f}, {1,1,1});
+            box(vertices, handwheelCenter + glm::vec3{0,.449f,.006f}, {.065f,.092f,.039f}, {1,1,1});
+        });
+        result.weightLens = add([](auto& vertices) {
+            box(vertices, glm::vec3{0.0f}, {.100f,.064f,.034f}, {1,1,1});
         });
         result.prop = add(addProp);
         return result;
@@ -283,8 +328,13 @@ inline void draw(const BoxRenderer& renderer, GLint visualFirst, const Room& roo
     const auto wheel = glm::translate(identity, handwheelCenter - glm::vec3{0,0,.064f});
     part(art.wheel, glm::rotate(wheel, room.angle(), {0,0,1}));
     part(art.lamp, identity, room.bridgeReady() ? glm::vec3{.36f,.86f,.55f} : glm::vec3{.92f,.59f,.25f});
-    constexpr std::array<glm::vec3, 4> ballTints{{{.88f,.53f,.26f},{.70f,.33f,.26f},
-        {.38f,.68f,.63f},{.80f,.73f,.44f}}};
+    const auto& captured = room.capturedWeights();
+    for (std::size_t i = 0; i < captured.size(); ++i) {
+        part(art.weightLens, glm::translate(identity, visual_detail::lensCenter(i)),
+             visual_detail::weightTints[i] * (captured[i] ? 1.0f : .22f));
+    }
+    constexpr std::array<glm::vec3, 4> ballTints{{visual_detail::weightTints[0], visual_detail::weightTints[1],
+        {.64f,.31f,.27f},{.77f,.74f,.57f}}};
     std::size_t color = 0;
     for (const auto& prop : room.props()) {
         const auto transform = glm::scale(glm::translate(identity,prop.position), glm::vec3{2*prop.radius});

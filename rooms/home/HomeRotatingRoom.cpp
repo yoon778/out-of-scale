@@ -114,6 +114,18 @@ void contain(Prop& prop, float angle, float angularSpeed) {
             prop.velocity -= normal * (1.24f * relativeSpeed);
         }
     };
+    for (const auto& rail : weightRails) {
+        const auto nearest = glm::clamp(local, rail.center - rail.half, rail.center + rail.half);
+        const auto offset = local - nearest;
+        const float distance = glm::length(offset);
+        if (distance >= prop.radius) continue;
+
+        const auto inward = distance > .0001f ? offset / distance
+            : glm::vec3{-std::copysign(1.0f, rail.center.x), 0.0f, 0.0f};
+        local = nearest + inward * prop.radius;
+        const glm::vec3 wallVelocity{-angularSpeed * local.y, angularSpeed * local.x, 0.0f};
+        bounce(inward, glm::dot(wallVelocity, inward));
+    }
     for (int axis = 0; axis < 2; ++axis) {
         if (std::abs(local[axis]) <= extent) continue;
         const float side = std::copysign(1.0f, local[axis]);
@@ -149,7 +161,17 @@ glm::mat4 Room::boardModel() const {
 
 void Room::advance(float elapsed, float angularSpeed) {
     angle_ = std::remainder(angle_ + angularSpeed * elapsed, fullTurn);
-    for (auto& prop : props_) {
+    const auto fixed = [&](std::size_t index) {
+        return index < capturedWeights_.size() && capturedWeights_[index];
+    };
+    for (std::size_t index = 0; index < props_.size(); ++index) {
+        auto& prop = props_[index];
+        if (fixed(index)) {
+            const auto offset = turned(weightSeats_[index], angle_);
+            prop.position = center + offset;
+            prop.velocity = {-angularSpeed * offset.y, angularSpeed * offset.x, 0.0f};
+            continue;
+        }
         prop.velocity.y -= 9.8f * elapsed;
         prop.position += prop.velocity * elapsed;
         contain(prop, angle_, angularSpeed);
@@ -163,16 +185,35 @@ void Room::advance(float elapsed, float angularSpeed) {
             const float overlap = a.radius + b.radius - distance;
             if (overlap <= 0.0f || distance < .0001f) continue;
             const auto normal = separation / distance;
-            a.position -= normal * (.5f * overlap);
-            b.position += normal * (.5f * overlap);
+            const float mobilityA = fixed(first) ? 0.0f : 1.0f;
+            const float mobilityB = fixed(second) ? 0.0f : 1.0f;
+            const float mobility = mobilityA + mobilityB;
+            if (mobility == 0.0f) continue;
+            a.position -= normal * (overlap * mobilityA / mobility);
+            b.position += normal * (overlap * mobilityB / mobility);
             const float approach = glm::dot(b.velocity - a.velocity, normal);
             if (approach < 0.0f) {
-                a.velocity += normal * (.60f * approach);
-                b.velocity -= normal * (.60f * approach);
+                a.velocity += normal * (1.20f * approach * mobilityA / mobility);
+                b.velocity -= normal * (1.20f * approach * mobilityB / mobility);
             }
-            contain(a, angle_, angularSpeed);
-            contain(b, angle_, angularSpeed);
+            if (mobilityA > 0.0f) contain(a, angle_, angularSpeed);
+            if (mobilityB > 0.0f) contain(b, angle_, angularSpeed);
         }
+    }
+    for (std::size_t index = 0; index < weightRails.size(); ++index) {
+        if (capturedWeights_[index] || angularSpeed != 0.0f) continue;
+        const auto& rail = weightRails[index];
+        const auto& ball = props_[index];
+        const auto local = turned(ball.position - center, -angle_);
+        const float side = std::copysign(1.0f, rail.center.x);
+        const float seatX = rail.center.x - side * (rail.half.x + ball.radius);
+        // The latch closes only while the wheel is stopped and the ball rests on the rail.
+        if (-side * std::sin(angle_) < .88f || std::abs(local.x - seatX) > .018f ||
+            std::abs(local.y - rail.center.y) > rail.half.y ||
+            std::abs(local.z - rail.center.z) > rail.half.z - ball.radius ||
+            glm::length(ball.velocity) > .55f) continue;
+        weightSeats_[index] = {seatX, local.y, local.z};
+        capturedWeights_[index] = true;
     }
     if (wallBroken_) {
         const float torque = 8.0f * std::sin(angle_) * std::sin(boardAngle_);
@@ -193,7 +234,7 @@ void Room::update(float elapsed, float turn) {
 }
 
 void Room::breakWall() {
-    if (wallBroken_) return;
+    if (wallBroken_ || !rackUnlocked()) return;
     wallBroken_ = true;
     boardAngle_ = .075f;
     boardSpeed_ = 1.35f;
@@ -226,11 +267,14 @@ std::optional<RayHit> Room::rayHit(glm::vec3 eye, glm::vec3 direction, float max
     for (const auto& part : shell) {
         test(perspective::rayBoxDistance(origin, ray, part.center, part.half));
     }
+    for (const auto& rail : weightRails) {
+        test(perspective::rayBoxDistance(origin, ray, rail.center, rail.half));
+    }
     for (const auto& part : rearRim) {
         test(perspective::rayBoxDistance(origin, ray, part.center, part.half));
     }
     if (!wallBroken_) {
-        test(perspective::rayBoxDistance(origin, ray, wallBox.center, wallBox.half), true);
+        test(perspective::rayBoxDistance(origin, ray, wallBox.center, wallBox.half), rackUnlocked());
     } else {
         const auto inverseBoard = glm::inverse(boardModel());
         const auto boardOrigin = glm::vec3{inverseBoard * glm::vec4{eye, 1.0f}};

@@ -133,6 +133,7 @@ private:
     HeldItem held_ = HeldItem::None;
     float rotationSoundGain_ = 0.0f;
     float boardSoundGain_ = 0.0f;
+    float rackOpening_ = 0.0f;
     std::array<Fragment, 18> fragments_{};
     glm::mat4 fragmentBasis_{1.0f};
     float debrisTime_ = 0.0f;

@@ -20,6 +20,10 @@ inline constexpr float frontZ = 8.80f;
 inline constexpr float farZ = 12.80f;
 inline constexpr float landingZ = 15.30f;
 inline constexpr float exitZ = 16.25f;
+inline constexpr std::array<Box, 2> weightRails{{
+    {{2.34f, 0.0f, 9.74f}, {.06f, 2.30f, .36f}},
+    {{-2.34f, 0.0f, 10.43f}, {.06f, 2.30f, .30f}},
+}};
 inline constexpr Box wallBox{{-1.19f, 0.0f, 12.76f}, {1.19f, 1.16f, .10f}};
 inline constexpr std::array<Box, 3> rearRim{{
     {{1.20f, 0.0f, wallBox.center.z}, {1.20f, halfExtent, wallBox.half.z}},
@@ -51,6 +55,8 @@ public:
 
     float angle() const { return angle_; }
     float boardAngle() const { return boardAngle_; }
+    const std::array<bool, 2>& capturedWeights() const { return capturedWeights_; }
+    bool rackUnlocked() const { return capturedWeights_[0] && capturedWeights_[1]; }
     bool wallBroken() const { return wallBroken_; }
     bool bridgeReady() const;
     bool escaped(glm::vec3 eye) const;
@@ -65,6 +71,8 @@ private:
     float boardAngle_ = 0.0f;
     float boardSpeed_ = 0.0f;
     bool wallBroken_ = false;
+    std::array<bool, 2> capturedWeights_{};
+    std::array<glm::vec3, 2> weightSeats_{};
     std::array<Prop, 4> props_{{
         {{4.93f, .28f, 9.74f}, {}, .28f},
         {{3.48f, .21f, 10.43f}, {}, .21f},
