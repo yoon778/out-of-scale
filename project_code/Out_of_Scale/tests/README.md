@@ -8,6 +8,8 @@
 
 경로가 다르면 `-VisualStudioRoot`와 `-OpenGLRoot`를 지정한다. 스크립트는 팀 Release를 `WholeProgramOptimization=false`로 빌드한 뒤 실제 개체 파일과 검사 드라이버를 링크한다. 프로젝트 설정은 바꾸지 않는다. 로그와 캡처는 `build/school-transition-tests/`에 저장한다.
 
+컴파일러 환경에 OpenGL 헤더와 정적 라이브러리(`glfw3_mt.lib`, `glew32s.lib`)가 잡혀 있으면 `-OpenGLRoot ''`로 실행한다.
+
 검사는 숨김 OpenGL 창에서 실제 `runGame`, `runPreview`, 공통 Player와 군대 방을 사용한다. 키·시간·포커스만 고정 입력으로 대체하며 모니터 전환을 막는다. 카메라를 학교 현관 직전으로 배치한 뒤 실제 W 입력으로 완료 판정을 통과한다. 완료 플래그를 직접 설정하지 않는다. 그 이전 퍼즐 동선은 학교 실행기의 기존 `--self-test`에서 별도로 검사한다.
 
 - 학교 정지 중 이동·전환 차단, 재개 후 단축키 없는 생활관 도착.

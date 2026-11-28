@@ -13,12 +13,19 @@ try {
     $project = 'project_code/Out_of_Scale/Out_of_Scale.vcxproj'
     $properties = @('/p:Configuration=Release', '/p:Platform=x64', '/p:PreferredToolArchitecture=x64',
                     "/p:OpenGLRoot=$OpenGLRoot", '/p:WholeProgramOptimization=false', '/nologo')
+    $compilerFlags = '/MT /DGLEW_STATIC'
+    $linkFlags = 'glfw3_mt.lib glew32s.lib'
+    if ($OpenGLRoot) {
+        $compilerFlags = "/MD /I `"$OpenGLRoot/include`" /I `"$OpenGLRoot/include/GL`""
+        $linkFlags = "/LIBPATH:`"$OpenGLRoot/lib/x64`" glfw3.lib glew32.lib"
+    }
     & $msbuild $project /t:Build @properties /v:minimal *> "$outputRoot/team-build.log"
     if ($LASTEXITCODE -ne 0) { throw "Team build failed: $outputRoot/team-build.log" }
     $objectsRoot = (& $msbuild $project @properties -getProperty:IntDir | Select-Object -Last 1).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Could not locate current team object files' }
-    $objects = @('MilitaryRoom', 'HomeRoom', 'TestRoom', 'BoxRenderer', 'PauseMenu',
-                 'SchoolRoom', 'SchoolCorridor', 'SchoolRenderer') | ForEach-Object {
+    $objects = @('MilitaryRoom', 'ParadeGround', 'HomeRoom', 'HomeFinale', 'ComputerScreen', 'CourseworkLabs',
+                 'TestRoom', 'BoxRenderer', 'PauseMenu', 'SchoolRoom', 'SchoolCorridor', 'SchoolRenderer',
+                 'Audio') | ForEach-Object {
         $object = Join-Path $objectsRoot "$_.obj"
         if (!(Test-Path -LiteralPath $object)) { throw "Missing object: $object" }
         '"' + $object + '"'
@@ -29,12 +36,15 @@ try {
     $command = @"
 @echo off
 call "$vcvars" >nul
-cl /nologo /std:c++20 /EHsc /W4 /MD /O2 /utf-8 /DGLFW_INCLUDE_NONE /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS /I "$OpenGLRoot/include" /I "$OpenGLRoot/include/GL" "$source" /Fo:"$outputRoot/SchoolTransitionTests.obj" /Fe:"$executable" $($objects -join ' ') /link /LIBPATH:"$OpenGLRoot/lib/x64" glfw3.lib glew32.lib opengl32.lib user32.lib gdi32.lib gdiplus.lib shell32.lib
+if errorlevel 1 exit /b 1
+cl /nologo /std:c++20 /EHsc /W4 /O2 /utf-8 /DGLFW_INCLUDE_NONE /DNOMINMAX /D_CRT_SECURE_NO_WARNINGS $compilerFlags "$source" /Fo:"$outputRoot/SchoolTransitionTests.obj" /Fe:"$executable" $($objects -join ' ') /link $linkFlags opengl32.lib user32.lib gdi32.lib gdiplus.lib shell32.lib
 if errorlevel 1 exit /b 1
 "$executable" "$outputRoot"
 "@
     [IO.File]::WriteAllText($batch, $command, [Text.UTF8Encoding]::new($false))
-    Copy-Item -LiteralPath "$OpenGLRoot/bin/x64/glew32.dll" -Destination $outputRoot
+    if ($OpenGLRoot) {
+        Copy-Item -LiteralPath "$OpenGLRoot/bin/x64/glew32.dll" -Destination $outputRoot
+    }
     New-Item -ItemType Directory -Force "$outputRoot/assets" | Out-Null
     Copy-Item -LiteralPath 'rooms/school/assets/art-class-still-life-v2.png' -Destination "$outputRoot/assets"
     & cmd.exe /d /c $batch *> "$outputRoot/tests.log"
