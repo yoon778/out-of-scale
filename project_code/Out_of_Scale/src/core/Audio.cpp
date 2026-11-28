@@ -33,6 +33,7 @@ constexpr float mechanismReleaseSeconds = 0.06f;
 constexpr float mechanismDuckGain = 0.75f;
 constexpr float mechanismDuckRestoreSeconds = 0.18f;
 constexpr std::size_t maximumWaveBytes = 64u * 1024u * 1024u;
+constexpr std::array musicFiles{L"school.wav", L"military.wav", L"office.wav", L"home.wav", L"finale.wav"};
 
 struct WaveData {
     WAVEFORMATEX format{};
@@ -122,7 +123,7 @@ std::optional<WaveData> readWave(const std::filesystem::path& path, bool music =
 
 int musicIndex(RoomMusic room) {
     const int value = static_cast<int>(room);
-    return value >= 1 && value <= 4 ? value - 1 : -1;
+    return value >= 1 && value <= static_cast<int>(musicFiles.size()) ? value - 1 : -1;
 }
 
 void destroySource(IXAudio2SourceVoice*& voice) {
@@ -159,7 +160,7 @@ struct Audio::State {
     IXAudio2MasteringVoice* master = nullptr;
     IXAudio2SourceVoice* clickVoice = nullptr;
     std::optional<WaveData> click;
-    std::array<Music, 4> tracks;
+    std::array<Music, musicFiles.size()> tracks;
     std::array<Effect, 4> effects;
     std::array<Mechanism, 2> mechanisms;
     int selected = -1;
@@ -225,10 +226,9 @@ bool Audio::initialize() {
     if (FAILED(XAudio2Create(&state->engine)) || FAILED(state->engine->CreateMasteringVoice(&state->master)))
         return false;
     const auto directory = musicDirectory();
-    constexpr const wchar_t* names[]{L"school.wav", L"military.wav", L"office.wav", L"home.wav"};
     if (!directory.empty()) {
         for (std::size_t index = 0; index < state->tracks.size(); ++index)
-            state->tracks[index].wave = readWave(directory / names[index]);
+            state->tracks[index].wave = readWave(directory / musicFiles[index]);
         const auto effectsDirectory = directory.parent_path() / L"sfx";
         constexpr const wchar_t* effectNames[]{L"footstep.wav", L"land.wav", L"grab.wav", L"place.wav"};
         for (std::size_t index = 0; index < state->effects.size(); ++index)

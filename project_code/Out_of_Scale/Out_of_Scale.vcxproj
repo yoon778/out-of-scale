@@ -103,7 +103,7 @@
     <ClCompile Include="..\..\rooms\home\HomeRoom.cpp">
       <AdditionalOptions>/bigobj /utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
-    <ClCompile Include="..\..\rooms\home\HomeRotatingRoom.cpp" />
+    <ClCompile Include="..\..\rooms\home\HomeFinale.cpp" />
     <ClCompile Include="..\..\rooms\home\ComputerScreen.cpp">
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -135,8 +135,8 @@
     <ClInclude Include="src\core\PauseMenu.h" />
     <ClInclude Include="..\..\rooms\test\TestRoom.h" />
     <ClInclude Include="..\..\rooms\home\HomeRoom.h" />
-    <ClInclude Include="..\..\rooms\home\HomeRotatingRoom.h" />
-    <ClInclude Include="..\..\rooms\home\HomeRotatingVisual.h" />
+    <ClInclude Include="..\..\rooms\home\HomeFinale.h" />
+    <ClInclude Include="..\..\rooms\home\HomeFinaleVisual.h" />
     <ClInclude Include="..\..\rooms\home\ComputerScreen.h" />
     <ClInclude Include="..\..\rooms\home\CourseworkLabs.h" />
     <ClInclude Include="..\..\rooms\home\HomeGeometry.inc" />
@@ -169,6 +169,7 @@
       <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\military.wav" />
       <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\office.wav" />
       <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\home.wav" />
+      <RoomMusic Include="$(ProjectDir)..\..\assets\audio\music\finale.wav" />
     </ItemGroup>
     <Copy SourceFiles="@(RoomMusic)" DestinationFolder="$(TargetDir)assets\audio\music\" SkipUnchangedFiles="true" />
   </Target>

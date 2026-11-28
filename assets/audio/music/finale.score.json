@@ -1,0 +1,453 @@
+{
+  "schema": "music-production/v1",
+  "title": "Out of Scale / Paper Turns Reprise",
+  "version": "1.0",
+  "brief": "A soft callback at the last doorway. The school melody returns in wider space.",
+  "clock": {
+    "bars": 4,
+    "meter": [
+      4,
+      4
+    ],
+    "tail_seconds": 7,
+    "tempo": [
+      [
+        0,
+        72
+      ]
+    ]
+  },
+  "sections": [
+    {
+      "id": "recognition",
+      "start_bar": 0,
+      "bars": 2,
+      "intent": "Recall the opening exactly at a slower pace"
+    },
+    {
+      "id": "daylight",
+      "start_bar": 2,
+      "bars": 2,
+      "intent": "Lift once, resolve to the original home chord"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "keys",
+      "role": "melody",
+      "engine": "soundfont",
+      "program": 4,
+      "notes": [
+        {
+          "id": "keys_1",
+          "on": 0.0,
+          "duration": 0.75,
+          "pitch": 78
+        },
+        {
+          "id": "keys_2",
+          "on": 0.75,
+          "duration": 0.75,
+          "pitch": 81
+        },
+        {
+          "id": "keys_3",
+          "on": 1.5,
+          "duration": 0.5,
+          "pitch": 83
+        },
+        {
+          "id": "keys_4",
+          "on": 2.0,
+          "duration": 1.0,
+          "pitch": 81
+        },
+        {
+          "id": "keys_5",
+          "on": 3.0,
+          "duration": 0.9,
+          "pitch": 76
+        },
+        {
+          "id": "keys_6",
+          "on": 4.5,
+          "duration": 1.18,
+          "pitch": 74
+        },
+        {
+          "id": "keys_7",
+          "on": 5.75,
+          "duration": 0.72,
+          "pitch": 78
+        },
+        {
+          "id": "keys_8",
+          "on": 6.5,
+          "duration": 1.25,
+          "pitch": 76
+        },
+        {
+          "id": "keys_9",
+          "on": 8.0,
+          "duration": 1.08,
+          "pitch": 74
+        },
+        {
+          "id": "keys_10",
+          "on": 9.25,
+          "duration": 0.72,
+          "pitch": 78
+        },
+        {
+          "id": "keys_11",
+          "on": 10.0,
+          "duration": 0.75,
+          "pitch": 83
+        },
+        {
+          "id": "keys_12",
+          "on": 10.75,
+          "duration": 1.15,
+          "pitch": 81
+        },
+        {
+          "id": "keys_13",
+          "on": 12.35,
+          "duration": 1.03,
+          "pitch": 78
+        },
+        {
+          "id": "keys_14",
+          "on": 13.5,
+          "duration": 2.28,
+          "pitch": 74
+        }
+      ],
+      "performance": {
+        "notes": {
+          "keys_1": {
+            "velocity": 76,
+            "gate": 0.95
+          },
+          "keys_2": {
+            "velocity": 72,
+            "gate": 0.95
+          },
+          "keys_3": {
+            "velocity": 78,
+            "gate": 0.95
+          },
+          "keys_4": {
+            "velocity": 69,
+            "gate": 0.95
+          },
+          "keys_5": {
+            "velocity": 66,
+            "gate": 0.95
+          },
+          "keys_6": {
+            "velocity": 66,
+            "gate": 0.95
+          },
+          "keys_7": {
+            "velocity": 64,
+            "gate": 0.95
+          },
+          "keys_8": {
+            "velocity": 60,
+            "gate": 0.95
+          },
+          "keys_9": {
+            "velocity": 67,
+            "gate": 0.95
+          },
+          "keys_10": {
+            "velocity": 67,
+            "gate": 0.95
+          },
+          "keys_11": {
+            "velocity": 73,
+            "gate": 0.95
+          },
+          "keys_12": {
+            "velocity": 68,
+            "gate": 0.95
+          },
+          "keys_13": {
+            "velocity": 62,
+            "gate": 0.95
+          },
+          "keys_14": {
+            "velocity": 61,
+            "gate": 0.95
+          }
+        }
+      },
+      "mix": {
+        "level_dbfs": -20,
+        "highpass": 65,
+        "lowpass": 5200,
+        "reverb_db": -24,
+        "pan": 0.0
+      },
+      "patch": {
+        "bank": 0,
+        "program": 4
+      },
+      "range": [
+        24,
+        100
+      ]
+    },
+    {
+      "id": "harp",
+      "role": "accompaniment",
+      "engine": "soundfont",
+      "program": 46,
+      "notes": [
+        {
+          "id": "harp_1",
+          "on": 0.06,
+          "duration": 2.8,
+          "pitch": 50
+        },
+        {
+          "id": "harp_2",
+          "on": 0.34,
+          "duration": 2.5,
+          "pitch": 57
+        },
+        {
+          "id": "harp_3",
+          "on": 1.1,
+          "duration": 1.7,
+          "pitch": 66
+        },
+        {
+          "id": "harp_4",
+          "on": 2.28,
+          "duration": 1.48,
+          "pitch": 64
+        },
+        {
+          "id": "harp_5",
+          "on": 4.0,
+          "duration": 3.55,
+          "pitch": 55
+        },
+        {
+          "id": "harp_6",
+          "on": 4.35,
+          "duration": 2.85,
+          "pitch": 62
+        },
+        {
+          "id": "harp_7",
+          "on": 5.14,
+          "duration": 2.4,
+          "pitch": 66
+        },
+        {
+          "id": "harp_8",
+          "on": 6.2,
+          "duration": 1.35,
+          "pitch": 59
+        },
+        {
+          "id": "harp_9",
+          "on": 8.0,
+          "duration": 3.68,
+          "pitch": 47
+        },
+        {
+          "id": "harp_10",
+          "on": 8.3,
+          "duration": 3.15,
+          "pitch": 54
+        },
+        {
+          "id": "harp_11",
+          "on": 9.1,
+          "duration": 2.45,
+          "pitch": 57
+        },
+        {
+          "id": "harp_12",
+          "on": 10.42,
+          "duration": 1.16,
+          "pitch": 62
+        },
+        {
+          "id": "harp_13",
+          "on": 12.0,
+          "duration": 3.5,
+          "pitch": 50
+        },
+        {
+          "id": "harp_14",
+          "on": 12.25,
+          "duration": 2.7,
+          "pitch": 57
+        },
+        {
+          "id": "harp_15",
+          "on": 13.4,
+          "duration": 2.3,
+          "pitch": 64
+        },
+        {
+          "id": "harp_16",
+          "on": 14.12,
+          "duration": 1.65,
+          "pitch": 66
+        }
+      ],
+      "performance": {
+        "notes": {
+          "harp_1": {
+            "velocity": 53,
+            "gate": 0.95
+          },
+          "harp_2": {
+            "velocity": 50,
+            "gate": 0.95
+          },
+          "harp_3": {
+            "velocity": 47,
+            "gate": 0.95
+          },
+          "harp_4": {
+            "velocity": 46,
+            "gate": 0.95
+          },
+          "harp_5": {
+            "velocity": 54,
+            "gate": 0.95
+          },
+          "harp_6": {
+            "velocity": 50,
+            "gate": 0.95
+          },
+          "harp_7": {
+            "velocity": 48,
+            "gate": 0.95
+          },
+          "harp_8": {
+            "velocity": 47,
+            "gate": 0.95
+          },
+          "harp_9": {
+            "velocity": 53,
+            "gate": 0.95
+          },
+          "harp_10": {
+            "velocity": 51,
+            "gate": 0.95
+          },
+          "harp_11": {
+            "velocity": 51,
+            "gate": 0.95
+          },
+          "harp_12": {
+            "velocity": 48,
+            "gate": 0.95
+          },
+          "harp_13": {
+            "velocity": 55,
+            "gate": 0.95
+          },
+          "harp_14": {
+            "velocity": 50,
+            "gate": 0.95
+          },
+          "harp_15": {
+            "velocity": 48,
+            "gate": 0.95
+          },
+          "harp_16": {
+            "velocity": 47,
+            "gate": 0.95
+          }
+        }
+      },
+      "mix": {
+        "level_dbfs": -30,
+        "highpass": 65,
+        "lowpass": 4100,
+        "reverb_db": -24,
+        "pan": 0.0
+      },
+      "patch": {
+        "bank": 0,
+        "program": 46
+      },
+      "range": [
+        24,
+        100
+      ]
+    }
+  ],
+  "loop": {
+    "start_bar": 0
+  },
+  "style": {
+    "primary": "game/town"
+  },
+  "mix": {
+    "chain": "bus",
+    "rules": 2,
+    "target_lufs": -20,
+    "dynamics": "wide",
+    "mono_below_hz": 140
+  },
+  "association": {
+    "source": "none",
+    "reason": "A reprise uses the established game melody as its brief."
+  },
+  "plan": {
+    "identity": "Paper Turns five-note opening in the same electric piano register with open harp voicings",
+    "high_point": {
+      "section": "daylight",
+      "means": "One high answer over B minor, then a quiet return to D"
+    },
+    "sections": [
+      {
+        "section": "recognition",
+        "sounds": [
+          "keys",
+          "harp"
+        ],
+        "leads": "keys"
+      },
+      {
+        "section": "daylight",
+        "sounds": [
+          "keys",
+          "harp"
+        ],
+        "leads": "keys"
+      }
+    ]
+  },
+  "decisions": [
+    "Keep the original five notes and metric onsets of Paper Turns at 72 BPM instead of 104."
+  ],
+  "harmony": [
+    {
+      "bar": 1,
+      "symbol": "Dadd9"
+    },
+    {
+      "bar": 2,
+      "symbol": "Gmaj7"
+    },
+    {
+      "bar": 3,
+      "symbol": "Bm7"
+    },
+    {
+      "bar": 4,
+      "symbol": "Dadd9"
+    }
+  ]
+}

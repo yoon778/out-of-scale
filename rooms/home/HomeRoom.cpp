@@ -1,18 +1,15 @@
 #include "HomeRoom.h"
-#include "HomeRotatingVisual.h"
+#include "HomeFinaleVisual.h"
 #include "HomePicture.h"
-#include "../../project_code/Out_of_Scale/src/core/Audio.h"
 
 #include "../shared/PerspectiveCarry.h"
 
 #include <GL/glfw3.h>
-#include <GL/glm/gtc/constants.hpp>
 #include <GL/glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <iterator>
-#include <random>
 #include <utility>
 #include <vector>
 
@@ -25,15 +22,10 @@ struct Box {
 constexpr float playerRadius = 0.25f;
 constexpr float sideLimit = 5.55f;
 constexpr float secretEntryZ = 6.34f;
-constexpr float rotaryEntryZ = home_rotate::frontZ - .25f;
+constexpr float finaleEntryZ = home_finale::frontZ - .25f;
 constexpr float wallZ = -6.50f;
 constexpr float backLimit = wallZ + .155f + playerRadius;
-constexpr Box rpgRack{{5.36f, 1.15f, 7.55f}, {.60f, 1.38f, .50f}};
 constexpr float reach = 2.8f;
-constexpr float debrisDuration = 1.4f;
-constexpr float projectileSpeed = 12.0f;
-constexpr float impactDuration = 0.20f;
-constexpr glm::vec3 plaster{0.856f, 0.837f, 0.777f};
 
 constexpr Box desk{{2.90f, 0.50f, 0.80f}, {3.30f, 1.00f, 1.40f}};
 constexpr Box shelf{{0.0f, 1.30f, -5.95f}, {2.05f, 2.60f, 0.60f}};
@@ -85,9 +77,9 @@ constexpr std::array staticInterior{
 bool withinRoomXZ(const glm::vec3& center, float extentX, float extentZ) {
     const float minZ = center.z - extentZ;
     const float maxZ = center.z + extentZ;
-    if (minZ < wallZ + .16f || maxZ > home_rotate::frontZ - .05f) return false;
+    if (minZ < wallZ + .16f || maxZ > home_finale::frontZ - .05f) return false;
     if (minZ < 6.68f && std::abs(center.x) + extentX > 5.69f) return false;
-    return maxZ <= 6.34f || std::abs(center.x - home_rotate::center.x) + extentX <= home_rotate::apronHalfWidth;
+    return maxZ <= 6.34f || std::abs(center.x - home_finale::hallCenterX) + extentX <= home_finale::entranceHalfWidth;
 }
 
 constexpr float roomCeiling(float, float = 0.0f) { return 3.22f; }
@@ -126,7 +118,7 @@ const BedroomMesh& bedroomMesh() {
         BedroomMesh result;
         constexpr std::array pieces{
             HomeMesh::Interior, HomeMesh::Shell, HomeMesh::IntactWall, HomeMesh::Shelf,
-            HomeMesh::Rpg, HomeMesh::CabinetLeftDoor, HomeMesh::CabinetRightDoor,
+            HomeMesh::CabinetLeftDoor, HomeMesh::CabinetRightDoor,
             HomeMesh::LockSocket, HomeMesh::PictureDoor, HomeMesh::Crate,
         };
         result.vertices.reserve(150000);
@@ -144,91 +136,6 @@ const BedroomMesh& bedroomMesh() {
                 result.vertices.insert(result.vertices.end(), vertices, vertices + 3);
             }
             result.ranges[slot] = {first, static_cast<GLsizei>(result.vertices.size()) - first};
-        }
-        return result;
-    }();
-    return mesh;
-}
-
-struct WallShard {
-    glm::vec3 center;
-    GLint first;
-    GLsizei count;
-};
-
-struct FractureMesh {
-    std::vector<MeshVertex> vertices;
-    std::array<WallShard, 18> shards;
-};
-
-const FractureMesh& fractureMesh() {
-    static const FractureMesh mesh = [] {
-        FractureMesh result;
-        std::mt19937 random{0xF4u};
-        std::uniform_real_distribution<float> horizontal{-0.84f, 0.84f};
-        std::uniform_real_distribution<float> vertical{-1.24f, 1.24f};
-        std::array<glm::vec2, 18> seeds;
-        for (auto& seed : seeds) {
-            seed = {horizontal(random), vertical(random)};
-        }
-        for (std::size_t index = 0; index < seeds.size(); ++index) {
-            std::vector<glm::vec2> polygon{{-0.90f, -1.30f}, {0.90f, -1.30f},
-                                         {0.90f, 1.30f}, {-0.90f, 1.30f}};
-            // Voronoi cuts share edges and fill the wall with unequal polygons.
-            for (std::size_t other = 0; other < seeds.size(); ++other) {
-                if (other == index) {
-                    continue;
-                }
-                const glm::vec2 normal = seeds[other] - seeds[index];
-                const float offset = (glm::dot(seeds[other], seeds[other]) -
-                                      glm::dot(seeds[index], seeds[index])) * 0.5f;
-                std::vector<glm::vec2> clipped;
-                for (std::size_t edge = 0; edge < polygon.size(); ++edge) {
-                    const auto a = polygon[edge];
-                    const auto b = polygon[(edge + 1) % polygon.size()];
-                    const float da = glm::dot(a, normal) - offset;
-                    const float db = glm::dot(b, normal) - offset;
-                    if (da <= 0.0f) {
-                        clipped.push_back(a);
-                    }
-                    if ((da <= 0.0f) != (db <= 0.0f)) {
-                        clipped.push_back(a + (b - a) * (da / (da - db)));
-                    }
-                }
-                polygon = std::move(clipped);
-            }
-            glm::vec2 center{0.0f};
-            for (const auto& point : polygon) {
-                center += point;
-            }
-            center /= static_cast<float>(polygon.size());
-            const auto first = static_cast<GLint>(result.vertices.size());
-            const auto triangle = [&](const glm::vec3& a, const glm::vec3& b,
-                                      const glm::vec3& c, const glm::vec3& color) {
-                result.vertices.insert(result.vertices.end(), {{a, color}, {b, color}, {c, color}});
-            };
-            const auto vertex = [&](std::size_t corner, float depth) {
-                return glm::vec3{polygon[corner] - center, depth};
-            };
-            constexpr float halfDepth = 0.155f;
-            for (std::size_t corner = 1; corner + 1 < polygon.size(); ++corner) {
-                triangle(vertex(0, halfDepth), vertex(corner, halfDepth), vertex(corner + 1, halfDepth),
-                         plaster * 0.64f);
-                triangle(vertex(0, -halfDepth), vertex(corner + 1, -halfDepth), vertex(corner, -halfDepth),
-                         plaster * 0.50f);
-            }
-            for (std::size_t corner = 0; corner < polygon.size(); ++corner) {
-                const std::size_t next = (corner + 1) % polygon.size();
-                const auto a = vertex(corner, halfDepth);
-                const auto b = vertex(next, halfDepth);
-                const auto c = vertex(next, -halfDepth);
-                const auto d = vertex(corner, -halfDepth);
-                constexpr glm::vec3 innerPlaster{0.64f, 0.62f, 0.56f};
-                triangle(a, d, c, innerPlaster);
-                triangle(a, c, b, innerPlaster);
-            }
-            result.shards[index] = {{center, 0.0f}, first,
-                                   static_cast<GLsizei>(result.vertices.size()) - first};
         }
         return result;
     }();
@@ -395,46 +302,31 @@ std::array<glm::vec3, 12> keyPoints(const glm::vec3& center, float yaw) {
 void drawHomeMesh(const BoxRenderer& renderer, HomeMesh mesh, const glm::mat4& model,
                   const glm::vec3& tint = glm::vec3{1.0f}) {
     const auto& range = bedroomMesh().ranges[static_cast<std::size_t>(mesh)];
-    const auto first = static_cast<GLint>(fractureMesh().vertices.size()) + range.first;
-    renderer.drawMovableMesh(first, range.count, model, tint);
+    renderer.drawMovableMesh(range.first, range.count, model, tint);
 }
 
-void drawRpg(const BoxRenderer& renderer, const glm::vec3& center, float scale) {
-    const auto model = glm::scale(glm::translate(glm::mat4{1.0f}, center), glm::vec3{scale});
-    drawHomeMesh(renderer, HomeMesh::Rpg, model);
-}
-
-glm::vec3 carrySide(const glm::vec3& direction) {
-    const glm::vec3 side = glm::cross(direction, glm::vec3{0.0f, 1.0f, 0.0f});
-    return glm::length(side) > 0.001f ? glm::normalize(side) : glm::vec3{1.0f, 0.0f, 0.0f};
-}
 }  // namespace
 
 bool HomeRoom::initialize() {
-    std::vector<MeshVertex> movable = fractureMesh().vertices;
-    const auto& bedroom = bedroomMesh().vertices;
-    movable.insert(movable.end(), bedroom.begin(), bedroom.end());
+    auto movable = bedroomMesh().vertices;
     const auto& painting = home_picture::art().vertices;
     movable.insert(movable.end(), painting.begin(), painting.end());
-    rotatingVisualFirst_ = static_cast<GLint>(movable.size());
-    const auto& rotatingVisual = home_rotate::visualVertices();
-    movable.insert(movable.end(), rotatingVisual.begin(), rotatingVisual.end());
+    finaleVisualFirst_ = static_cast<GLint>(movable.size());
+    const auto finaleVisual = home_finale::visualVertices();
+    movable.insert(movable.end(), finaleVisual.begin(), finaleVisual.end());
     return renderer_.initialize({}, movable) && computer_.initialize();
 }
 
-void HomeRoom::closeComputer() { computerFocused_ = false; computerClearInput(); }
+void HomeRoom::closeComputer() { computerFocused_ = false; computer_.clearInput(); }
 
 void HomeRoom::computerKey(int key, int action, int mods) {
     if (computerFocused_ || action == GLFW_RELEASE) computer_.keyInput(key, action, mods);
-    if (action == GLFW_REPEAT) return;
-    if (key == GLFW_KEY_LEFT) turnLeft_ = action == GLFW_PRESS;
-    if (key == GLFW_KEY_RIGHT) turnRight_ = action == GLFW_PRESS;
+    if (action == GLFW_PRESS && key == GLFW_KEY_R && finale_.isCarrying()) finale_.rotate();
 }
 
-void HomeRoom::computerClearInput() {
-    computer_.clearInput();
-    turnLeft_ = turnRight_ = false;
-}
+void HomeRoom::computerClearInput() { computer_.clearInput(); }
+
+void HomeRoom::scroll(double yOffset) { finale_.scroll(yOffset); }
 
 glm::mat4 HomeRoom::portableModel(int index) const {
     auto model = glm::translate(glm::mat4{1.0f},portable_[index].center);
@@ -855,6 +747,10 @@ float HomeRoom::visibleRange(const glm::vec3& eye, const glm::vec3& direction, f
 }
 
 void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
+    if (finale_.isCarrying() || (cabinetOpen_ && eye.z >= finaleEntryZ && held_ == HeldItem::None)) {
+        finale_.interact(eye, direction);
+        return;
+    }
     if (held_ == HeldItem::Portable && heldPortable_ >= 0) {
         const int index = heldPortable_;
         if (index == socketObject && !socketInstalled_ &&
@@ -948,69 +844,7 @@ void HomeRoom::interact(const glm::vec3& eye, const glm::vec3& direction) {
             return;
         }
     }
-    if (held_ == HeldItem::Rpg) return;
-    if (cabinetOpen_ && rackOpening_ >= 1.0f && !rotatingRoom_.wallBroken() && eye.z > secretEntryZ &&
-        aimsAt(eye, direction, rpgRack, visibleRange(eye, direction, reach))) {
-        held_ = HeldItem::Rpg;
-        return;
-    }
     if (held_ == HeldItem::None) grabPortable(eye, direction);
-}
-
-void HomeRoom::shoot(const glm::vec3& eye, const glm::vec3& direction) {
-    if (!cabinetOpen_ || held_ != HeldItem::Rpg || rotatingRoom_.wallBroken() ||
-        projectile_ || eye.z <= secretEntryZ) return;
-    shotFlashTime_ = .14f;
-    projectile_ = Projectile{eye, direction, 16.0f};
-}
-
-void HomeRoom::impact(const Projectile& projectile) {
-    impactCenter_ = projectile.center - projectile.direction * .08f;
-    impactTime_ = impactDuration;
-    const glm::vec3 side = carrySide(projectile.direction);
-    const glm::vec3 up = glm::normalize(glm::cross(side, projectile.direction));
-    for (unsigned int index = 0; index < particles_.size(); ++index) {
-        const float angle = static_cast<float>(index) * 2.39996f;
-        const bool spark = index % 3 == 0;
-        const float spread = 0.65f + static_cast<float>(index % 5) * 0.28f;
-        const glm::vec3 radial = side * std::cos(angle) + up * std::sin(angle);
-        particles_[index] = {
-            impactCenter_,
-            (radial * spread - projectile.direction * 1.1f) * (spark ? 2.0f : 0.7f),
-            spark ? 0.40f : 0.95f,
-            (spark ? 0.045f : 0.18f + static_cast<float>(index % 4) * 0.025f),
-            spark,
-        };
-    }
-    if (projectile.breaksWall) {
-        held_ = HeldItem::None;
-        const auto roomPose = rotatingRoom_.model();
-        const auto gatePose = glm::translate(roomPose, home_rotate::wallBox.center);
-        fragmentBasis_ = glm::rotate(glm::mat4{1.0f}, rotatingRoom_.angle(), {0.0f, 0.0f, 1.0f});
-        fragmentBasis_ = glm::scale(fragmentBasis_,
-            home_rotate::wallBox.half / glm::vec3{.90f, 1.30f, .155f});
-        rotatingRoom_.breakWall();
-        exitState_ = ExitState::WallBroken;
-        debrisTime_ = debrisDuration;
-        std::mt19937 random{0xB019u};
-        std::uniform_real_distribution<float> jitter{-1.0f, 1.0f};
-        const auto& shapes = fractureMesh().shards;
-        const glm::vec3 realImpact = projectile.center;
-        for (std::size_t index = 0; index < fragments_.size(); ++index) {
-            const glm::vec3 center = glm::vec3{gatePose[3]} +
-                glm::vec3{fragmentBasis_ * glm::vec4{shapes[index].center, 0.0f}};
-            const glm::vec3 outward = center - realImpact;
-            const glm::vec3 axis = glm::normalize(glm::vec3{jitter(random), jitter(random), jitter(random)});
-            fragments_[index] = {
-                center,
-                {outward.x * 2.0f + jitter(random), 2.0f + outward.y * 0.7f + jitter(random),
-                 1.7f + jitter(random) * 1.4f},
-                axis,
-                jitter(random) * 0.12f,
-                jitter(random) * 7.0f,
-            };
-        }
-    }
 }
 
 void HomeRoom::updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
@@ -1069,8 +903,7 @@ void HomeRoom::updateCube(float elapsed, const glm::vec3& eye, const glm::vec3& 
 }
 
 void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& direction) {
-    rotationSoundGain_ = boardSoundGain_ = 0.0f;
-    ending_.update(elapsed, exitState_ == ExitState::Escaped);
+    ending_.update(elapsed, finale_.escaped());
     if (elapsed <= 0.0f) return;
     lastEye_ = eye;
     updatePicture(elapsed);
@@ -1084,69 +917,20 @@ void HomeRoom::update(float elapsed, const glm::vec3& eye, const glm::vec3& dire
     updateKey(elapsed, eye, direction);
     updatePortables(elapsed, eye, direction);
     updateDoors(elapsed, eye);
-    if (cabinetOpen_) {
-        const bool atControls = eye.z > secretEntryZ + .35f && eye.z < rotaryEntryZ &&
-            std::abs(eye.x - home_rotate::center.x) < home_rotate::apronHalfWidth;
-        const float turn = atControls ? static_cast<float>(turnRight_ - turnLeft_) : 0.0f;
-        const float previousAngle = rotatingRoom_.angle();
-        const float previousBoardAngle = rotatingRoom_.boardAngle();
-        const auto capturedBefore = rotatingRoom_.capturedWeights();
-        rotatingRoom_.update(elapsed, turn);
-        if (capturedBefore != rotatingRoom_.capturedWeights()) Audio::instance().playDoorFitClick();
-        if (rotatingRoom_.rackUnlocked()) rackOpening_ = std::min(1.0f, rackOpening_ + elapsed / .55f);
-        rotationSoundGain_ = std::abs(std::remainder(rotatingRoom_.angle() - previousAngle, glm::two_pi<float>()))
-            > 1e-5f ? .70f : 0.0f;
-        boardSoundGain_ = std::min(.72f, std::abs(rotatingRoom_.boardAngle() - previousBoardAngle) / elapsed);
-        if (exitState_ != ExitState::Escaped && rotatingRoom_.wallBroken())
-            exitState_ = rotatingRoom_.bridgeReady() ? ExitState::BridgeReady : ExitState::WallBroken;
-    }
-    shotFlashTime_ = std::max(0.0f, shotFlashTime_ - elapsed);
-    impactTime_ = std::max(0.0f, impactTime_ - elapsed);
-    for (Particle& particle : particles_) {
-        if (particle.life <= 0.0f) {
-            continue;
-        }
-        particle.life = std::max(0.0f, particle.life - elapsed);
-        particle.velocity.y += (particle.spark ? -7.5f : 0.5f) * elapsed;
-        particle.center += particle.velocity * elapsed;
-    }
-    if (debrisTime_ > 0.0f) {
-        debrisTime_ = std::max(0.0f, debrisTime_ - elapsed);
-        for (std::size_t index = 0; index < fragments_.size(); ++index) {
-            auto& piece = fragments_[index];
-            piece.velocity.y -= 7.5f * elapsed;
-            piece.center += piece.velocity * elapsed;
-            piece.angle += piece.angularSpeed * elapsed;
-        }
-    }
-    if (projectile_) {
-        auto& projectile = *projectile_;
-        const float distance = std::min(projectileSpeed * elapsed, projectile.remaining);
-        if (const auto hit = rotatingRoom_.rayHit(projectile.center, projectile.direction, distance)) {
-            projectile.center += projectile.direction * hit->distance;
-            projectile.breaksWall = hit->breakable;
-            impact(projectile);
-            projectile_.reset();
-        } else {
-            projectile.center += projectile.direction * distance;
-            projectile.remaining -= distance;
-            projectile.traveled += distance;
-            if (projectile.remaining <= 0.0f) projectile_.reset();
-        }
-    }
+    if (cabinetOpen_) finale_.update(elapsed, eye, direction);
 }
 
 glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded) {
-    if (cabinetOpen_ && (previous.z >= rotaryEntryZ || desired.z >= rotaryEntryZ)) {
-        const auto position = rotatingRoom_.resolveMovement(previous, desired, grounded);
-        if (rotatingRoom_.escaped(position)) exitState_ = ExitState::Escaped;
-        return position;
+    if (cabinetOpen_ && (previous.z >= finaleEntryZ || desired.z >= finaleEntryZ)) {
+        auto target = desired;
+        if (finale_.isCarrying()) target.z = std::max(target.z, home_finale::frontZ + .025f);
+        return finale_.resolveMovement(previous, target, grounded);
     }
     const auto minX = [](float z) {
-        return z > secretEntryZ ? home_rotate::center.x - home_rotate::apronHalfWidth + playerRadius : -sideLimit;
+        return z > secretEntryZ ? home_finale::hallCenterX - home_finale::entranceHalfWidth + playerRadius : -sideLimit;
     };
     const auto maxX = [](float z) {
-        return z > secretEntryZ ? home_rotate::center.x + home_rotate::apronHalfWidth - playerRadius : sideLimit;
+        return z > secretEntryZ ? home_finale::hallCenterX + home_finale::entranceHalfWidth - playerRadius : sideLimit;
     };
     const auto blocked = [&](const glm::vec3& position) {
         if (position.x < minX(position.z) || position.x > maxX(position.z)) return true;
@@ -1183,7 +967,7 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
             if (!(previous.y - eyeHeight >= top - .02f && desired.y <= previous.y) &&
                 cubeOverlapsPlayer(cube.center, cube.edge, cube.yaw, position)) return true;
         }
-        return cabinetOpen_ && position.z > 6.80f && overlapsPlayer(position, rpgRack);
+        return false;
     };
 
     glm::vec3 position{previous.x, desired.y, previous.z};
@@ -1191,7 +975,7 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
     if (!blocked(moveX)) {
         position.x = moveX.x;
     }
-    const glm::vec3 moveZ{position.x, desired.y, std::clamp(desired.z, backLimit, home_rotate::frontZ)};
+    const glm::vec3 moveZ{position.x, desired.y, std::clamp(desired.z, backLimit, home_finale::frontZ)};
     if (!blocked(moveZ)) {
         position.z = moveZ.z;
     }
@@ -1241,14 +1025,15 @@ glm::vec3 HomeRoom::resolveMovement(const glm::vec3& previous, const glm::vec3& 
 }
 
 HomeRoom::ExitState HomeRoom::exitState() const {
-    return exitState_;
+    if (finale_.escaped()) return ExitState::Escaped;
+    return finale_.exitOpen() ? ExitState::ExitOpen : ExitState::Explore;
 }
 
 void HomeRoom::drawPicture(const glm::mat4& model) const {
     using namespace home_picture;
     drawHomeMesh(renderer_, HomeMesh::PictureDoor, glm::translate(model, framePosition));
     const auto& painting = art();
-    const auto first = static_cast<GLint>(fractureMesh().vertices.size() + bedroomMesh().vertices.size());
+    const auto first = static_cast<GLint>(bedroomMesh().vertices.size());
     renderer_.drawMovableMesh(first, painting.backdropCount, model, glm::vec3{1.0f});
     const auto pupilCount = static_cast<GLsizei>(painting.vertices.size()) - painting.backdropCount;
     const auto pupils = glm::translate(model, gazeOffset(lastEye_));
@@ -1275,80 +1060,14 @@ void HomeRoom::drawBedroom() const {
     drawHomeMesh(renderer_, HomeMesh::Shelf, glm::translate(model, shelf.center));
 }
 
-void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const {
+void HomeRoom::draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3&) const {
     renderer_.begin(viewProjection);
+    if (cabinetSwing_ > 0.0f || eye.z > secretEntryZ)
+        home_finale::draw(renderer_, finaleVisualFirst_, finale_, eye);
+    if (eye.z > home_finale::frontZ + 7.0f) return;
     drawBedroom();
-    if (cabinetSwing_ > 0.0f || eye.z > secretEntryZ) {
-        home_rotate::draw(renderer_, rotatingVisualFirst_, rotatingRoom_);
-        constexpr glm::vec3 frame{.25f, .29f, .27f};
-        constexpr glm::vec3 trim{.48f, .45f, .36f};
-        for (const float side : {-1.0f, 1.0f}) {
-            renderer_.drawBox(rpgRack.center + glm::vec3{side * .33f, -.37f, 0.0f},
-                              {.075f, 1.56f, .54f}, frame);
-        }
-        renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.61f, 0.0f}, {.72f, .13f, .56f}, frame);
-        renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.11f, .25f}, {.72f, .91f, .07f}, frame);
-        const float shutter = .69f * glm::smoothstep(0.0f, 1.0f, rackOpening_);
-        for (int slat = 0; slat < 4; ++slat) {
-            renderer_.drawBox(rpgRack.center + glm::vec3{0.0f, -.27f + slat * .13f + shutter, -.27f},
-                              {.67f, .065f, .065f}, trim);
-        }
-        const auto& captured = rotatingRoom_.capturedWeights();
-        renderer_.drawBox(rpgRack.center + glm::vec3{-.07f, .46f, -.03f}, {.073f, .047f, .06f},
-                          captured[0] ? glm::vec3{.96f, .58f, .20f} : frame);
-        renderer_.drawBox(rpgRack.center + glm::vec3{.07f, .46f, -.03f}, {.073f, .047f, .06f},
-                          captured[1] ? glm::vec3{.29f, .82f, .74f} : frame);
-        if (held_ != HeldItem::Rpg && !rotatingRoom_.wallBroken())
-            drawRpg(renderer_, rpgRack.center, .85f);
-    }
-    if (debrisTime_ > 0.0f) {
-        const auto& shapes = fractureMesh().shards;
-        for (std::size_t index = 0; index < fragments_.size(); ++index) {
-            const auto& piece = fragments_[index];
-            auto pose = glm::translate(glm::mat4{1.0f}, piece.center);
-            pose = glm::rotate(pose, piece.angle, piece.rotationAxis) * fragmentBasis_;
-            renderer_.drawMovableMesh(shapes[index].first, shapes[index].count, pose, glm::vec3{1.0f});
-        }
-    }
     if (portable_[socketObject].active) {
         drawHomeMesh(renderer_,HomeMesh::LockSocket,portableModel(socketObject));
-    }
-    if (projectile_) {
-        renderer_.drawBox(projectile_->center, {0.10f, 0.10f, 0.10f}, {1.0f, 0.89f, 0.55f});
-        const glm::vec3 side = carrySide(projectile_->direction);
-        const glm::vec3 up = glm::normalize(glm::cross(side, projectile_->direction));
-        for (int index = 1; index <= 7; ++index) {
-            const float trail = static_cast<float>(index) * 0.13f;
-            if (trail > projectile_->traveled) {
-                break;
-            }
-            const float angle = static_cast<float>(index) * 2.39996f;
-            const float spread = 0.02f + static_cast<float>(index) * 0.025f;
-            const glm::vec3 drift = (side * std::cos(angle) + up * std::sin(angle)) * spread;
-            const float size = 0.04f + static_cast<float>(index) * 0.008f;
-            renderer_.drawBox(projectile_->center - projectile_->direction * trail + drift,
-                             glm::vec3{size}, {1.0f - trail * 0.22f, 0.86f - trail * 0.24f, 0.52f});
-        }
-    }
-    if (impactTime_ > 0.0f) {
-        const float size = (0.35f + (impactDuration - impactTime_) * 2.0f);
-        renderer_.drawBox(impactCenter_, glm::vec3{size}, {1.0f, 0.82f, 0.43f});
-    }
-    for (const Particle& particle : particles_) {
-        if (particle.life > 0.0f) {
-            const float size = particle.size * std::min(1.0f, particle.life / 0.18f);
-            const glm::vec3 tint = particle.spark ? glm::vec3{1.0f, 0.65f, 0.23f}
-                                                 : plaster * (0.65f + particle.life * 0.25f);
-            renderer_.drawBox(particle.center, glm::vec3{size}, tint);
-        }
-    }
-    if (held_ == HeldItem::Rpg) {
-        const glm::vec3 center = eye + direction * 0.85f + carrySide(direction) * 0.34f - glm::vec3{0.0f, 0.31f, 0.0f};
-        // The source RPG now uses F2 meter dimensions; retain its hand-view size.
-        drawRpg(renderer_, center, 0.37f);
-        if (shotFlashTime_ > 0.0f) {
-            renderer_.drawBox(center + direction * 0.30f, {0.13f, 0.13f, 0.13f}, {1.0f, 0.79f, 0.30f});
-        }
     }
     if (computerCube_) {
         auto model = glm::translate(glm::mat4{1.0f}, computerCube_->center);

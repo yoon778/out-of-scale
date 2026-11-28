@@ -149,7 +149,7 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
 const char* windowTitle(HomeRoom::ExitState state) {
     return state == HomeRoom::ExitState::Escaped
         ? "Out of Scale | Home escaped | Esc Pause"
-        : "Out of Scale | Home | E Interact | Left/Right Rotate | Left Click Fire | Esc Pause";
+        : "Out of Scale | Home | E Grab/Place | Wheel Scale | R Rotate | Esc Pause";
 }
 
 template<class Room>
@@ -282,13 +282,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         if (wasPaused) {
             if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) scene.pause->click(target);
             updatePauseCursor(target, scene, wasPaused);
-        } else if constexpr (std::is_same_v<Room, HomeRoom>) {
-            if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-                scene.room.shoot(scene.player.eyePosition(), scene.player.viewDirection());
-            }
         }
     });
-    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
+    if constexpr (std::is_same_v<Room, MilitaryRoom> || std::is_same_v<Room, HomeRoom>) {
         glfwSetScrollCallback(window, [](GLFWwindow* target, double, double yOffset) {
             auto& scene = sceneFor<Room>(target);
             if (!scene.pause->isPaused() && glfwGetWindowAttrib(target, GLFW_FOCUSED) == GLFW_TRUE) {
@@ -338,7 +334,9 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
                 bool grounded = false;
                 const glm::vec3 resolved = scene.room.resolveMovement(previousEye, desiredEye, &grounded);
                 scene.player.setRoomPosition(resolved, grounded);
-                Audio::instance().setSceneMusicGain(1.0f - scene.room.endingFade());
+                auto& audio = Audio::instance();
+                if (scene.room.repriseActive()) audio.selectMusic(RoomMusic::Finale);
+                audio.setSceneMusicGain(1.0f - scene.room.endingFade());
             } else if constexpr (std::is_same_v<Room, TestRoom>) {
                 scene.player.setHorizontalPosition(scene.room.resolveMovement(previousEye, desiredEye));
             }
@@ -348,11 +346,6 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             playMovement(movement.sample(scene.player.eyePosition(), scene.player.isGrounded()));
         } else {
             movement.reset(scene.player.eyePosition(), scene.player.isGrounded());
-        }
-        if constexpr (std::is_same_v<Room, HomeRoom>) {
-            auto& audio = Audio::instance();
-            audio.setMechanismSound(MechanismSound::Bookcase, playRoomAudio ? scene.room.boardSoundGain() : 0.0f);
-            audio.setMechanismSound(MechanismSound::Lift, playRoomAudio ? scene.room.rotationSoundGain() : 0.0f);
         }
 
         if (const char* currentTitle = titleForRoom(); currentTitle != title) {
@@ -374,10 +367,6 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         }
     }
 
-    if constexpr (std::is_same_v<Room, HomeRoom>) {
-        Audio::instance().setMechanismSound(MechanismSound::Bookcase, 0.0f);
-        Audio::instance().setMechanismSound(MechanismSound::Lift, 0.0f);
-    }
     glfwSetCursorPosCallback(window, nullptr);
     glfwSetWindowFocusCallback(window, nullptr);
     glfwSetKeyCallback(window, nullptr);
@@ -419,7 +408,8 @@ int runGame(GLFWwindow* window, Map activeMap) {
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     auto& audio = Audio::instance();
     while (!glfwWindowShouldClose(window)) {
-        audio.selectMusic(musicForMap(activeMap));
+        audio.selectMusic(activeMap == Map::Home && home.room.repriseActive()
+            ? RoomMusic::Finale : musicForMap(activeMap));
         audio.setSceneMusicGain(activeMap == Map::Home ? 1.0f - home.room.endingFade() : 1.0f);
         int result = 0;
         switch (activeMap) {

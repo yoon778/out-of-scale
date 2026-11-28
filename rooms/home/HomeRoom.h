@@ -3,18 +3,18 @@
 #include "../shared/BoxRenderer.h"
 #include "ComputerScreen.h"
 #include "HomeEnding.h"
-#include "HomeRotatingRoom.h"
+#include "HomeFinale.h"
 
 #include <array>
 #include <optional>
 
 class HomeRoom {
 public:
-    enum class ExitState { Explore, WallBroken, BridgeReady, Escaped };
+    enum class ExitState { Explore, ExitOpen, Escaped };
 
     bool initialize();
     void interact(const glm::vec3& eye, const glm::vec3& direction);
-    void shoot(const glm::vec3& eye, const glm::vec3& direction);
+    void scroll(double yOffset);
     void update(float elapsed, const glm::vec3& eye,
                 const glm::vec3& direction = glm::vec3{0.0f, 0.0f, -1.0f});
     glm::vec3 resolveMovement(const glm::vec3& previous, const glm::vec3& desired, bool* grounded = nullptr);
@@ -25,16 +25,15 @@ public:
     void draw(const glm::mat4& viewProjection, const glm::vec3& eye, const glm::vec3& direction) const;
     void drawEndingOverlay() const;
     float endingFade() const { return ending_.fade(); }
-    bool isCarrying() const { return held_ != HeldItem::None; }
-    float rotationSoundGain() const { return rotationSoundGain_; }
-    float boardSoundGain() const { return boardSoundGain_; }
+    bool isCarrying() const { return held_ != HeldItem::None || finale_.isCarrying(); }
+    bool repriseActive() const { return finale_.exitOpen(); }
 
-    static constexpr float halfSize = 20.0f;
+    static constexpr float halfSize = 40.0f;
     static constexpr glm::vec3 spawnEye{0.0f, 1.65f, 5.0f};
     static constexpr float spawnYaw = 0.0f;
 
 private:
-    enum class HeldItem { None, Rpg, Cube, Key, Portable };
+    enum class HeldItem { None, Cube, Key, Portable };
 
     struct PortableObject {
         glm::vec3 center{0.0f};
@@ -57,33 +56,8 @@ private:
         float verticalSpeed = 0.0f;
     };
 
-    struct Fragment {
-        glm::vec3 center;
-        glm::vec3 velocity;
-        glm::vec3 rotationAxis;
-        float angle;
-        float angularSpeed;
-    };
-
-    struct Projectile {
-        glm::vec3 center;
-        glm::vec3 direction;
-        float remaining;
-        bool breaksWall = false;
-        float traveled = 0.0f;
-    };
-
-    struct Particle {
-        glm::vec3 center;
-        glm::vec3 velocity;
-        float life = 0.0f;
-        float size = 0.0f;
-        bool spark = false;
-    };
-
     float visibleRange(const glm::vec3& eye, const glm::vec3& direction, float maxDistance) const;
     void drawBedroom() const;
-    void impact(const Projectile& projectile);
     std::optional<glm::vec2> computerUv(const glm::vec3& eye, const glm::vec3& direction) const;
     bool cubeFits(const ComputerCube& cube, const glm::vec3& eye) const;
     std::optional<ComputerCube> carriedCube(const glm::vec3& eye, const glm::vec3& direction) const;
@@ -106,8 +80,8 @@ private:
     BoxRenderer renderer_;
     HomeEnding ending_;
     ComputerScreen computer_;
-    home_rotate::Room rotatingRoom_;
-    GLint rotatingVisualFirst_ = 0;
+    home_finale::Room finale_;
+    GLint finaleVisualFirst_ = 0;
     // A real room prop; coursework scenes never spawn this crate.
     std::optional<ComputerCube> computerCube_{ComputerCube{{2.6f,.5f,-2.0f},1.0f,0.0f}};
     std::optional<KeyPiece> keyPiece_;
@@ -123,23 +97,9 @@ private:
     bool completeKeyInserted_ = false;
     glm::vec3 lastEye_{0.0f,1.65f,5.0f};
     bool computerFocused_ = false;
-    bool turnLeft_ = false;
-    bool turnRight_ = false;
     bool cabinetUnlocked_ = false;
     bool cabinetOpen_ = false;
     float keyTurn_ = 0.0f;
     float cabinetSwing_ = 0.0f;
-    ExitState exitState_ = ExitState::Explore;
     HeldItem held_ = HeldItem::None;
-    float rotationSoundGain_ = 0.0f;
-    float boardSoundGain_ = 0.0f;
-    float rackOpening_ = 0.0f;
-    std::array<Fragment, 18> fragments_{};
-    glm::mat4 fragmentBasis_{1.0f};
-    float debrisTime_ = 0.0f;
-    float shotFlashTime_ = 0.0f;
-    std::optional<Projectile> projectile_;
-    std::array<Particle, 36> particles_{};
-    glm::vec3 impactCenter_{0.0f};
-    float impactTime_ = 0.0f;
 };

@@ -2,7 +2,7 @@
 
 #include <memory>
 
-enum class RoomMusic { None, School, Military, Office, Home };
+enum class RoomMusic { None, School, Military, Office, Home, Finale };
 enum class SoundEffect { Footstep, Land, Grab, Place };
 enum class MechanismSound { Bookcase, Lift };
 
