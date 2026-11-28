@@ -29,6 +29,9 @@
     <ClCompile Include="..\..\rooms\home\HomeRoom.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\rooms\home\HomeRotatingRoom.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\rooms\home\ComputerScreen.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -74,6 +77,12 @@
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\..\rooms\home\HomeRoom.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\rooms\home\HomeRotatingRoom.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\rooms\home\HomeRotatingVisual.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
     <ClInclude Include="..\..\rooms\home\ComputerScreen.h">

@@ -149,7 +149,7 @@ const char* windowTitle(MilitaryRoom::ExitState state) {
 const char* windowTitle(HomeRoom::ExitState state) {
     return state == HomeRoom::ExitState::Escaped
         ? "Out of Scale | Home escaped | Esc Pause"
-        : "Out of Scale | Home | E Interact | Left Click Fire | Scroll Down Grow | Esc Pause";
+        : "Out of Scale | Home | E Interact | Left/Right Rotate | Left Click Fire | Esc Pause";
 }
 
 template<class Room>
@@ -288,7 +288,7 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
             }
         }
     });
-    if constexpr (std::is_same_v<Room, MilitaryRoom> || std::is_same_v<Room, HomeRoom>) {
+    if constexpr (std::is_same_v<Room, MilitaryRoom>) {
         glfwSetScrollCallback(window, [](GLFWwindow* target, double, double yOffset) {
             auto& scene = sceneFor<Room>(target);
             if (!scene.pause->isPaused() && glfwGetWindowAttrib(target, GLFW_FOCUSED) == GLFW_TRUE) {
@@ -351,8 +351,8 @@ int run(GLFWwindow* window, Scene<Room>& scene, Map& activeMap, PauseMenu& pause
         }
         if constexpr (std::is_same_v<Room, HomeRoom>) {
             auto& audio = Audio::instance();
-            audio.setMechanismSound(MechanismSound::Bookcase, playRoomAudio ? scene.room.bookcaseSoundGain() : 0.0f);
-            audio.setMechanismSound(MechanismSound::Lift, playRoomAudio ? scene.room.liftSoundGain() : 0.0f);
+            audio.setMechanismSound(MechanismSound::Bookcase, playRoomAudio ? scene.room.boardSoundGain() : 0.0f);
+            audio.setMechanismSound(MechanismSound::Lift, playRoomAudio ? scene.room.rotationSoundGain() : 0.0f);
         }
 
         if (const char* currentTitle = titleForRoom(); currentTitle != title) {
